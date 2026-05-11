@@ -1,0 +1,39 @@
+# Node
+node_modules/
+dist/
+build/
+*.log
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Rust / Tauri
+target/
+src-tauri/target/
+src-tauri/gen/
+
+# PyInstaller
+*.spec.bak
+backend/dist/
+backend/build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project
+.cache/
+*.mag/.cache/
+.env
+.env.local

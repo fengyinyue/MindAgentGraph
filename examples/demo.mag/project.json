@@ -1,0 +1,8 @@
+{
+  "name": "demo",
+  "version": "0.1.0",
+  "rootGraph": "graphs/main.json",
+  "description": "MVP demo project — city generator planning",
+  "createdAt": "2026-05-11T00:00:00.000Z",
+  "updatedAt": "2026-05-11T00:00:00.000Z"
+}

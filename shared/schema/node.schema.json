@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindagentgraph.dev/schema/node.json",
+  "title": "MindAgentGraph Node",
+  "type": "object",
+  "required": ["id", "type", "title", "position", "contextMode", "data"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "type": {
+      "type": "string",
+      "enum": ["prompt", "planning", "memory", "filescope", "code", "api", "asset", "agent", "task", "semantic"]
+    },
+    "title": { "type": "string" },
+    "position": {
+      "type": "object",
+      "required": ["x", "y"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "contextMode": {
+      "type": "string",
+      "enum": ["inherit", "explicit", "isolated"],
+      "default": "explicit"
+    },
+    "fileScope": {
+      "type": "object",
+      "properties": {
+        "allow": { "type": "array", "items": { "type": "string" } },
+        "deny": { "type": "array", "items": { "type": "string" } }
+      },
+      "default": { "allow": [], "deny": [] }
+    },
+    "toolPolicy": {
+      "type": "object",
+      "properties": {
+        "tools": { "type": "array", "items": { "type": "string" } },
+        "deny": { "type": "array", "items": { "type": "string" } }
+      },
+      "default": { "tools": [], "deny": [] }
+    },
+    "memoryRef": { "type": "string" },
+    "data": { "type": "object" },
+    "summary": { "type": "string" }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mindagentgraph.dev/schema/project.json",
+  "title": "MindAgentGraph Project",
+  "type": "object",
+  "required": ["name", "version", "rootGraph", "createdAt"],
+  "properties": {
+    "name": { "type": "string" },
+    "version": { "type": "string", "default": "0.1.0" },
+    "rootGraph": { "type": "string", "default": "graphs/main.json" },
+    "description": { "type": "string" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "nodes": [
+    {
+      "id": "city",
+      "type": "planning",
+      "title": "CityGenerator",
+      "position": { "x": 0, "y": 0 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": ["**/*"], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": { "purpose": "顶层规划：城市生成器" }
+    },
+    {
+      "id": "terrain",
+      "type": "code",
+      "title": "Terrain",
+      "position": { "x": 280, "y": -180 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": ["Content/Terrain/**"], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": { "purpose": "高度图与生物群落" }
+    },
+    {
+      "id": "road",
+      "type": "code",
+      "title": "Road",
+      "position": { "x": 280, "y": -60 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": ["Content/Road/**", "PCG/**"], "deny": ["NPC/**", "UI/**"] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": { "purpose": "路网生成（基于地形）" }
+    },
+    {
+      "id": "plot",
+      "type": "code",
+      "title": "Plot",
+      "position": { "x": 560, "y": -60 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": ["Content/Plot/**"], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": { "purpose": "地块划分（基于路网）" }
+    },
+    {
+      "id": "building",
+      "type": "asset",
+      "title": "Building",
+      "position": { "x": 840, "y": -60 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": ["Content/Building/**"], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": { "purpose": "在地块上放置建筑" }
+    },
+    {
+      "id": "npc",
+      "type": "agent",
+      "title": "NPC",
+      "position": { "x": 840, "y": 80 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": ["Content/NPC/**"], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": { "purpose": "NPC 行为与生成" }
+    }
+  ],
+  "links": [
+    { "id": "e1", "source": "city", "target": "terrain" },
+    { "id": "e2", "source": "city", "target": "road" },
+    { "id": "e3", "source": "terrain", "target": "road" },
+    { "id": "e4", "source": "road", "target": "plot" },
+    { "id": "e5", "source": "plot", "target": "building" },
+    { "id": "e6", "source": "building", "target": "npc" }
+  ]
+}

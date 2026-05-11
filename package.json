@@ -1,0 +1,13 @@
+{
+  "name": "mindagentgraph",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Node-based AI planning tool — workspace root",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:no-open": "node scripts/dev.mjs --no-open",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "dev:backend": "node scripts/dev-backend.mjs"
+  }
+}
