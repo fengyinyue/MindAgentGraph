@@ -11,13 +11,24 @@ import socket
 import asyncio
 from contextlib import closing
 
+import os
+from pathlib import Path
+import dotenv
+
+# Load backend/.env relative to this file so it works regardless of cwd.
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+dotenv.load_dotenv(_env_path)
+
 from fastapi import FastAPI, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from typing import Annotated, Optional
+import json
 import uvicorn
 
-from app.schemas import HealthResponse, PlanRequest, Graph
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, Graph
 from app.services.planner import plan_graph
+from app.services.runner import run_node_stream
 
 app = FastAPI(title="MindAgentGraph Backend", version="0.1.0")
 
@@ -52,6 +63,51 @@ async def plan(
         provider=req.provider,
         model=req.model,
         api_key=x_provider_key,
+    )
+
+
+@app.post("/run/node")
+async def run_node(
+    req: RunNodeRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+) -> StreamingResponse:
+    """SSE stream of text chunks for a single node.
+
+    Wire format (each event ends with blank line):
+      event: text\\n
+      data: "<json-encoded chunk>"\\n
+      \\n
+      event: done\\n
+      data: {}\\n
+      \\n
+      event: error\\n
+      data: {"message": "..."}\\n
+      \\n
+    """
+
+    async def gen():
+        try:
+            async for chunk in run_node_stream(
+                node_title=req.node.title,
+                node_type=req.node.type,
+                node_purpose=req.node.purpose or "",
+                user_prompt=req.userPrompt,
+                provider=req.provider,
+                model=req.model,
+                api_key=x_provider_key,
+            ):
+                yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            yield "event: done\ndata: {}\n\n"
+        except Exception as e:  # noqa: BLE001
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",  # disable proxy buffering if any
+        },
     )
 
 

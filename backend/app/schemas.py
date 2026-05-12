@@ -63,6 +63,19 @@ class PlanRequest(BaseModel):
     model: Optional[str] = None
 
 
+class RunNodeInput(BaseModel):
+    title: str
+    type: NodeType
+    purpose: Optional[str] = ""
+
+
+class RunNodeRequest(BaseModel):
+    node: RunNodeInput
+    userPrompt: Optional[str] = None
+    provider: Optional[Literal["anthropic", "deepseek"]] = None
+    model: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "0.1.0"

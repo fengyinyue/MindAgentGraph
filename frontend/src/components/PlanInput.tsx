@@ -2,6 +2,7 @@ import { useState } from "react";
 import { planGraph, type Provider } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
+import { useProviderStore } from "@/store/providerStore";
 
 const PROVIDER_OPTIONS: { value: Provider; label: string }[] = [
   { value: "anthropic", label: "Claude" },
@@ -10,7 +11,8 @@ const PROVIDER_OPTIONS: { value: Provider; label: string }[] = [
 
 export default function PlanInput() {
   const [goal, setGoal] = useState("");
-  const [provider, setProvider] = useState<Provider>("anthropic");
+  const provider = useProviderStore((s) => s.provider);
+  const setProvider = useProviderStore((s) => s.setProvider);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const setGraph = useGraphStore((s) => s.setGraph);
