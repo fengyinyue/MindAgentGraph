@@ -129,6 +129,72 @@ export async function runNodeStream(
   }
 }
 
+export interface CodeRunInput {
+  node: { title: string; type: string; purpose?: string };
+  projectDir: string;
+  fileScopeAllow?: string[];
+  fileScopeDeny?: string[];
+  parentOutputs?: Record<string, string>;
+  userPrompt?: string;
+  model?: string;
+}
+
+export interface CodeRunCallbacks {
+  onText: (chunk: string) => void;
+  onFiles: (files: string[]) => void;
+  onDone: () => void;
+  onError: (message: string) => void;
+  signal?: AbortSignal;
+}
+
+export async function runNodeCode(
+  input: CodeRunInput,
+  cb: CodeRunCallbacks,
+): Promise<void> {
+  const url = await getBackendUrl();
+  const res = await fetch(`${url}/run/node/code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    signal: cb.signal,
+  });
+  if (!res.ok || !res.body) {
+    cb.onError(`/run/node/code failed: ${res.status}`);
+    return;
+  }
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const event = parseSseEvent(raw);
+        if (!event) continue;
+        if (event.type === "text") {
+          try { cb.onText(JSON.parse(event.data)); } catch { cb.onText(event.data); }
+        } else if (event.type === "files") {
+          try { cb.onFiles(JSON.parse(event.data)); } catch { /* ignore */ }
+        } else if (event.type === "done") {
+          cb.onDone(); return;
+        } else if (event.type === "error") {
+          try { cb.onError(JSON.parse(event.data).message ?? event.data); } catch { cb.onError(event.data); }
+          return;
+        }
+      }
+    }
+    cb.onDone();
+  } catch (e) {
+    if ((e as Error).name === "AbortError") return;
+    cb.onError(e instanceof Error ? e.message : String(e));
+  }
+}
+
 function parseSseEvent(raw: string): { type: string; data: string } | null {
   let type = "message";
   const dataLines: string[] = [];

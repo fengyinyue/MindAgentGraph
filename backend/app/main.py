@@ -26,9 +26,10 @@ from typing import Annotated, Optional
 import json
 import uvicorn
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, Graph
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, Graph
 from app.services.planner import plan_graph
 from app.services.runner import run_node_stream
+from app.services.code_runner import run_node_with_claude
 
 app = FastAPI(title="MindAgentGraph Backend", version="0.1.0")
 
@@ -106,7 +107,50 @@ async def run_node(
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # disable proxy buffering if any
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/run/node/code")
+async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
+    """SSE stream of Claude Code CLI output.
+
+    Same SSE wire format as /run/node, with one extra event type:
+      event: files\\n
+      data: ["+ src/a.py", "~ src/b.py"]\\n
+    """
+
+    async def gen():
+        try:
+            async for chunk in run_node_with_claude(
+                node_title=req.node.title,
+                node_type=req.node.type,
+                node_purpose=req.node.purpose or "",
+                project_dir=req.projectDir,
+                file_scope_allow=req.fileScopeAllow,
+                file_scope_deny=req.fileScopeDeny,
+                parent_outputs=req.parentOutputs,
+                user_prompt=req.userPrompt,
+                model=req.model,
+            ):
+                # Check for the special __files__ marker (may have leading whitespace).
+                stripped = chunk.strip()
+                if stripped.startswith("__files__:"):
+                    files_json = stripped[len("__files__:"):].strip()
+                    yield f"event: files\ndata: {files_json}\n\n"
+                else:
+                    yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+            yield "event: done\ndata: {}\n\n"
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
         },
     )
 

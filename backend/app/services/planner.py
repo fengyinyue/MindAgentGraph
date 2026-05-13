@@ -38,8 +38,8 @@ PLANNER_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 1. 5-12 个节点，覆盖目标的关键模块
 2. 每个节点应有清晰的单一职责
 3. 用 links 表达数据依赖（A 的输出是 B 的输入）
-4. 节点位置 (position) 要分散：x 间距 ≥ 250，y 间距 ≥ 150，layout 体现层级
-5. 根节点放在 (0,0)，下游节点向下展开
+4. 节点位置 (position) 要分散。layout 从上到下：同级节点 x 间距 ≥ 200（水平均匀散开），父子节点 y 间距 ≥ 300（向下延伸）
+5. 根节点放在 (0,0)，下游节点向下展开，同层兄弟节点水平排列
 
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
 
@@ -150,10 +150,10 @@ def _offline_demo(goal: str) -> Graph:
     """No API key → 返回硬编码示例，让 UI 流程可演示。"""
     nodes_raw = [
         {"id": "root", "type": "planning", "title": goal[:30] or "Project", "x": 0, "y": 0},
-        {"id": "design", "type": "prompt", "title": "需求拆解", "x": -200, "y": 140},
-        {"id": "data", "type": "memory", "title": "项目记忆", "x": 0, "y": 140},
-        {"id": "impl", "type": "code", "title": "代码实现", "x": 200, "y": 140},
-        {"id": "test", "type": "task", "title": "测试验证", "x": 0, "y": 280},
+        {"id": "design", "type": "prompt", "title": "需求拆解", "x": -220, "y": 300},
+        {"id": "data", "type": "memory", "title": "项目记忆", "x": 0, "y": 300},
+        {"id": "impl", "type": "code", "title": "代码实现", "x": 220, "y": 300},
+        {"id": "test", "type": "task", "title": "测试验证", "x": 0, "y": 600},
     ]
     links_raw = [
         {"source": "root", "target": "design"},

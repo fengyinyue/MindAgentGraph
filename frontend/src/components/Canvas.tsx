@@ -137,7 +137,8 @@ export default function Canvas() {
   );
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
-  const { run, runningId } = useRunNode();
+  const { run, runCode, runningId } = useRunNode();
+  const projectDir = useGraphStore((s) => s.projectDir);
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -221,8 +222,20 @@ export default function Canvas() {
             }}
             disabled={runningId !== null}
           >
-            ▶ Run node
+            ▶ Explain (AI)
           </button>
+          <button
+            className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+            onClick={() => {
+              runCode(menu.nodeId);
+              closeMenu();
+            }}
+            disabled={runningId !== null || !projectDir}
+            title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : undefined}
+          >
+            ⚡ Generate Code
+          </button>
+          <hr className="border-zinc-700 my-1" />
           <button
             className="block w-full text-left px-3 py-1.5 hover:bg-canvas hover:text-red-400"
             onClick={() => {

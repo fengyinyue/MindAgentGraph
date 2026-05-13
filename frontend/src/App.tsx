@@ -1,9 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, Component } from "react";
 import Canvas from "./components/Canvas";
 import PlanInput from "./components/PlanInput";
 import NodeInspector from "./components/NodeInspector";
 import Toolbar from "./components/Toolbar";
 import { checkHealth } from "./api/backend";
+
+// Catch render errors so a crash in one panel doesn't white-screen the entire app.
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: string | null }> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(e: Error) {
+    return { error: e.message };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="p-4 text-red-400 text-xs whitespace-pre-wrap">
+          <div className="font-bold mb-1">Render Error:</div>
+          {this.state.error}
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [backendReady, setBackendReady] = useState(false);
@@ -42,7 +61,9 @@ export default function App() {
         <Canvas />
       </div>
       <div className="bg-panel border-l border-zinc-800 overflow-hidden">
-        <NodeInspector />
+        <ErrorBoundary>
+          <NodeInspector />
+        </ErrorBoundary>
       </div>
     </div>
   );

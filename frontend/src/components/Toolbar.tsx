@@ -8,6 +8,8 @@ export default function Toolbar() {
   const setGraph = useGraphStore((s) => s.setGraph);
   const setProjectPath = useGraphStore((s) => s.setProjectPath);
   const projectPath = useGraphStore((s) => s.projectPath);
+  const projectDir = useGraphStore((s) => s.projectDir);
+  const setProjectDir = useGraphStore((s) => s.setProjectDir);
   const nodes = useGraphStore((s) => s.nodes);
   const links = useGraphStore((s) => s.links);
 
@@ -31,6 +33,24 @@ export default function Toolbar() {
     }
   };
 
+  const onSelectProjectDir = async () => {
+    try {
+      const isTauri = "__TAURI_INTERNALS__" in window;
+      if (isTauri) {
+        const { open } = await import("@tauri-apps/plugin-dialog");
+        const dir = await open({ directory: true, multiple: false, title: "Select project directory for code generation" });
+        if (dir && typeof dir === "string") setProjectDir(dir);
+        return;
+      }
+      // Browser mode: no native dialog with full path → prompt.
+      const path = prompt("请输入工程目录的完整路径（代码将生成到此目录下）：", projectDir ?? "E:/projects/my-game");
+      if (path && path.trim()) setProjectDir(path.trim());
+    } catch (e) {
+      if ((e as Error).name === "AbortError") return;
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <>
       <div className="flex gap-2 items-center px-3 py-1.5 border-b border-zinc-800 bg-canvas text-xs">
@@ -38,6 +58,14 @@ export default function Toolbar() {
         <span className="text-zinc-600">|</span>
         <button className="hover:text-accent" onClick={onOpen}>Open</button>
         <button className="hover:text-accent" onClick={onSave}>Save As</button>
+        <span className="text-zinc-600">|</span>
+        <button
+          className="hover:text-accent text-xs"
+          onClick={onSelectProjectDir}
+          title="Project directory for code generation"
+        >
+          📁 {projectDir ? projectDir.split(/[/\\]/).pop() : "Project Dir"}
+        </button>
         <span className="ml-auto text-zinc-500">
           {projectPath ?? "untitled"}
         </span>

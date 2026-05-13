@@ -6,6 +6,7 @@ interface GraphState {
   links: Edge[];
   selectedNodeId: string | null;
   projectPath: string | null;
+  projectDir: string | null;
 
   setGraph: (graph: Graph) => void;
   addNode: (node: NodeBase) => void;
@@ -14,6 +15,7 @@ interface GraphState {
   removeNode: (id: string) => void;
   selectNode: (id: string | null) => void;
   setProjectPath: (path: string | null) => void;
+  setProjectDir: (dir: string | null) => void;
   clear: () => void;
 }
 
@@ -22,6 +24,7 @@ export const useGraphStore = create<GraphState>((set) => ({
   links: [],
   selectedNodeId: null,
   projectPath: null,
+  projectDir: null,
 
   setGraph: (graph) => set({ nodes: graph.nodes, links: graph.links }),
   addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
@@ -43,5 +46,6 @@ export const useGraphStore = create<GraphState>((set) => ({
     })),
   selectNode: (id) => set({ selectedNodeId: id }),
   setProjectPath: (path) => set({ projectPath: path }),
+  setProjectDir: (dir) => set({ projectDir: dir }),
   clear: () => set({ nodes: [], links: [], selectedNodeId: null }),
 }));

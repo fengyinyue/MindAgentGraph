@@ -76,6 +76,16 @@ class RunNodeRequest(BaseModel):
     model: Optional[str] = None
 
 
+class CodeRunRequest(BaseModel):
+    node: RunNodeInput
+    projectDir: str
+    fileScopeAllow: Optional[list[str]] = None
+    fileScopeDeny: Optional[list[str]] = None
+    parentOutputs: Optional[dict[str, str]] = None
+    userPrompt: Optional[str] = None
+    model: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "0.1.0"
