@@ -10,6 +10,11 @@ export type NodeType =
   | "task"
   | "semantic";
 
+export const NODE_TYPES: NodeType[] = [
+  "prompt", "planning", "memory", "filescope",
+  "code", "api", "asset", "agent", "task", "semantic",
+];
+
 export type ContextMode = "inherit" | "explicit" | "isolated";
 
 export interface Position {

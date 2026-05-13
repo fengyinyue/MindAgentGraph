@@ -1,5 +1,6 @@
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
+import { NODE_TYPES, type NodeType } from "@shared/types";
 
 export default function NodeInspector() {
   const selectedId = useGraphStore((s) => s.selectedNodeId);
@@ -31,16 +32,36 @@ export default function NodeInspector() {
       <div className="p-4 space-y-3 border-b border-zinc-800">
         <div>
           <div className="text-xs text-zinc-500 uppercase">Title</div>
-          <div className="font-medium">{node.title}</div>
+          <input
+            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-sm outline-none focus:border-accent"
+            value={node.title}
+            onChange={(e) => updateNode(node.id, { title: e.target.value })}
+          />
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
             <div className="text-xs text-zinc-500 uppercase">Type</div>
-            <div>{node.type}</div>
+            <select
+              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-sm outline-none focus:border-accent"
+              value={node.type}
+              onChange={(e) => updateNode(node.id, { type: e.target.value as NodeType })}
+            >
+              {NODE_TYPES.map((nt) => (
+                <option key={nt} value={nt}>{nt}</option>
+              ))}
+            </select>
           </div>
           <div>
             <div className="text-xs text-zinc-500 uppercase">Context</div>
-            <div>{node.contextMode}</div>
+            <select
+              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-sm outline-none focus:border-accent"
+              value={node.contextMode}
+              onChange={(e) => updateNode(node.id, { contextMode: e.target.value as "inherit" | "explicit" | "isolated" })}
+            >
+              <option value="inherit">inherit</option>
+              <option value="explicit">explicit</option>
+              <option value="isolated">isolated</option>
+            </select>
           </div>
         </div>
         {purpose && (

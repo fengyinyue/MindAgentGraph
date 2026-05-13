@@ -6,6 +6,7 @@ import {
   MiniMap,
   useNodesState,
   useEdgesState,
+  useReactFlow,
   type Node as RFNode,
   type Edge as RFEdge,
   type Connection,
@@ -15,7 +16,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
-import type { NodeBase, Edge as EdgeT } from "@shared/types";
+import { NODE_TYPES, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
 
 const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
@@ -59,7 +60,6 @@ export default function Canvas() {
   const storeNodes = useGraphStore((s) => s.nodes);
   const storeEdges = useGraphStore((s) => s.links);
   const selectNode = useGraphStore((s) => s.selectNode);
-  const storeSetGraph = useGraphStore((s) => s.setGraph);
   const storeRemoveNode = useGraphStore((s) => s.removeNode);
 
   // xyflow managed state
@@ -137,8 +137,10 @@ export default function Canvas() {
   );
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
+  const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const { run, runCode, runningId } = useRunNode();
   const projectDir = useGraphStore((s) => s.projectDir);
+  const { screenToFlowPosition } = useReactFlow();
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -179,8 +181,44 @@ export default function Canvas() {
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
+  const addNode = useCallback(
+    (type: NodeType, position: { x: number; y: number }) => {
+      const newNode: NodeBase = {
+        id: crypto.randomUUID(),
+        type,
+        title: type.charAt(0).toUpperCase() + type.slice(1),
+        position,
+        contextMode: "inherit",
+        fileScope: { allow: [], deny: [] },
+        toolPolicy: { tools: [], deny: [] },
+        data: {},
+      };
+      useGraphStore.getState().addNode(newNode);
+    },
+    [],
+  );
+
+  // Keyboard shortcut "N": add a prompt node at viewport center.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "n" || e.key === "N") {
+        e.preventDefault();
+        const center = screenToFlowPosition({
+          x: window.innerWidth / 2,
+          y: window.innerHeight / 2,
+        });
+        addNode("prompt", center);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [addNode, screenToFlowPosition]);
+
   return (
-    <div className="w-full h-full" onClick={closeMenu}>
+    <div className="w-full h-full" onClick={() => { closeMenu(); setPaneMenu(null); }}>
       <ReactFlow
         nodes={decoratedNodes}
         edges={rfEdges}
@@ -192,6 +230,7 @@ export default function Canvas() {
         onPaneContextMenu={(e) => {
           e.preventDefault();
           closeMenu();
+          setPaneMenu({ x: e.clientX, y: e.clientY });
         }}
         deleteKeyCode={["Backspace", "Delete"]}
         fitView
@@ -245,6 +284,32 @@ export default function Canvas() {
           >
             🗑 Delete
           </button>
+        </div>
+      )}
+
+      {paneMenu && (
+        <div
+          className="fixed bg-panel border border-zinc-700 rounded shadow-2xl text-xs py-1 z-50 min-w-[140px]"
+          style={{ left: paneMenu.x, top: paneMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-3 py-1 text-zinc-500 uppercase tracking-wider text-[10px]">
+            Add Node
+          </div>
+          <hr className="border-zinc-700 my-0.5" />
+          {NODE_TYPES.map((nt) => (
+            <button
+              key={nt}
+              className="block w-full text-left px-3 py-1 hover:bg-canvas"
+              onClick={() => {
+                const pos = screenToFlowPosition({ x: paneMenu.x, y: paneMenu.y });
+                addNode(nt, pos);
+                setPaneMenu(null);
+              }}
+            >
+              + {nt}
+            </button>
+          ))}
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useState, Component } from "react";
+import { ReactFlowProvider } from "@xyflow/react";
 import Canvas from "./components/Canvas";
 import PlanInput from "./components/PlanInput";
 import NodeInspector from "./components/NodeInspector";
@@ -58,7 +59,9 @@ export default function App() {
             等待后端启动…
           </div>
         )}
-        <Canvas />
+        <ReactFlowProvider>
+          <Canvas />
+        </ReactFlowProvider>
       </div>
       <div className="bg-panel border-l border-zinc-800 overflow-hidden">
         <ErrorBoundary>

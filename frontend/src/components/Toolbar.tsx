@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGraphStore } from "@/store/graphStore";
 import { openProjectDialog, saveProjectDialog } from "@/api/project";
+import type { NodeBase } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
 export default function Toolbar() {
@@ -58,6 +59,25 @@ export default function Toolbar() {
         <span className="text-zinc-600">|</span>
         <button className="hover:text-accent" onClick={onOpen}>Open</button>
         <button className="hover:text-accent" onClick={onSave}>Save As</button>
+        <span className="text-zinc-600">|</span>
+        <button
+          className="hover:text-green-400 font-bold"
+          title="Add Node"
+          onClick={() => {
+            useGraphStore.getState().addNode({
+              id: crypto.randomUUID(),
+              type: "prompt",
+              title: "Prompt",
+              position: { x: 250, y: 250 },
+              contextMode: "inherit",
+              fileScope: { allow: [], deny: [] },
+              toolPolicy: { tools: [], deny: [] },
+              data: {},
+            } as NodeBase);
+          }}
+        >
+          + Node
+        </button>
         <span className="text-zinc-600">|</span>
         <button
           className="hover:text-accent text-xs"

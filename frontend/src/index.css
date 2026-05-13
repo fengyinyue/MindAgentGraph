@@ -33,3 +33,26 @@ html, body, #root {
 .react-flow__edge.selected .react-flow__edge-path {
   stroke: #6c8eef;
 }
+
+.react-flow__handle {
+  width: 12px;
+  height: 12px;
+  background: #4a4a5a;
+  border: 2px solid #888;
+  border-radius: 50%;
+}
+
+.react-flow__handle:hover {
+  background: #6c8eef;
+  border-color: #fff;
+  width: 14px;
+  height: 14px;
+}
+
+.react-flow__handle-connecting {
+  background: #6cef6c !important;
+}
+
+.react-flow__handle-valid {
+  background: #6cef6c !important;
+}
