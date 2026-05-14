@@ -188,6 +188,7 @@ async def run_node_with_claude(
         yield f"__files__:{[]}"
         return
 
+    proc = None
     try:
         args = [claude_bin, "--print", "--dangerously-skip-permissions"]
         if model:
@@ -224,20 +225,32 @@ async def run_node_with_claude(
         if proc.returncode != 0:
             yield f"\n[claude exited with code {proc.returncode}]"
 
+        # Detect changed files (only on clean completion).
+        changed = await _detect_changed_files(project_dir, marker)
+
+    except asyncio.CancelledError:
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+        raise
+
     except FileNotFoundError:
         yield "\n[error] `claude` 命令未找到。请确认 Claude Code 已安装。\n"
+        changed = []
     except Exception as e:
         yield f"\n[error] 执行异常: {e}\n"
+        changed = await _detect_changed_files(project_dir, marker)
 
-    # Detect changed files.
-    changed = await _detect_changed_files(project_dir, marker)
-
-    # Clean up marker.
-    if marker:
-        try:
-            os.remove(marker)
-        except OSError:
-            pass
+    finally:
+        # Clean up marker.
+        if marker:
+            try:
+                os.remove(marker)
+            except OSError:
+                pass
 
     # Final marker (yield as a separate chunk so main.py can detect it cleanly).
     import json as _json

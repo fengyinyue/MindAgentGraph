@@ -11,6 +11,7 @@ stream_text:
 """
 
 from __future__ import annotations
+import logging
 import os
 import re
 import json
@@ -18,6 +19,8 @@ from typing import Any, AsyncIterator
 from openai import AsyncOpenAI, APIStatusError, APIConnectionError
 
 from app.services.providers.base import ProviderError
+
+_log = logging.getLogger("mag.deepseek")
 
 DEFAULT_MODEL = "deepseek-chat"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
@@ -77,32 +80,27 @@ class DeepSeekProvider:
         raw = choice.message.content or ""
         finish = choice.finish_reason
 
-        # ── output log ──
+        # ── debug log ──
         usage = resp.usage
-        print(
-            f"\n{'='*60}\n"
-            f"[deepseek emit_graph] model={chosen_model} finish={finish}\n"
-            f"[deepseek emit_graph] tokens: prompt={usage.prompt_tokens if usage else '?'} "
-            f"completion={usage.completion_tokens if usage else '?'}\n"
-            f"[deepseek emit_graph] raw content ({len(raw)} chars):\n{raw}\n"
-            f"{'='*60}",
-            flush=True,
+        _log.debug(
+            "emit_graph model=%s finish=%s prompt_tokens=%s completion_tokens=%s len=%s",
+            chosen_model, finish,
+            usage.prompt_tokens if usage else "?",
+            usage.completion_tokens if usage else "?",
+            len(raw),
         )
 
         parsed = _extract_json(raw)
         if isinstance(parsed, dict):
             n_nodes = len(parsed.get("nodes", []))
             n_links = len(parsed.get("links", []))
-            print(
-                f"[deepseek emit_graph] parsed OK → {n_nodes} nodes, {n_links} links",
-                flush=True,
-            )
+            _log.debug("emit_graph parsed OK → %s nodes, %s links", n_nodes, n_links)
             return parsed
 
         # Fallback: content was not valid JSON.
-        print(
-            f"[deepseek emit_graph] could not parse JSON (finish_reason={finish}, len={len(raw)})",
-            flush=True,
+        _log.warning(
+            "emit_graph could not parse JSON (finish_reason=%s, len=%s)",
+            finish, len(raw),
         )
         raise ProviderError(
             f"DeepSeek returned unparseable JSON content "
@@ -148,13 +146,7 @@ class DeepSeekProvider:
         finally:
             full = "".join(acc)
             if full:
-                print(
-                    f"\n{'='*60}\n"
-                    f"[deepseek stream_text] {len(full)} chars:\n"
-                    f"{full[:800]}{'…' if len(full) > 800 else ''}\n"
-                    f"{'='*60}\n",
-                    flush=True,
-                )
+                _log.debug("stream_text %s chars", len(full))
 
 
 # ── JSON extraction helpers ────────────────────────────────────────────

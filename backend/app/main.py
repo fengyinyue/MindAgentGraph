@@ -5,26 +5,33 @@ Tauri Rust 主进程从 stdout 抓取端口供前端 invoke 查询。
 """
 
 from __future__ import annotations
-import os
-import sys
-import socket
 import asyncio
-from contextlib import closing
-
+import json
+import logging
 import os
+import socket
+import sys
+from contextlib import closing
 from pathlib import Path
+from typing import Annotated, Optional
+
 import dotenv
+import uvicorn
+from fastapi import FastAPI, Header
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 
 # Load backend/.env relative to this file so it works regardless of cwd.
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 dotenv.load_dotenv(_env_path)
 
-from fastapi import FastAPI, Header
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from typing import Annotated, Optional
-import json
-import uvicorn
+# Default quiet. Set MAG_DEBUG=1 to restore verbose provider logs.
+_log_level = logging.DEBUG if os.environ.get("MAG_DEBUG") == "1" else logging.WARNING
+_log_handler = logging.StreamHandler(sys.stderr)
+_log_handler.setFormatter(logging.Formatter("%(levelname)s [%(name)s] %(message)s"))
+logging.getLogger("mag").setLevel(_log_level)
+logging.getLogger("mag").addHandler(_log_handler)
+logging.getLogger("mag").propagate = False
 
 from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, Graph
 from app.services.planner import plan_graph
@@ -99,6 +106,8 @@ async def run_node(
             ):
                 yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
             yield "event: done\ndata: {}\n\n"
+        except asyncio.CancelledError:
+            raise
         except Exception as e:  # noqa: BLE001
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 
@@ -142,6 +151,8 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 else:
                     yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
             yield "event: done\ndata: {}\n\n"
+        except asyncio.CancelledError:
+            raise
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
 

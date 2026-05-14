@@ -10,11 +10,14 @@ Output: an async generator of text chunks. Caller wraps it as SSE.
 
 from __future__ import annotations
 import asyncio
+import logging
 import os
 from typing import Any, AsyncIterator
 
 from app.services.providers.base import ProviderError
 from app.services.planner import _PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS
+
+_log = logging.getLogger("mag.runner")
 
 NODE_RUN_SYSTEM = """你是一个被绑定到某个"思维节点"上的助手。
 
@@ -61,7 +64,7 @@ async def run_node_stream(
             yield chunk
     except ProviderError as e:
         # Same fallback philosophy as planner: keep UX demoable.
-        print(f"[runner] provider={chosen} fell back to offline demo: {e}", flush=True)
+        _log.warning("provider=%s fell back to offline demo: %s", chosen, e)
         async for chunk in _offline_demo_stream(node_title, node_type, node_purpose):
             yield chunk
 

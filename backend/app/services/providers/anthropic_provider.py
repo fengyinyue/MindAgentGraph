@@ -1,12 +1,15 @@
 """Anthropic Claude provider — forced tool_use + streaming text."""
 
 from __future__ import annotations
+import logging
 import os
 import json
 from typing import Any, AsyncIterator
 from anthropic import AsyncAnthropic, APIStatusError, APIConnectionError
 
 from app.services.providers.base import ProviderError
+
+_log = logging.getLogger("mag.anthropic")
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 
@@ -48,13 +51,11 @@ class AnthropicProvider:
             if block.type == "tool_use" and block.name == tool_schema["name"]:
                 # block.input is a dict
                 result = dict(block.input)  # type: ignore[arg-type]
-                print(
-                    f"\n{'='*60}\n"
-                    f"[anthropic emit_graph] model={model or DEFAULT_MODEL}\n"
-                    f"[anthropic emit_graph] tool_use input:\n"
-                    f"{json.dumps(result, ensure_ascii=False, indent=2)[:3000]}\n"
-                    f"{'='*60}",
-                    flush=True,
+                _log.debug(
+                    "emit_graph model=%s nodes=%s links=%s",
+                    model or DEFAULT_MODEL,
+                    len(result.get("nodes", [])),
+                    len(result.get("links", [])),
                 )
                 return result
 
@@ -90,10 +91,4 @@ class AnthropicProvider:
         finally:
             full = "".join(acc)
             if full:
-                print(
-                    f"\n{'='*60}\n"
-                    f"[anthropic stream_text] {len(full)} chars:\n"
-                    f"{full[:800]}{'…' if len(full) > 800 else ''}\n"
-                    f"{'='*60}\n",
-                    flush=True,
-                )
+                _log.debug("stream_text %s chars", len(full))

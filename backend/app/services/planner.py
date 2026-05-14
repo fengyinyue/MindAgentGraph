@@ -5,6 +5,7 @@ provider 抽象在 [providers/](providers/)：MVP 支持 anthropic + deepseek。
 """
 
 from __future__ import annotations
+import logging
 import os
 import uuid
 from typing import Any
@@ -13,6 +14,8 @@ from app.schemas import Graph, Node, Edge, Position
 from app.services.providers.base import PlanProvider, ProviderError
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.deepseek_provider import DeepSeekProvider
+
+_log = logging.getLogger("mag.planner")
 
 # 默认 provider/model 来自 env，请求体可以覆盖。
 DEFAULT_PROVIDER = os.environ.get("MAG_PROVIDER", "anthropic")
@@ -142,7 +145,7 @@ async def plan_graph(
     except ProviderError as e:
         # No API key OR provider refused → fall back to offline demo so the
         # UI flow stays demonstrable. We still log so users notice.
-        print(f"[planner] provider={chosen} fell back to offline demo: {e}", flush=True)
+        _log.warning("provider=%s fell back to offline demo: %s", chosen, e)
         return _offline_demo(goal)
 
 
