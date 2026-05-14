@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useGraphStore } from "@/store/graphStore";
 import { openProjectDialog, saveProjectDialog } from "@/api/project";
+import { useRunNode } from "@/hooks/useRunNode";
 import type { NodeBase } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
@@ -13,13 +14,14 @@ export default function Toolbar() {
   const setProjectDir = useGraphStore((s) => s.setProjectDir);
   const nodes = useGraphStore((s) => s.nodes);
   const links = useGraphStore((s) => s.links);
+  const { runDag, runningId } = useRunNode();
 
   const onOpen = async () => {
     try {
       const payload = await openProjectDialog();
       if (!payload) return;
       setGraph(payload.graph);
-      setProjectPath(null);
+      setProjectPath(payload.path ?? null);
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     }
@@ -77,6 +79,14 @@ export default function Toolbar() {
           }}
         >
           + Node
+        </button>
+        <button
+          className="hover:text-accent disabled:opacity-50"
+          onClick={() => void runDag().catch((e) => alert(e instanceof Error ? e.message : String(e)))}
+          disabled={runningId !== null || nodes.length === 0}
+          title="按拓扑顺序执行整张 DAG"
+        >
+          Run DAG
         </button>
         <span className="text-zinc-600">|</span>
         <button

@@ -28,10 +28,11 @@ class Node(BaseModel):
     type: NodeType
     title: str
     position: Position
-    contextMode: ContextMode = "explicit"
+    contextMode: ContextMode = "inherit"
     fileScope: FileScope = Field(default_factory=FileScope)
     toolPolicy: ToolPolicy = Field(default_factory=ToolPolicy)
     memoryRef: Optional[str] = None
+    systemPrompt: Optional[str] = None
     data: dict[str, Any] = Field(default_factory=dict)
     summary: Optional[str] = None
 
@@ -64,14 +65,20 @@ class PlanRequest(BaseModel):
 
 
 class RunNodeInput(BaseModel):
+    id: Optional[str] = None
     title: str
     type: NodeType
     purpose: Optional[str] = ""
+    contextMode: ContextMode = "inherit"
+    memoryRef: Optional[str] = None
+    systemPrompt: Optional[str] = None
 
 
 class RunNodeRequest(BaseModel):
     node: RunNodeInput
     userPrompt: Optional[str] = None
+    parentOutputs: Optional[dict[str, str]] = None
+    projectPath: Optional[str] = None
     provider: Optional[Literal["anthropic", "deepseek"]] = None
     model: Optional[str] = None
 
@@ -79,11 +86,17 @@ class RunNodeRequest(BaseModel):
 class CodeRunRequest(BaseModel):
     node: RunNodeInput
     projectDir: str
+    projectPath: Optional[str] = None
     fileScopeAllow: Optional[list[str]] = None
     fileScopeDeny: Optional[list[str]] = None
     parentOutputs: Optional[dict[str, str]] = None
     userPrompt: Optional[str] = None
     model: Optional[str] = None
+    runId: Optional[str] = None
+
+
+class CodeCancelRequest(BaseModel):
+    runId: str
 
 
 class HealthResponse(BaseModel):

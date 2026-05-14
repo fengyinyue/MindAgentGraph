@@ -41,6 +41,7 @@ export interface NodeBase {
   fileScope: FileScope;
   toolPolicy: ToolPolicy;
   memoryRef?: string;
+  systemPrompt?: string;
   data: Record<string, unknown>;
   summary?: string;
 }

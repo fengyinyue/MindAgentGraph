@@ -41,6 +41,7 @@
       "default": { "tools": [], "deny": [] }
     },
     "memoryRef": { "type": "string" },
+    "systemPrompt": { "type": "string" },
     "data": { "type": "object" },
     "summary": { "type": "string" }
   }

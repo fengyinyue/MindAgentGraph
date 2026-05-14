@@ -26,6 +26,8 @@ export default function NodeInspector() {
   const codeError = (node.data?.codeError as string | undefined) ?? "";
   const purpose = (node.data?.purpose as string | undefined) ?? "";
   const generatedFiles = (node.data?.generatedFiles as string[] | undefined) ?? [];
+  const systemPrompt = node.systemPrompt ?? "";
+  const memoryRef = node.memoryRef ?? "";
 
   return (
     <div className="flex flex-col h-full text-sm">
@@ -64,12 +66,33 @@ export default function NodeInspector() {
             </select>
           </div>
         </div>
-        {purpose && (
-          <div>
-            <div className="text-xs text-zinc-500 uppercase">Purpose</div>
-            <div className="text-zinc-300">{purpose}</div>
-          </div>
-        )}
+        <div>
+          <div className="text-xs text-zinc-500 uppercase">Purpose / Node Prompt</div>
+          <textarea
+            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16"
+            value={purpose}
+            placeholder="这个节点自己的任务说明"
+            onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { purpose: e.target.value })}
+          />
+        </div>
+        <div>
+          <div className="text-xs text-zinc-500 uppercase">System Prompt</div>
+          <textarea
+            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16"
+            value={systemPrompt}
+            placeholder="留空则使用全局默认节点助手 prompt"
+            onChange={(e) => updateNode(node.id, { systemPrompt: e.target.value })}
+          />
+        </div>
+        <div>
+          <div className="text-xs text-zinc-500 uppercase">Memory Ref</div>
+          <input
+            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent font-mono"
+            value={memoryRef}
+            placeholder="architecture.md"
+            onChange={(e) => updateNode(node.id, { memoryRef: e.target.value || undefined })}
+          />
+        </div>
         <div className="flex gap-2 pt-1">
           {isRunning ? (
             <button className="px-3 py-1.5 bg-red-700 rounded text-xs" onClick={cancel}>

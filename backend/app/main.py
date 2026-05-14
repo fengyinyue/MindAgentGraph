@@ -33,10 +33,11 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, Graph
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeCancelRequest, Graph
 from app.services.planner import plan_graph
 from app.services.runner import run_node_stream
-from app.services.code_runner import run_node_with_claude
+from app.services.code_runner import cancel_claude_run, run_node_with_claude
+from app.services.memory import read_memory, write_memory
 
 app = FastAPI(title="MindAgentGraph Backend", version="0.1.0")
 
@@ -95,16 +96,34 @@ async def run_node(
 
     async def gen():
         try:
+            memory_text = None
+            if req.node.contextMode == "inherit":
+                memory_text = read_memory(req.projectPath, req.node.memoryRef)
+
+            output_parts: list[str] = []
             async for chunk in run_node_stream(
                 node_title=req.node.title,
                 node_type=req.node.type,
                 node_purpose=req.node.purpose or "",
                 user_prompt=req.userPrompt,
+                context_mode=req.node.contextMode,
+                parent_outputs=req.parentOutputs,
+                memory_text=memory_text,
+                system_prompt=req.node.systemPrompt,
                 provider=req.provider,
                 model=req.model,
                 api_key=x_provider_key,
             ):
+                output_parts.append(chunk)
                 yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+            if req.node.contextMode != "isolated":
+                write_memory(
+                    req.projectPath,
+                    req.node.memoryRef,
+                    "".join(output_parts),
+                    node_title=req.node.title,
+                )
             yield "event: done\ndata: {}\n\n"
         except asyncio.CancelledError:
             raise
@@ -121,6 +140,12 @@ async def run_node(
     )
 
 
+@app.post("/run/node/code/cancel")
+async def cancel_node_code(req: CodeCancelRequest) -> dict[str, bool]:
+    cancelled = await cancel_claude_run(req.runId)
+    return {"cancelled": cancelled}
+
+
 @app.post("/run/node/code")
 async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
     """SSE stream of Claude Code CLI output.
@@ -132,6 +157,11 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
 
     async def gen():
         try:
+            memory_text = None
+            if req.node.contextMode == "inherit":
+                memory_text = read_memory(req.projectPath, req.node.memoryRef)
+
+            output_parts: list[str] = []
             async for chunk in run_node_with_claude(
                 node_title=req.node.title,
                 node_type=req.node.type,
@@ -141,7 +171,11 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 file_scope_deny=req.fileScopeDeny,
                 parent_outputs=req.parentOutputs,
                 user_prompt=req.userPrompt,
+                context_mode=req.node.contextMode,
+                memory_text=memory_text,
+                system_prompt=req.node.systemPrompt,
                 model=req.model,
+                run_id=req.runId,
             ):
                 # Check for the special __files__ marker (may have leading whitespace).
                 stripped = chunk.strip()
@@ -149,7 +183,16 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                     files_json = stripped[len("__files__:"):].strip()
                     yield f"event: files\ndata: {files_json}\n\n"
                 else:
+                    output_parts.append(chunk)
                     yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+            if req.node.contextMode != "isolated":
+                write_memory(
+                    req.projectPath,
+                    req.node.memoryRef,
+                    "".join(output_parts),
+                    node_title=req.node.title,
+                )
             yield "event: done\ndata: {}\n\n"
         except asyncio.CancelledError:
             raise

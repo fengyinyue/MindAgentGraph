@@ -1,4 +1,4 @@
-import type { Graph } from "@shared/types";
+import type { ContextMode, Graph } from "@shared/types";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -48,8 +48,18 @@ export async function planGraph(
 }
 
 export interface RunNodeInput {
-  node: { title: string; type: string; purpose?: string };
+  node: {
+    id?: string;
+    title: string;
+    type: string;
+    purpose?: string;
+    contextMode?: ContextMode;
+    memoryRef?: string;
+    systemPrompt?: string;
+  };
   userPrompt?: string;
+  parentOutputs?: Record<string, string>;
+  projectPath?: string | null;
   provider?: Provider;
   model?: string;
   apiKey?: string;
@@ -79,6 +89,8 @@ export async function runNodeStream(
     body: JSON.stringify({
       node: input.node,
       userPrompt: input.userPrompt,
+      parentOutputs: input.parentOutputs,
+      projectPath: input.projectPath,
       provider: input.provider,
       model: input.model,
     }),
@@ -130,13 +142,23 @@ export async function runNodeStream(
 }
 
 export interface CodeRunInput {
-  node: { title: string; type: string; purpose?: string };
+  node: {
+    id?: string;
+    title: string;
+    type: string;
+    purpose?: string;
+    contextMode?: ContextMode;
+    memoryRef?: string;
+    systemPrompt?: string;
+  };
   projectDir: string;
+  projectPath?: string | null;
   fileScopeAllow?: string[];
   fileScopeDeny?: string[];
   parentOutputs?: Record<string, string>;
   userPrompt?: string;
   model?: string;
+  runId?: string;
 }
 
 export interface CodeRunCallbacks {
@@ -193,6 +215,18 @@ export async function runNodeCode(
     if ((e as Error).name === "AbortError") return;
     cb.onError(e instanceof Error ? e.message : String(e));
   }
+}
+
+export async function cancelCodeRun(runId: string): Promise<boolean> {
+  const url = await getBackendUrl();
+  const res = await fetch(`${url}/run/node/code/cancel`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ runId }),
+  });
+  if (!res.ok) return false;
+  const data = await res.json() as { cancelled?: boolean };
+  return data.cancelled === true;
 }
 
 function parseSseEvent(raw: string): { type: string; data: string } | null {

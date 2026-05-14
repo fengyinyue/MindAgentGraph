@@ -5,6 +5,7 @@ const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window
 interface ProjectPayload {
   meta: ProjectMeta;
   graph: Graph;
+  path?: string;
 }
 
 function ensureTauri(): void {
@@ -19,7 +20,8 @@ export async function openProjectDialog(): Promise<ProjectPayload | null> {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const path = await open({ directory: true, multiple: false, title: "Open .mag Project" });
   if (!path || typeof path !== "string") return null;
-  return invoke<ProjectPayload>("open_project", { path });
+  const payload = await invoke<ProjectPayload>("open_project", { path });
+  return { ...payload, path };
 }
 
 export async function saveProjectDialog(

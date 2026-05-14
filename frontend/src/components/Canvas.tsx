@@ -183,14 +183,16 @@ export default function Canvas() {
 
   const addNode = useCallback(
     (type: NodeType, position: { x: number; y: number }) => {
+      const id = crypto.randomUUID();
       const newNode: NodeBase = {
-        id: crypto.randomUUID(),
+        id,
         type,
         title: type.charAt(0).toUpperCase() + type.slice(1),
         position,
         contextMode: "inherit",
         fileScope: { allow: [], deny: [] },
         toolPolicy: { tools: [], deny: [] },
+        memoryRef: type === "memory" ? `${id}.md` : undefined,
         data: {},
       };
       useGraphStore.getState().addNode(newNode);

@@ -105,6 +105,8 @@ def _to_internal_graph(payload: dict[str, Any]) -> Graph:
                 type=raw["type"],
                 title=raw["title"],
                 position=Position(x=float(raw["x"]), y=float(raw["y"])),
+                contextMode="inherit",
+                memoryRef=f"{raw['id']}.md" if raw["type"] == "memory" else None,
                 data={"purpose": raw.get("purpose", "")},
             )
         )

@@ -10,9 +10,16 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import signal
+import subprocess
+import sys
+import uuid
 from typing import AsyncIterator
 
 CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要提问、不要解释、不要等确认。
+
+## 节点系统 Prompt
+{system_prompt}
 
 ## 任务
 {task}
@@ -20,6 +27,9 @@ CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要�
 
 ## 工作目录
 当前工作目录是：{project_dir}
+
+## ContextMode
+{context_mode}
 
 ## 文件约束
 你**只能**在以下路径操作文件：
@@ -29,11 +39,61 @@ CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要�
 ## 上游参考
 {parent_context}
 
+## Memory
+{memory_context}
+
 ## 规则
 1. 直接调用 write_file / edit / bash 工具完成任务
 2. 不要输出"我可以帮你..."之类的解释，直接干活
 3. 生成完整可运行的代码
 """
+
+
+_ACTIVE_CLAUDE_RUNS: dict[str, asyncio.subprocess.Process] = {}
+
+
+def _log_claude(run_id: str, status: str, detail: str = "") -> None:
+    suffix = f" {detail}" if detail else ""
+    print(f"[ClaudeCode][{run_id}] {status}{suffix}", file=sys.stderr, flush=True)
+
+
+async def _kill_process_tree(proc: asyncio.subprocess.Process, run_id: str) -> bool:
+    if proc.returncode is not None:
+        return False
+
+    pid = proc.pid
+    _log_claude(run_id, "CANCEL", f"terminating pid={pid}")
+    try:
+        if os.name == "nt":
+            killer = await asyncio.create_subprocess_exec(
+                "taskkill", "/PID", str(pid), "/T", "/F",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await killer.communicate()
+        else:
+            os.killpg(pid, signal.SIGTERM)
+
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+        except asyncio.TimeoutError:
+            if os.name == "nt":
+                proc.kill()
+            else:
+                os.killpg(pid, signal.SIGKILL)
+            await proc.wait()
+        _log_claude(run_id, "CANCELLED", f"pid={pid}")
+        return True
+    except ProcessLookupError:
+        return False
+
+
+async def cancel_claude_run(run_id: str) -> bool:
+    proc = _ACTIVE_CLAUDE_RUNS.get(run_id)
+    if proc is None:
+        _log_claude(run_id, "CANCEL_MISS")
+        return False
+    return await _kill_process_tree(proc, run_id)
 
 
 def _assemble_prompt(
@@ -46,6 +106,9 @@ def _assemble_prompt(
     file_scope_deny: list[str],
     parent_outputs: dict[str, str] | None,
     user_prompt: str | None,
+    context_mode: str,
+    memory_text: str | None,
+    system_prompt: str | None,
 ) -> str:
     allow = (
         ", ".join(file_scope_allow)
@@ -58,11 +121,18 @@ def _assemble_prompt(
             f"  - 禁止：{g}" for g in file_scope_deny
         )
 
+    mode = context_mode if context_mode in {"inherit", "explicit", "isolated"} else "explicit"
     parent_context = ""
-    if parent_outputs:
+    if mode == "inherit" and parent_outputs:
         for pid, text in parent_outputs.items():
-            snippet = text[:600] + ("…" if len(text) > 600 else "")
+            snippet = text[:800] + ("…" if len(text) > 800 else "")
             parent_context += f"\n上游节点 {pid} 的输出：\n{snippet}\n"
+
+    memory_context = "(无)"
+    if mode == "inherit" and memory_text and memory_text.strip():
+        memory_context = memory_text.strip()[:1600]
+        if len(memory_text.strip()) > 1600:
+            memory_context += "…"
 
     task = user_prompt.strip() if user_prompt and user_prompt.strip() else f"实现 {node_title} 节点的全部代码（{node_purpose}）"
     purpose_hint = ""
@@ -70,10 +140,13 @@ def _assemble_prompt(
         purpose_hint = f"\n具体目标：{node_purpose}"
 
     return CODE_RUN_SYSTEM.format(
+        system_prompt=(system_prompt.strip() if system_prompt and system_prompt.strip() else "按节点职责完成代码生成。"),
         project_dir=project_dir,
+        context_mode=mode,
         allow_globs=allow,
         banned_section=banned,
         parent_context=parent_context or "(无)",
+        memory_context=memory_context,
         task=task,
         purpose_hint=purpose_hint,
     )
@@ -145,11 +218,18 @@ async def run_node_with_claude(
     file_scope_deny: list[str] | None = None,
     parent_outputs: dict[str, str] | None = None,
     user_prompt: str | None = None,
+    context_mode: str = "inherit",
+    memory_text: str | None = None,
+    system_prompt: str | None = None,
     model: str | None = None,
+    run_id: str | None = None,
 ) -> AsyncIterator[str]:
     """Yield stdout chunks from ``claude --print``, then a final
     ``__files__:["+ src/a.py", ...]`` marker line."""
+    effective_run_id = run_id or f"local-{uuid.uuid4().hex[:8]}"
+    _log_claude(effective_run_id, "START", f"node={node_title!r} cwd={project_dir}")
     if not os.path.isdir(project_dir):
+        _log_claude(effective_run_id, "ERROR", f"missing cwd={project_dir}")
         yield f"[error] 工程目录不存在: {project_dir}\n"
         return
 
@@ -162,6 +242,9 @@ async def run_node_with_claude(
         file_scope_deny=file_scope_deny or [],
         parent_outputs=parent_outputs,
         user_prompt=user_prompt,
+        context_mode=context_mode,
+        memory_text=memory_text,
+        system_prompt=system_prompt,
     )
 
     # Marker file for timestamp-based file detection
@@ -174,6 +257,7 @@ async def run_node_with_claude(
 
     claude_bin = shutil.which("claude")
     if not claude_bin:
+        _log_claude(effective_run_id, "ERROR", "claude command not found")
         # ── fallback: no Claude Code CLI ──
         yield (
             "[fallback] 未找到 `claude` 命令行工具。\n"
@@ -194,14 +278,21 @@ async def run_node_with_claude(
         if model:
             args += ["--model", model]
 
-        proc = await asyncio.create_subprocess_exec(
-            *args,
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=project_dir,
-            env={**os.environ, "NO_COLOR": "1", "CLAUDE_CODE_SIMPLE": "1"},
-        )
+        spawn_kwargs = {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "cwd": project_dir,
+            "env": {**os.environ, "NO_COLOR": "1", "CLAUDE_CODE_SIMPLE": "1"},
+        }
+        if os.name == "nt":
+            spawn_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            spawn_kwargs["start_new_session"] = True
+
+        proc = await asyncio.create_subprocess_exec(*args, **spawn_kwargs)
+        _ACTIVE_CLAUDE_RUNS[effective_run_id] = proc
+        _log_claude(effective_run_id, "RUNNING", f"pid={proc.pid}")
         # Pass prompt via stdin (more reliable than cmdline arg).
         if proc.stdin:
             proc.stdin.write(prompt.encode("utf-8"))
@@ -215,6 +306,7 @@ async def run_node_with_claude(
 
         # Wait for process to finish.
         await proc.wait()
+        _log_claude(effective_run_id, "EXIT", f"pid={proc.pid} code={proc.returncode}")
 
         # Capture stderr for diagnostics.
         if proc.stderr:
@@ -227,24 +319,24 @@ async def run_node_with_claude(
 
         # Detect changed files (only on clean completion).
         changed = await _detect_changed_files(project_dir, marker)
+        _log_claude(effective_run_id, "DONE", f"files={len(changed)}")
 
     except asyncio.CancelledError:
-        if proc is not None and proc.returncode is None:
-            try:
-                proc.kill()
-                await proc.wait()
-            except ProcessLookupError:
-                pass
+        if proc is not None:
+            await _kill_process_tree(proc, effective_run_id)
         raise
 
     except FileNotFoundError:
+        _log_claude(effective_run_id, "ERROR", "claude command not found")
         yield "\n[error] `claude` 命令未找到。请确认 Claude Code 已安装。\n"
         changed = []
     except Exception as e:
+        _log_claude(effective_run_id, "ERROR", str(e))
         yield f"\n[error] 执行异常: {e}\n"
         changed = await _detect_changed_files(project_dir, marker)
 
     finally:
+        _ACTIVE_CLAUDE_RUNS.pop(effective_run_id, None)
         # Clean up marker.
         if marker:
             try:
