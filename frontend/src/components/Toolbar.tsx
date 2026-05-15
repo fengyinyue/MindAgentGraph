@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useGraphStore } from "@/store/graphStore";
+import { usePanelStore } from "@/store/panelStore";
 import { openProjectDialog, saveProjectDialog } from "@/api/project";
 import { useRunNode } from "@/hooks/useRunNode";
 import type { NodeBase } from "@shared/types";
@@ -15,6 +16,10 @@ export default function Toolbar() {
   const nodes = useGraphStore((s) => s.nodes);
   const links = useGraphStore((s) => s.links);
   const { runDag, runningId } = useRunNode();
+  const toggleLeftPanel = usePanelStore((s) => s.toggleLeft);
+  const toggleBottomPanel = usePanelStore((s) => s.toggleBottom);
+  const leftOpen = usePanelStore((s) => s.leftOpen);
+  const bottomOpen = usePanelStore((s) => s.bottomOpen);
 
   const onOpen = async () => {
     try {
@@ -99,6 +104,21 @@ export default function Toolbar() {
         <span className="ml-auto text-zinc-500">
           {projectPath ?? "untitled"}
         </span>
+        <span className="text-zinc-600">|</span>
+        <button
+          className={`text-xs ${leftOpen ? "text-accent" : "text-zinc-500"} hover:text-accent`}
+          onClick={toggleLeftPanel}
+          title={leftOpen ? "折叠左侧面板" : "展开左侧面板"}
+        >
+          ☰
+        </button>
+        <button
+          className={`text-xs ${bottomOpen ? "text-accent" : "text-zinc-500"} hover:text-accent`}
+          onClick={toggleBottomPanel}
+          title={bottomOpen ? "折叠底部面板" : "展开底部面板"}
+        >
+          ⬡
+        </button>
         <button
           className="ml-2 text-zinc-400 hover:text-accent text-base leading-none"
           onClick={() => setSettingsOpen(true)}
