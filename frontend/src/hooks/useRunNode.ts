@@ -226,6 +226,17 @@ export function useRunNode() {
       const state = useGraphStore.getState();
       const node = state.nodes.find((n) => n.id === nodeId);
       if (!node) return false;
+      if (node.type !== "code") {
+        useMonitorStore.getState().addLog({
+          level: "warn",
+          source: "code",
+          status: "SKIPPED",
+          nodeId,
+          nodeTitle: node.title,
+          message: "只有 Code 节点可以执行 Run Code。",
+        });
+        return false;
+      }
       if (useRunState.getState().runningId) return false;
 
       const projectDir = state.projectDir;

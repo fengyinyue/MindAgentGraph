@@ -28,6 +28,7 @@ export default function NodeInspector() {
   const generatedFiles = (node.data?.generatedFiles as string[] | undefined) ?? [];
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
+  const isCodeNode = node.type === "code";
 
   return (
     <div className="flex flex-col h-full text-sm">
@@ -113,14 +114,16 @@ export default function NodeInspector() {
               >
                 ▶ Explain
               </button>
-              <button
-                className="px-3 py-1.5 bg-emerald-700 rounded text-xs disabled:opacity-50"
-                onClick={() => runCode(node.id)}
-                disabled={runningId !== null || !projectDir}
-                title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "Claude Code 生成代码"}
-              >
-                ⚡ Code
-              </button>
+              {isCodeNode ? (
+                <button
+                  className="px-3 py-1.5 bg-emerald-700 rounded text-xs disabled:opacity-50"
+                  onClick={() => runCode(node.id)}
+                  disabled={runningId !== null || !projectDir}
+                  title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "Claude Code 生成代码"}
+                >
+                  ⚡ Code
+                </button>
+              ) : null}
             </>
           )}
         </div>
@@ -175,7 +178,7 @@ export default function NodeInspector() {
           ) : (
             !codeOutput && (
               <div className="text-zinc-600 text-xs italic">
-                点 ▶ Explain 文本展开 或 ⚡ Code 生成代码
+                {isCodeNode ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码" : "点 ▶ Explain 文本展开"}
               </div>
             )
           )}
