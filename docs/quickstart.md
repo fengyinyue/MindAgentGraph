@@ -9,7 +9,7 @@
 ## A. 浏览器 dev 模式（无需 Rust）
 
 适合：第一次跑、验证 MVP 闭环（一句话 → 节点树）。
-不可用：Open/Save .mag（点击会提示"仅在 Tauri 桌面应用内可用"）。
+Open/Save As 可用：浏览器 dev 模式会使用 Chrome/Edge 的目录选择授权读取或写入 `.mag` 工程目录；不支持该 API 的浏览器需要改用 Tauri 桌面模式。
 
 ### 一次性准备
 

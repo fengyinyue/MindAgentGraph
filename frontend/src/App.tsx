@@ -7,6 +7,7 @@ import NodeInspector from "./components/NodeInspector";
 import Toolbar from "./components/Toolbar";
 import LeftPanel from "./components/LeftPanel";
 import BottomPanel from "./components/BottomPanel";
+import OutputViewer from "./components/OutputViewer";
 import { checkHealth } from "./api/backend";
 import { usePanelStore } from "./store/panelStore";
 
@@ -116,6 +117,7 @@ export default function App() {
           </div>
         </Panel>
       </Group>
+      <OutputViewer />
     </div>
   );
 }

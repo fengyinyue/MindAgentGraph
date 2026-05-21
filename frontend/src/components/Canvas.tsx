@@ -16,6 +16,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
+import { useOutputPanelStore } from "@/store/outputPanelStore";
 import { NODE_TYPES, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
 
 const typeColor: Record<string, string> = {
@@ -139,24 +140,33 @@ export default function Canvas() {
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const { run, runCode, runningId } = useRunNode();
+  const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
   const { screenToFlowPosition } = useReactFlow();
   const contextMenuNode = menu
     ? storeNodes.find((node) => node.id === menu.nodeId)
     : undefined;
+  const contextMenuOutput = contextMenuNode
+    ? contextMenuNode.output ?? (contextMenuNode.data?.output as string | undefined) ?? ""
+    : "";
+  const contextMenuCodeOutput = contextMenuNode
+    ? (contextMenuNode.data?.codeOutput as string | undefined) ?? ""
+    : "";
+  const contextMenuCanExplain = contextMenuNode !== undefined && contextMenuNode.type !== "planning";
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
       rfNodes.map((n) => {
         const orig = storeNodes.find((s) => s.id === n.id);
+        const status = orig?.data?.status;
         return {
           ...n,
           data: {
             ...n.data,
-            label: `${orig?.title ?? n.id}\n[${orig?.type ?? "?"}]${runningId === n.id ? " ●" : ""}`,
+            label: `${orig?.title ?? n.id}\n[${orig?.type ?? "?"}]${runningId === n.id ? " ●" : status === "needs_confirmation" ? " ?" : ""}`,
           },
           style: {
-            borderLeft: `3px solid ${typeColor[orig?.type ?? "semantic"] || "#999"}`,
+            borderLeft: `3px solid ${status === "needs_confirmation" ? "#f59e0b" : typeColor[orig?.type ?? "semantic"] || "#999"}`,
             whiteSpace: "pre-line" as const,
             opacity: runningId && runningId !== n.id ? 0.6 : 1,
           },
@@ -261,16 +271,18 @@ export default function Canvas() {
           style={{ left: menu.x, top: menu.y }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
-            onClick={() => {
-              run(menu.nodeId);
-              closeMenu();
-            }}
-            disabled={runningId !== null}
-          >
-            ▶ Explain (AI)
-          </button>
+          {contextMenuCanExplain ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                run(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              ▶ Explain (AI)
+            </button>
+          ) : null}
           {contextMenuNode?.type === "code" ? (
             <button
               className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
@@ -282,6 +294,28 @@ export default function Canvas() {
               title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : undefined}
             >
               ⚡ Generate Code
+            </button>
+          ) : null}
+          {contextMenuOutput ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas"
+              onClick={() => {
+                openOutputPanel(menu.nodeId, "explain");
+                closeMenu();
+              }}
+            >
+              View Explain Output
+            </button>
+          ) : null}
+          {contextMenuCodeOutput ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas"
+              onClick={() => {
+                openOutputPanel(menu.nodeId, "code");
+                closeMenu();
+              }}
+            >
+              View Code Output
             </button>
           ) : null}
           <hr className="border-zinc-700 my-1" />

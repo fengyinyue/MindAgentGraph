@@ -1,5 +1,11 @@
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
+import { useOutputPanelStore } from "@/store/outputPanelStore";
+import {
+  buildConfirmationPrompt,
+  type ConfirmationAnswers,
+  type ConfirmationRequest,
+} from "@/utils/confirmation";
 import { NODE_TYPES, type NodeType } from "@shared/types";
 
 export default function NodeInspector() {
@@ -10,6 +16,7 @@ export default function NodeInspector() {
   const { run, runCode, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
+  const openOutputPanel = useOutputPanelStore((s) => s.open);
 
   if (!node) {
     return (
@@ -29,6 +36,23 @@ export default function NodeInspector() {
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
+  const canExplain = node.type !== "planning";
+  const confirmation = getConfirmationRequest(node.data?.confirmation);
+  const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
+  const needsConfirmation = node.data?.status === "needs_confirmation" && confirmation !== null;
+
+  const updateConfirmationAnswer = (id: string, value: string) => {
+    useGraphStore.getState().patchNodeData(node.id, {
+      confirmationAnswers: { ...confirmationAnswers, [id]: value },
+    });
+  };
+
+  const continueWithConfirmation = () => {
+    if (!confirmation) return;
+    void run(node.id, {
+      userPrompt: buildConfirmationPrompt(confirmation, confirmationAnswers),
+    });
+  };
 
   return (
     <div className="flex flex-col h-full text-sm">
@@ -107,13 +131,15 @@ export default function NodeInspector() {
             </button>
           ) : (
             <>
-              <button
-                className="px-3 py-1.5 bg-accent rounded text-xs disabled:opacity-50"
-                onClick={() => run(node.id)}
-                disabled={runningId !== null}
-              >
-                ▶ Explain
-              </button>
+              {canExplain ? (
+                <button
+                  className="px-3 py-1.5 bg-accent rounded text-xs disabled:opacity-50"
+                  onClick={() => run(node.id)}
+                  disabled={runningId !== null}
+                >
+                  ▶ Explain
+                </button>
+              ) : null}
               {isCodeNode ? (
                 <button
                   className="px-3 py-1.5 bg-emerald-700 rounded text-xs disabled:opacity-50"
@@ -136,6 +162,12 @@ export default function NodeInspector() {
             <div className="text-xs text-zinc-500 uppercase mb-1 flex items-center gap-2">
               <span>Code Output</span>
               {isRunning && <span className="text-emerald-400 animate-pulse">generating…</span>}
+              <button
+                className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:border-accent hover:text-accent"
+                onClick={() => openOutputPanel(node.id, "code")}
+              >
+                Open Panel
+              </button>
             </div>
             {codeError ? (
               <pre className="bg-red-950/40 border border-red-800/50 text-red-300 text-xs p-2 rounded whitespace-pre-wrap">
@@ -161,11 +193,73 @@ export default function NodeInspector() {
           </div>
         ) : null}
 
+        {needsConfirmation ? (
+          <div className="rounded border border-amber-700/60 bg-amber-950/20 p-3">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-xs font-semibold uppercase text-amber-300">
+                Needs Confirmation
+              </span>
+              <button
+                className="ml-auto rounded border border-amber-700/70 px-2 py-0.5 text-[11px] text-amber-200 hover:bg-amber-900/30 disabled:opacity-50"
+                onClick={continueWithConfirmation}
+                disabled={runningId !== null}
+              >
+                Continue
+              </button>
+            </div>
+            {confirmation.title ? (
+              <div className="mb-1 text-sm text-zinc-100">{confirmation.title}</div>
+            ) : null}
+            {confirmation.note ? (
+              <div className="mb-2 text-xs leading-relaxed text-zinc-400">{confirmation.note}</div>
+            ) : null}
+            <div className="space-y-2">
+              {confirmation.questions.map((question) => (
+                <label key={question.id} className="block">
+                  <span className="block text-xs text-zinc-300">{question.label}</span>
+                  {question.description ? (
+                    <span className="block pb-1 text-[11px] leading-snug text-zinc-500">
+                      {question.description}
+                    </span>
+                  ) : null}
+                  {question.options && question.options.length > 0 ? (
+                    <select
+                      className="w-full rounded border border-zinc-700 bg-canvas px-2 py-1 text-xs outline-none focus:border-amber-500"
+                      value={confirmationAnswers[question.id] ?? ""}
+                      onChange={(e) => updateConfirmationAnswer(question.id, e.target.value)}
+                    >
+                      <option value="">Select...</option>
+                      {question.options.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <textarea
+                      className="w-full min-h-16 resize-y rounded border border-zinc-700 bg-canvas px-2 py-1 text-xs outline-none focus:border-amber-500"
+                      value={confirmationAnswers[question.id] ?? ""}
+                      placeholder={question.placeholder ?? "输入确认内容..."}
+                      onChange={(e) => updateConfirmationAnswer(question.id, e.target.value)}
+                    />
+                  )}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         {/* Text output (Explain mode) */}
         <div>
           <div className="text-xs text-zinc-500 uppercase mb-1 flex items-center gap-2">
             <span>Output</span>
             {isRunning && <span className="text-accent animate-pulse">streaming…</span>}
+            {output ? (
+              <button
+                className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:border-accent hover:text-accent"
+                onClick={() => openOutputPanel(node.id, "explain")}
+              >
+                Open Panel
+              </button>
+            ) : null}
           </div>
           {error ? (
             <pre className="bg-red-950/40 border border-red-800/50 text-red-300 text-xs p-2 rounded whitespace-pre-wrap">
@@ -178,7 +272,11 @@ export default function NodeInspector() {
           ) : (
             !codeOutput && (
               <div className="text-zinc-600 text-xs italic">
-                {isCodeNode ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码" : "点 ▶ Explain 文本展开"}
+                {node.type === "planning"
+                  ? "Planning 节点由生成节点图阶段创建，不需要单独 Explain。"
+                  : isCodeNode
+                    ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码"
+                    : "点 ▶ Explain 文本展开"}
               </div>
             )
           )}
@@ -240,6 +338,23 @@ export default function NodeInspector() {
       </div>
     </div>
   );
+}
+
+function getConfirmationRequest(value: unknown): ConfirmationRequest | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<ConfirmationRequest>;
+  if (!Array.isArray(raw.questions) || raw.questions.length === 0) return null;
+  return raw as ConfirmationRequest;
+}
+
+function getConfirmationAnswers(value: unknown): ConfirmationAnswers {
+  if (!value || typeof value !== "object") return {};
+  const raw = value as Record<string, unknown>;
+  const answers: ConfirmationAnswers = {};
+  for (const [key, answer] of Object.entries(raw)) {
+    if (typeof answer === "string") answers[key] = answer;
+  }
+  return answers;
 }
 
 function contextHint(mode: "inherit" | "explicit" | "isolated"): string {

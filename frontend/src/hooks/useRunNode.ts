@@ -5,6 +5,7 @@ import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
 import { useProviderStore } from "@/store/providerStore";
+import { parseConfirmationRequest } from "@/utils/confirmation";
 import type { Edge, NodeBase } from "@shared/types";
 
 interface RunState {
@@ -100,6 +101,17 @@ export function useRunNode() {
       const node = state.nodes.find((n) => n.id === nodeId);
       if (!node) return false;
       if (useRunState.getState().runningId) return false;
+      if (node.type === "planning") {
+        useMonitorStore.getState().addLog({
+          level: "warn",
+          source: "node",
+          status: "SKIPPED",
+          nodeId,
+          nodeTitle: node.title,
+          message: "Planning 节点由生成节点图阶段创建，不需要单独 Explain。",
+        });
+        return false;
+      }
 
       const provider = useProviderStore.getState().provider;
       const model = useProviderStore.getState().getModel(provider);
@@ -118,7 +130,13 @@ export function useRunNode() {
         ? collectUpstreamOutputs(state.nodes, state.links, node.id)
         : undefined;
 
-      state.patchNodeData(nodeId, { output: "", error: undefined });
+      state.patchNodeData(nodeId, {
+        output: "",
+        error: undefined,
+        confirmation: undefined,
+        confirmationAnswers: undefined,
+        status: "running",
+      });
       state.updateNode(nodeId, { output: "" });
       const runRecordId = crypto.randomUUID();
       appendRunRecord(node, {
@@ -166,11 +184,30 @@ export function useRunNode() {
               });
             }
             acc += chunk;
-            useGraphStore.getState().patchNodeData(nodeId, { output: acc });
+            useGraphStore.getState().patchNodeData(nodeId, { output: acc, status: "running" });
             useGraphStore.getState().updateNode(nodeId, { output: acc });
           },
           onDone: () => {
             finishRunRecord(nodeId, runRecordId, { status: "done", finishedAt: new Date().toISOString() });
+            const confirmation = parseConfirmationRequest(acc);
+            if (confirmation) {
+              ok = false;
+              useGraphStore.getState().patchNodeData(nodeId, {
+                confirmation,
+                confirmationAnswers: {},
+                status: "needs_confirmation",
+              });
+              useMonitorStore.getState().addLog({
+                level: "warn",
+                source: "node",
+                status: "NEEDS_CONFIRMATION",
+                nodeId,
+                nodeTitle: node.title,
+                message: `Node needs ${confirmation.questions.length} confirmation item(s) before continuing`,
+              });
+            } else {
+              useGraphStore.getState().patchNodeData(nodeId, { confirmation: undefined, status: "done" });
+            }
             useMonitorStore.getState().addLog({
               level: "info",
               source: "node",
@@ -185,7 +222,7 @@ export function useRunNode() {
           onError: (message) => {
             ok = false;
             finishRunRecord(nodeId, runRecordId, { status: "error", finishedAt: new Date().toISOString(), error: message });
-            useGraphStore.getState().patchNodeData(nodeId, { error: message });
+            useGraphStore.getState().patchNodeData(nodeId, { error: message, status: "error" });
             useMonitorStore.getState().addLog({
               level: "error",
               source: "node",
@@ -390,7 +427,7 @@ export function useRunNode() {
           onText: (nodeId, chunk) => {
             const node = useGraphStore.getState().nodes.find((n) => n.id === nodeId);
             const next = `${outputText(node)}${chunk}`;
-            useGraphStore.getState().patchNodeData(nodeId, { output: next });
+            useGraphStore.getState().patchNodeData(nodeId, { output: next, status: "running" });
             useGraphStore.getState().updateNode(nodeId, { output: next });
           },
           onProgress: (progress) => {
@@ -402,8 +439,17 @@ export function useRunNode() {
               message: progress.message,
             });
             if (progress.output !== undefined) {
-              useGraphStore.getState().patchNodeData(progress.nodeId, { output: progress.output });
+              const confirmation = parseConfirmationRequest(progress.output);
+              useGraphStore.getState().patchNodeData(progress.nodeId, {
+                output: progress.output,
+                confirmation: confirmation ?? undefined,
+                confirmationAnswers: confirmation ? {} : undefined,
+                status: confirmation ? "needs_confirmation" : progress.status,
+              });
               useGraphStore.getState().updateNode(progress.nodeId, { output: progress.output });
+            } else if (progress.status === "needs_confirmation") {
+              useGraphStore.getState().patchNodeData(progress.nodeId, { status: "needs_confirmation" });
+              ok = false;
             }
           },
           onLog: (entry) => useMonitorStore.getState().addLog({
@@ -415,7 +461,12 @@ export function useRunNode() {
             message: entry.message ?? "",
           }),
           onDone: () => {
-            useMonitorStore.getState().addLog({ level: "info", source: "dag", status: "DONE", message: "DAG run done" });
+            useMonitorStore.getState().addLog({
+              level: ok ? "info" : "warn",
+              source: "dag",
+              status: ok ? "DONE" : "PAUSED",
+              message: ok ? "DAG run done" : "DAG paused for user confirmation",
+            });
           },
           onError: (message, nodeId) => {
             ok = false;

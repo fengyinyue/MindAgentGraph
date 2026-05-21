@@ -54,6 +54,10 @@ def _output_key(node: Node) -> str:
     return f"{node.title} ({node.id})"
 
 
+def _has_confirmation_request(output: str) -> bool:
+    return "```mag-confirmation" in output.lower()
+
+
 async def run_dag_stream(
     *,
     graph: Graph,
@@ -81,6 +85,23 @@ async def run_dag_stream(
 
     for node_id in order:
         node = nodes_by_id[node_id]
+        if node.type == "planning":
+            yield sse("log", {
+                "level": "warn",
+                "source": "dag",
+                "status": "SKIPPED",
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "message": "跳过 Planning 节点；项目结构已由生成节点图阶段完成。",
+            })
+            yield sse("progress", {
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "status": "skipped",
+                "message": "Planning 节点不执行 Explain。",
+            })
+            continue
+
         if node.type == "code" and not allow_code:
             yield sse("log", {
                 "level": "warn",
@@ -143,6 +164,25 @@ async def run_dag_stream(
 
             output = "".join(output_parts)
             results[node.id] = output
+            if _has_confirmation_request(output):
+                yield sse("progress", {
+                    "nodeId": node.id,
+                    "nodeTitle": node.title,
+                    "status": "needs_confirmation",
+                    "message": "节点需要用户确认，DAG 已暂停。",
+                    "output": output,
+                })
+                yield sse("log", {
+                    "level": "warn",
+                    "source": "dag",
+                    "status": "NEEDS_CONFIRMATION",
+                    "nodeId": node.id,
+                    "nodeTitle": node.title,
+                    "message": "节点需要用户确认，确认后再继续执行。",
+                })
+                yield sse("done", {"results": results, "pausedAt": node.id})
+                return
+
             if node.contextMode != "isolated":
                 write_memory(project_path, node.memoryRef, output, node_title=node.title)
 

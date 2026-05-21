@@ -26,7 +26,7 @@ export interface DagProgress {
   runId: string;
   nodeId: string;
   nodeTitle?: string;
-  status: "pending" | "running" | "done" | "error" | "skipped";
+  status: "pending" | "running" | "done" | "error" | "skipped" | "needs_confirmation";
   message?: string;
 }
 

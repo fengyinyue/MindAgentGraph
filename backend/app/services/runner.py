@@ -22,9 +22,33 @@ NODE_RUN_SYSTEM = """你是一个被绑定到某个“思维节点”上的助�
 3. 默认中文，除非用户用其他语言提问
 4. 长度控制在 600 字以内，重点是密度而非全面"""
 
+CONFIRMATION_PROTOCOL = """
+If the node cannot produce a responsible result without user input, do not guess.
+Return the useful partial work first, then append exactly one fenced block:
+
+```mag-confirmation
+{
+  "title": "Need confirmation",
+  "note": "Brief reason this blocks the node.",
+  "questions": [
+    {
+      "id": "stable_snake_case_id",
+      "label": "Question shown to the user",
+      "description": "Optional context",
+      "options": ["Optional choice A", "Optional choice B"],
+      "placeholder": "Optional free text placeholder"
+    }
+  ]
+}
+```
+
+Use options only for finite choices. Use no more than 3 questions.
+"""
+
 
 def _effective_system_prompt(system_prompt: str | None) -> str:
-    return system_prompt.strip() if system_prompt and system_prompt.strip() else NODE_RUN_SYSTEM
+    base = system_prompt.strip() if system_prompt and system_prompt.strip() else NODE_RUN_SYSTEM
+    return f"{base}\n\n{CONFIRMATION_PROTOCOL}"
 
 
 async def run_node_stream(
