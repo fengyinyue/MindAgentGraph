@@ -139,7 +139,7 @@ export default function Canvas() {
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
-  const { run, runCode, runningId } = useRunNode();
+  const { run, runCode, expandPlanNodes, runningId } = useRunNode();
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
   const { screenToFlowPosition } = useReactFlow();
@@ -152,7 +152,8 @@ export default function Canvas() {
   const contextMenuCodeOutput = contextMenuNode
     ? (contextMenuNode.data?.codeOutput as string | undefined) ?? ""
     : "";
-  const contextMenuCanExplain = contextMenuNode !== undefined && contextMenuNode.type !== "planning";
+  const contextMenuCanExplain = contextMenuNode !== undefined;
+  const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" && contextMenuOutput;
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -281,6 +282,18 @@ export default function Canvas() {
               disabled={runningId !== null}
             >
               ▶ Explain (AI)
+            </button>
+          ) : null}
+          {contextMenuCanGenerateNodes ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                expandPlanNodes(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              ✦ Generate Nodes
             </button>
           ) : null}
           {contextMenuNode?.type === "code" ? (

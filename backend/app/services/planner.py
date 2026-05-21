@@ -129,6 +129,61 @@ def _to_internal_graph(payload: dict[str, Any]) -> Graph:
     return Graph(nodes=nodes, links=links)
 
 
+EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
+
+你的任务：根据已有的高层规划文本，将其拆解成一组节点组成的 DAG (有向无环图)。
+
+节点类型选择规则：
+- 小/中型项目（单一系统，如"番茄钟"、"Markdown编辑器"）：直接生成实现节点（code、task、prompt），不要创建 planning 子节点
+- 大型项目（覆盖多个独立子系统，如"电商平台"、"游戏引擎"）：可以为每个子系统创建一个 planning 节点（后续可各自 Explain + Generate Nodes 展开），子系统之间直接生成实现节点
+
+节点类型说明：
+- planning: 仅用于大型项目中独立子系统的规划入口
+- code: 代码实现节点
+- prompt: 与 AI 对话生成内容的节点
+- asset: 资源/素材节点
+- task: 待办任务节点
+- memory: 记忆/上下文节点
+- filescope: 文件作用域定义
+
+设计原则：
+1. 3-10 个节点，覆盖规划中的关键模块
+2. 每个节点应有清晰的单一职责
+3. 用 links 表达数据依赖（A 的输出是 B 的输入）
+4. 节点位置 (position) 分散。同级节点 x 间距 ≥ 200，父子节点 y 间距 ≥ 250
+5. 根节点放在 (0,0)，下游节点向下展开，同层兄弟节点水平排列
+6. 节点的 purpose 字段要具体
+
+必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
+
+
+async def expand_plan(
+    plan_text: str,
+    provider: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+) -> dict[str, object]:
+    """将规划文本展开为子节点+连线。返回 {"nodes": [...], "links": [...]}。"""
+    chosen = (provider or DEFAULT_PROVIDER).lower()
+    if chosen not in _PROVIDERS:
+        raise ProviderError(f"unknown provider: {chosen}")
+    impl = _PROVIDERS[chosen]
+    chosen_model = model or DEFAULT_MODELS.get(chosen)
+
+    try:
+        payload = await impl.emit_graph(
+            system_prompt=EXPAND_SYSTEM,
+            user_goal=plan_text,
+            tool_schema=EMIT_GRAPH_TOOL,
+            model=chosen_model,
+            api_key=api_key,
+        )
+        return payload
+    except ProviderError as e:
+        _log.warning("expand_plan provider=%s failed: %s", chosen, e)
+        raise
+
+
 async def plan_graph(
     goal: str,
     provider: str | None = None,

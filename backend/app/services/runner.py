@@ -11,7 +11,7 @@ from app.services.planner import _PROVIDERS, DEFAULT_PROVIDER, DEFAULT_MODELS
 
 _log = logging.getLogger("mag.runner")
 
-NODE_RUN_SYSTEM = """你是一个被绑定到某个“思维节点”上的助手。
+NODE_RUN_SYSTEM = """你是一个被绑定到某个"思维节点"上的助手。
 
 每个节点是项目规划图中的一个独立单元，拥有自己的职责（title）、类型（type）和目的（purpose）。
 用户会要求你在这个节点的语境下展开工作 —— 输出与该节点职责严格相关的内容。
@@ -20,7 +20,20 @@ NODE_RUN_SYSTEM = """你是一个被绑定到某个“思维节点”上的助�
 1. 紧扣节点的 title / purpose；不要漫谈到节点之外的事
 2. Markdown 格式，结构清晰（标题、列表、代码块）
 3. 默认中文，除非用户用其他语言提问
-4. 长度控制在 600 字以内，重点是密度而非全面"""
+4. 长度控制在 600 字以内，重点是密度而非全面
+5. 不要尝试读取文件或探索项目目录，直接基于你的知识输出文本"""
+
+PLANNING_RUN_SYSTEM = """你是一个项目规划助手。
+
+当前节点类型是 planning，你需要基于节点的目的（purpose）输出一份详细的项目规划方案。
+
+输出原则：
+1. 将目的拆解为具体的模块/阶段，每个模块说明其职责和关键输出
+2. 规划应覆盖：技术选型、架构设计、模块划分、实现顺序、关键依赖
+3. Markdown 格式，结构清晰（标题、列表、代码块）
+4. 默认中文
+5. 不要尝试读取文件、探索目录或执行任何命令——直接基于你的知识输出规划文本
+6. 后续会有其他步骤根据这份规划生成具体的实现节点"""
 
 CONFIRMATION_PROTOCOL = """
 If the node cannot produce a responsible result without user input, do not guess.
@@ -46,8 +59,13 @@ Use options only for finite choices. Use no more than 3 questions.
 """
 
 
-def _effective_system_prompt(system_prompt: str | None) -> str:
-    base = system_prompt.strip() if system_prompt and system_prompt.strip() else NODE_RUN_SYSTEM
+def _effective_system_prompt(system_prompt: str | None, node_type: str = "") -> str:
+    if system_prompt and system_prompt.strip():
+        base = system_prompt.strip()
+    elif node_type == "planning":
+        base = PLANNING_RUN_SYSTEM
+    else:
+        base = NODE_RUN_SYSTEM
     return f"{base}\n\n{CONFIRMATION_PROTOCOL}"
 
 
@@ -83,7 +101,7 @@ async def run_node_stream(
 
     try:
         async for chunk in impl.stream_text(
-            system_prompt=_effective_system_prompt(system_prompt),
+            system_prompt=_effective_system_prompt(system_prompt, node_type),
             user_message=user_message,
             model=chosen_model,
             api_key=api_key,
@@ -117,7 +135,7 @@ def _build_user_message(
     if mode == "inherit" and parent_outputs:
         blocks: list[str] = []
         for pid, text in parent_outputs.items():
-            snippet = text[:1200] + ("…" if len(text) > 1200 else "")
+            snippet = text[:1200] + ("..." if len(text) > 1200 else "")
             blocks.append(f"### {pid}\n{snippet}")
         if blocks:
             parts.append("\n## 上游输出\n" + "\n\n".join(blocks))
@@ -125,7 +143,7 @@ def _build_user_message(
     if mode == "inherit" and memory_text and memory_text.strip():
         snippet = memory_text.strip()[:1600]
         if len(memory_text.strip()) > 1600:
-            snippet += "…"
+            snippet += "..."
         parts.append("\n## Memory\n" + snippet)
 
     if user_prompt and user_prompt.strip():

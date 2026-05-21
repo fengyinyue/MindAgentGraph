@@ -33,8 +33,8 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeCancelRequest, Graph, RunDagRequest
-from app.services.planner import plan_graph
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest
+from app.services.planner import expand_plan, plan_graph
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_claude_run, run_node_with_claude
 from app.services.memory import read_memory, write_memory
@@ -70,6 +70,20 @@ async def plan(
     # var when absent.
     return await plan_graph(
         req.goal,
+        provider=req.provider,
+        model=req.model,
+        api_key=x_provider_key,
+    )
+
+
+@app.post("/plan/expand")
+async def plan_expand(
+    req: ExpandPlanRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+):
+    """将规划文本展开为子节点+连线，返回 AI 原始 emit_graph 结果。"""
+    return await expand_plan(
+        req.plan_text,
         provider=req.provider,
         model=req.model,
         api_key=x_provider_key,

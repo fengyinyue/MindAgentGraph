@@ -13,7 +13,7 @@ export default function NodeInspector() {
   const node = useGraphStore((s) =>
     s.nodes.find((n) => n.id === selectedId),
   );
-  const { run, runCode, cancel, runningId } = useRunNode();
+  const { run, runCode, expandPlanNodes, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
   const openOutputPanel = useOutputPanelStore((s) => s.open);
@@ -36,7 +36,8 @@ export default function NodeInspector() {
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
-  const canExplain = node.type !== "planning";
+  const isPlanningNode = node.type === "planning";
+  const canGenerateNodes = isPlanningNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
   const needsConfirmation = node.data?.status === "needs_confirmation" && confirmation !== null;
@@ -131,13 +132,20 @@ export default function NodeInspector() {
             </button>
           ) : (
             <>
-              {canExplain ? (
+              <button
+                className="px-3 py-1.5 bg-accent rounded text-xs disabled:opacity-50"
+                onClick={() => run(node.id)}
+                disabled={runningId !== null}
+              >
+                ▶ Explain
+              </button>
+              {canGenerateNodes ? (
                 <button
-                  className="px-3 py-1.5 bg-accent rounded text-xs disabled:opacity-50"
-                  onClick={() => run(node.id)}
+                  className="px-3 py-1.5 bg-purple-700 rounded text-xs disabled:opacity-50"
+                  onClick={() => expandPlanNodes(node.id)}
                   disabled={runningId !== null}
                 >
-                  ▶ Explain
+                  ✦ Generate Nodes
                 </button>
               ) : null}
               {isCodeNode ? (
@@ -272,10 +280,10 @@ export default function NodeInspector() {
           ) : (
             !codeOutput && (
               <div className="text-zinc-600 text-xs italic">
-                {node.type === "planning"
-                  ? "Planning 节点由生成节点图阶段创建，不需要单独 Explain。"
-                  : isCodeNode
-                    ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码"
+                {isCodeNode
+                  ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码"
+                  : isPlanningNode
+                    ? "填写 Purpose 后点 ▶ Explain 生成规划，再用 ✦ Generate Nodes 展开子节点"
                     : "点 ▶ Explain 文本展开"}
               </div>
             )

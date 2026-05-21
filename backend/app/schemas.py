@@ -126,6 +126,12 @@ class CodeCancelRequest(BaseModel):
     runId: str
 
 
+class ExpandPlanRequest(BaseModel):
+    plan_text: str
+    provider: Optional[ProviderName] = None
+    model: Optional[str] = None
+
+
 class HealthResponse(BaseModel):
     status: str = "ok"
     version: str = "0.1.0"

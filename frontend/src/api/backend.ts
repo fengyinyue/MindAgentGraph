@@ -236,6 +236,40 @@ export async function runNodeCode(
   }
 }
 
+export interface ExpandPlanResult {
+  nodes: Array<{
+    id: string;
+    type: string;
+    title: string;
+    x: number;
+    y: number;
+    purpose?: string;
+  }>;
+  links: Array<{
+    source: string;
+    target: string;
+    label?: string;
+  }>;
+}
+
+export async function expandPlan(
+  planText: string,
+  opts: { provider?: Provider; model?: string; apiKey?: string } = {},
+): Promise<ExpandPlanResult> {
+  const url = await getBackendUrl();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.apiKey) headers["X-Provider-Key"] = opts.apiKey;
+  const res = await fetch(`${url}/plan/expand`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ plan_text: planText, provider: opts.provider, model: opts.model }),
+  });
+  if (!res.ok) {
+    throw new Error(`/plan/expand failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
 export async function cancelCodeRun(runId: string): Promise<boolean> {
   const url = await getBackendUrl();
   const res = await fetch(`${url}/run/node/code/cancel`, {

@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { create } from "zustand";
-import { cancelCodeRun, runDagStream, runNodeCode, runNodeStream } from "@/api/backend";
+import { cancelCodeRun, expandPlan, runDagStream, runNodeCode, runNodeStream } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
@@ -101,17 +101,6 @@ export function useRunNode() {
       const node = state.nodes.find((n) => n.id === nodeId);
       if (!node) return false;
       if (useRunState.getState().runningId) return false;
-      if (node.type === "planning") {
-        useMonitorStore.getState().addLog({
-          level: "warn",
-          source: "node",
-          status: "SKIPPED",
-          nodeId,
-          nodeTitle: node.title,
-          message: "Planning 节点由生成节点图阶段创建，不需要单独 Explain。",
-        });
-        return false;
-      }
 
       const provider = useProviderStore.getState().provider;
       const model = useProviderStore.getState().getModel(provider);
@@ -390,6 +379,118 @@ export function useRunNode() {
     [setRunning],
   );
 
+  const expandPlanNodes = useCallback(
+    async (planningNodeId: string): Promise<boolean> => {
+      const state = useGraphStore.getState();
+      const planningNode = state.nodes.find((n) => n.id === planningNodeId);
+      if (!planningNode || planningNode.type !== "planning") return false;
+      if (useRunState.getState().runningId) return false;
+
+      const planText = outputText(planningNode).trim();
+      if (!planText) {
+        useMonitorStore.getState().addLog({
+          level: "warn",
+          source: "plan",
+          status: "SKIPPED",
+          nodeId: planningNodeId,
+          nodeTitle: planningNode.title,
+          message: "Planning 节点还没有 output，请先 Explain 生成规划文本。",
+        });
+        return false;
+      }
+
+      const provider = useProviderStore.getState().provider;
+      const model = useProviderStore.getState().getModel(provider);
+      const apiKey = useKeyStore.getState().keys[provider];
+
+      useMonitorStore.getState().addLog({
+        level: "info",
+        source: "plan",
+        status: "START",
+        nodeId: planningNodeId,
+        nodeTitle: planningNode.title,
+        message: `Expand plan started with ${provider}/${model}`,
+      });
+      setRunning(planningNodeId);
+
+      try {
+        const result = await expandPlan(planText, { provider, model, apiKey });
+
+        // Map old AI-generated IDs to new UUIDs
+        const idMap = new Map<string, string>();
+        for (const raw of result.nodes) {
+          idMap.set(raw.id, crypto.randomUUID());
+        }
+
+        const baseX = planningNode.position.x;
+        const baseY = planningNode.position.y + 350;
+
+        const newNodes: NodeBase[] = result.nodes.map((raw) => ({
+          id: idMap.get(raw.id)!,
+          type: raw.type as NodeBase["type"],
+          title: raw.title,
+          position: { x: baseX + raw.x, y: baseY + raw.y },
+          contextMode: "inherit" as const,
+          fileScope: { allow: [], deny: [] },
+          toolPolicy: { tools: [], deny: [] },
+          memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
+          purpose: raw.purpose ?? "",
+          data: { purpose: raw.purpose ?? "" },
+          runHistory: [],
+          resourceRefs: [],
+          metadata: {},
+        }));
+
+        const newEdges: Array<{ id: string; source: string; target: string }> = result.links.map((raw) => ({
+          id: crypto.randomUUID(),
+          source: idMap.get(raw.source) ?? raw.source,
+          target: idMap.get(raw.target) ?? raw.target,
+        }));
+
+        // Find root nodes (no incoming edges from other new nodes) and connect planning → root
+        const newTargets = new Set(newEdges.map((e) => e.target));
+        const roots = newNodes.filter((n) => !newTargets.has(n.id));
+        for (const root of roots) {
+          newEdges.push({
+            id: crypto.randomUUID(),
+            source: planningNodeId,
+            target: root.id,
+          });
+        }
+
+        const currentState = useGraphStore.getState();
+        useGraphStore.getState().setGraph({
+          nodes: [...currentState.nodes, ...newNodes],
+          links: [...currentState.links, ...newEdges],
+        });
+
+        useMonitorStore.getState().addLog({
+          level: "info",
+          source: "plan",
+          status: "DONE",
+          nodeId: planningNodeId,
+          nodeTitle: planningNode.title,
+          message: `Expanded into ${newNodes.length} nodes / ${newEdges.length} links`,
+        });
+        return true;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        useMonitorStore.getState().addLog({
+          level: "error",
+          source: "plan",
+          status: "ERROR",
+          nodeId: planningNodeId,
+          nodeTitle: planningNode.title,
+          message,
+        });
+        return false;
+      } finally {
+        setRunning(null);
+      }
+    },
+    [setRunning],
+  );
+
   const runDag = useCallback(async (): Promise<boolean> => {
     if (dagActive || useRunState.getState().runningId) return false;
     const state = useGraphStore.getState();
@@ -495,5 +596,5 @@ export function useRunNode() {
     useMonitorStore.getState().addLog({ level: "warn", source: "node", status: "CANCELLED", message: "Run cancelled" });
   }, [setRunning]);
 
-  return { run, runCode, runDag, cancel, runningId };
+  return { run, runCode, expandPlanNodes, runDag, cancel, runningId };
 }
