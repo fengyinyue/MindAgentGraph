@@ -6,6 +6,7 @@ NodeType = Literal[
     "code", "api", "asset", "agent", "task", "semantic",
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
+ProviderName = Literal["anthropic", "deepseek", "local-claude", "local-codex"]
 
 
 class Position(BaseModel):
@@ -23,6 +24,18 @@ class ToolPolicy(BaseModel):
     deny: list[str] = Field(default_factory=list)
 
 
+class RunRecord(BaseModel):
+    id: str
+    startedAt: str
+    finishedAt: Optional[str] = None
+    status: Literal["running", "done", "error", "cancelled"]
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    inputTokens: Optional[int] = None
+    outputTokens: Optional[int] = None
+    error: Optional[str] = None
+
+
 class Node(BaseModel):
     id: str
     type: NodeType
@@ -35,6 +48,11 @@ class Node(BaseModel):
     systemPrompt: Optional[str] = None
     data: dict[str, Any] = Field(default_factory=dict)
     summary: Optional[str] = None
+    purpose: Optional[str] = None
+    output: Optional[str] = None
+    runHistory: list[RunRecord] = Field(default_factory=list)
+    resourceRefs: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class EdgeChannel(BaseModel):
@@ -56,11 +74,12 @@ class Edge(BaseModel):
 class Graph(BaseModel):
     nodes: list[Node]
     links: list[Edge]
+    metadata: dict[str, Any] = Field(default_factory=dict)
 
 
 class PlanRequest(BaseModel):
     goal: str
-    provider: Optional[Literal["anthropic", "deepseek"]] = None
+    provider: Optional[ProviderName] = None
     model: Optional[str] = None
 
 
@@ -74,12 +93,20 @@ class RunNodeInput(BaseModel):
     systemPrompt: Optional[str] = None
 
 
+class RunDagRequest(BaseModel):
+    graph: Graph
+    projectPath: Optional[str] = None
+    provider: Optional[ProviderName] = None
+    model: Optional[str] = None
+    allowCode: bool = False
+
+
 class RunNodeRequest(BaseModel):
     node: RunNodeInput
     userPrompt: Optional[str] = None
     parentOutputs: Optional[dict[str, str]] = None
     projectPath: Optional[str] = None
-    provider: Optional[Literal["anthropic", "deepseek"]] = None
+    provider: Optional[ProviderName] = None
     model: Optional[str] = None
 
 

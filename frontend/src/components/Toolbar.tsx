@@ -6,6 +6,12 @@ import { useRunNode } from "@/hooks/useRunNode";
 import type { NodeBase } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
+const buttonBase = "inline-flex h-7 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45";
+const buttonNeutral = `${buttonBase} border-zinc-700 bg-panel text-zinc-200 hover:border-accent/70 hover:text-accent`;
+const buttonPrimary = `${buttonBase} border-accent/70 bg-accent/15 text-accent hover:bg-accent/25`;
+const buttonSuccess = `${buttonBase} border-emerald-700/70 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20`;
+const iconButton = "inline-flex h-7 w-7 items-center justify-center rounded border border-zinc-700 bg-panel text-xs transition-colors hover:border-accent/70 hover:text-accent";
+
 export default function Toolbar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const setGraph = useGraphStore((s) => s.setGraph);
@@ -63,12 +69,12 @@ export default function Toolbar() {
     <>
       <div className="flex gap-2 items-center px-3 py-1.5 border-b border-zinc-800 bg-canvas text-xs">
         <span className="font-semibold text-accent">MindAgentGraph</span>
-        <span className="text-zinc-600">|</span>
-        <button className="hover:text-accent" onClick={onOpen}>Open</button>
-        <button className="hover:text-accent" onClick={onSave}>Save As</button>
-        <span className="text-zinc-600">|</span>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <button className={buttonNeutral} onClick={onOpen}>Open</button>
+        <button className={buttonNeutral} onClick={onSave}>Save As</button>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
-          className="hover:text-green-400 font-bold"
+          className={buttonSuccess}
           title="Add Node"
           onClick={() => {
             useGraphStore.getState().addNode({
@@ -80,22 +86,28 @@ export default function Toolbar() {
               fileScope: { allow: [], deny: [] },
               toolPolicy: { tools: [], deny: [] },
               data: {},
+              runHistory: [],
+              resourceRefs: [],
+              metadata: {},
             } as NodeBase);
           }}
         >
           + Node
         </button>
         <button
-          className="hover:text-accent disabled:opacity-50"
-          onClick={() => void runDag().catch((e) => alert(e instanceof Error ? e.message : String(e)))}
+          className={buttonPrimary}
+          onClick={() => {
+            if (!bottomOpen) toggleBottomPanel();
+            void runDag().catch((e) => alert(e instanceof Error ? e.message : String(e)));
+          }}
           disabled={runningId !== null || nodes.length === 0}
           title="按拓扑顺序执行整张 DAG"
         >
           Run DAG
         </button>
-        <span className="text-zinc-600">|</span>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
-          className="hover:text-accent text-xs"
+          className={buttonNeutral}
           onClick={onSelectProjectDir}
           title="Project directory for code generation"
         >
@@ -104,23 +116,23 @@ export default function Toolbar() {
         <span className="ml-auto text-zinc-500">
           {projectPath ?? "untitled"}
         </span>
-        <span className="text-zinc-600">|</span>
+        <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
-          className={`text-xs ${leftOpen ? "text-accent" : "text-zinc-500"} hover:text-accent`}
+          className={`${iconButton} ${leftOpen ? "border-accent/60 text-accent" : "text-zinc-500"}`}
           onClick={toggleLeftPanel}
           title={leftOpen ? "折叠左侧面板" : "展开左侧面板"}
         >
           ☰
         </button>
         <button
-          className={`text-xs ${bottomOpen ? "text-accent" : "text-zinc-500"} hover:text-accent`}
+          className={`${iconButton} ${bottomOpen ? "border-accent/60 text-accent" : "text-zinc-500"}`}
           onClick={toggleBottomPanel}
           title={bottomOpen ? "折叠底部面板" : "展开底部面板"}
         >
           ⬡
         </button>
         <button
-          className="ml-2 text-zinc-400 hover:text-accent text-base leading-none"
+          className={`${iconButton} ml-1 text-base`}
           onClick={() => setSettingsOpen(true)}
           title="Settings"
           aria-label="Settings"

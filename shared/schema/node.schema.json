@@ -43,6 +43,39 @@
     "memoryRef": { "type": "string" },
     "systemPrompt": { "type": "string" },
     "data": { "type": "object" },
-    "summary": { "type": "string" }
+    "summary": { "type": "string" },
+    "purpose": { "type": "string" },
+    "output": { "type": "string" },
+    "runHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "startedAt", "status"],
+        "properties": {
+          "id": { "type": "string" },
+          "startedAt": { "type": "string" },
+          "finishedAt": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["running", "done", "error", "cancelled"]
+          },
+          "provider": { "type": "string" },
+          "model": { "type": "string" },
+          "inputTokens": { "type": "integer" },
+          "outputTokens": { "type": "integer" },
+          "error": { "type": "string" }
+        }
+      },
+      "default": []
+    },
+    "resourceRefs": {
+      "type": "array",
+      "items": { "type": "string" },
+      "default": []
+    },
+    "metadata": {
+      "type": "object",
+      "default": {}
+    }
   }
 }

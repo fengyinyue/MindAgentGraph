@@ -26,7 +26,19 @@ export const useGraphStore = create<GraphState>((set) => ({
   projectPath: null,
   projectDir: null,
 
-  setGraph: (graph) => set({ nodes: graph.nodes, links: graph.links }),
+  setGraph: (graph) => set({
+    nodes: graph.nodes.map((node) => ({
+      ...node,
+      purpose: node.purpose ?? (typeof node.data?.purpose === "string" ? node.data.purpose : undefined),
+      data: node.data ?? {},
+      fileScope: node.fileScope ?? { allow: [], deny: [] },
+      toolPolicy: node.toolPolicy ?? { tools: [], deny: [] },
+      runHistory: node.runHistory ?? [],
+      resourceRefs: node.resourceRefs ?? [],
+      metadata: node.metadata ?? {},
+    })),
+    links: graph.links,
+  }),
   addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
   updateNode: (id, patch) =>
     set((s) => ({

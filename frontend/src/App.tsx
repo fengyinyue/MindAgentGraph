@@ -8,6 +8,7 @@ import Toolbar from "./components/Toolbar";
 import LeftPanel from "./components/LeftPanel";
 import BottomPanel from "./components/BottomPanel";
 import { checkHealth } from "./api/backend";
+import { usePanelStore } from "./store/panelStore";
 
 // Catch render errors so a crash in one panel doesn't white-screen the entire app.
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: string | null }> {
@@ -30,6 +31,8 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { error: st
 
 export default function App() {
   const [backendReady, setBackendReady] = useState(false);
+  const leftOpen = usePanelStore((s) => s.leftOpen);
+  const bottomOpen = usePanelStore((s) => s.bottomOpen);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,21 +52,28 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-full">
-      <Group orientation="horizontal">
-        <Panel defaultSize={25} minSize={3.5} maxSize={30}>
+    <div className="h-full w-full overflow-hidden">
+      <Group orientation="horizontal" className="h-full w-full">
+        <Panel
+          key={`left-${leftOpen ? "open" : "closed"}`}
+          defaultSize={leftOpen ? "280px" : "36px"}
+          minSize={leftOpen ? "220px" : "36px"}
+          maxSize={leftOpen ? "520px" : "36px"}
+          disabled={!leftOpen}
+          groupResizeBehavior="preserve-pixel-size"
+        >
           <LeftPanel />
         </Panel>
 
-        <Separator className="w-1 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
+        <Separator className="w-1.5 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
 
-        <Panel>
-          <Group orientation="vertical">
-            <Panel defaultSize={100} minSize={50}>
+        <Panel minSize="480px">
+          <Group orientation="vertical" className="h-full w-full">
+            <Panel minSize="360px">
               <div className="h-full flex flex-col">
                 <Toolbar />
                 <PlanInput />
-                <div className="flex-1 bg-canvas relative">
+                <div className="flex-1 min-h-0 bg-canvas relative">
                   {!backendReady && (
                     <div className="absolute top-2 left-2 z-10 bg-yellow-900/80 text-yellow-200 text-xs px-3 py-1.5 rounded">
                       等待后端启动…
@@ -78,15 +88,27 @@ export default function App() {
 
             <Separator className="h-1 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-row-resize" />
 
-            <Panel defaultSize={0} minSize={0} maxSize={35}>
+            <Panel
+              key={`bottom-${bottomOpen ? "open" : "closed"}`}
+              defaultSize={bottomOpen ? "220px" : "28px"}
+              minSize={bottomOpen ? "140px" : "28px"}
+              maxSize={bottomOpen ? "45%" : "28px"}
+              disabled={!bottomOpen}
+              groupResizeBehavior="preserve-pixel-size"
+            >
               <BottomPanel />
             </Panel>
           </Group>
         </Panel>
 
-        <Separator className="w-1 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
+        <Separator className="w-1.5 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
 
-        <Panel defaultSize={30} minSize={18} maxSize={40}>
+        <Panel
+          defaultSize="360px"
+          minSize="300px"
+          maxSize="720px"
+          groupResizeBehavior="preserve-pixel-size"
+        >
           <div className="bg-panel border-l border-zinc-800 overflow-hidden h-full">
             <ErrorBoundary>
               <NodeInspector />

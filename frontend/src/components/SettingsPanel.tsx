@@ -24,6 +24,21 @@ const PROVIDERS: ProviderInfo[] = [
   },
 ];
 
+const LOCAL_PROVIDERS: ProviderInfo[] = [
+  {
+    id: "local-claude",
+    label: "Local Claude CLI",
+    hint: "使用本机已配置的 `claude`/`claude.cmd`。无需 API Key，可用 MAG_LOCAL_CLAUDE_CMD 覆盖命令。",
+    placeholder: "",
+  },
+  {
+    id: "local-codex",
+    label: "Local Codex CLI",
+    hint: "使用本机已登录的 `codex exec`。无需 API Key，可用 MAG_LOCAL_CODEX_CMD 覆盖命令。",
+    placeholder: "",
+  },
+];
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -72,6 +87,15 @@ export default function SettingsPanel({ open, onClose }: Props) {
           {PROVIDERS.map((p) => (
             <KeyRow key={p.id} info={p} />
           ))}
+          <div className="border-t border-zinc-800 pt-4 space-y-3">
+            <h3 className="text-sm font-semibold">Local CLI Providers</h3>
+            {LOCAL_PROVIDERS.map((p) => (
+              <div key={p.id} className="rounded border border-zinc-800 bg-canvas/40 p-3">
+                <div className="text-sm font-medium">{p.label}</div>
+                <p className="mt-1 text-[11px] text-zinc-600 leading-relaxed">{p.hint}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </aside>
     </>

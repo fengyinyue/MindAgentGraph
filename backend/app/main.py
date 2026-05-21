@@ -33,11 +33,12 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeCancelRequest, Graph
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeCancelRequest, Graph, RunDagRequest
 from app.services.planner import plan_graph
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_claude_run, run_node_with_claude
 from app.services.memory import read_memory, write_memory
+from app.services.dag_executor import run_dag_stream
 
 app = FastAPI(title="MindAgentGraph Backend", version="0.1.0")
 
@@ -201,6 +202,28 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
 
     return StreamingResponse(
         gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/run/dag")
+async def run_dag(
+    req: RunDagRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+) -> StreamingResponse:
+    return StreamingResponse(
+        run_dag_stream(
+            graph=req.graph,
+            project_path=req.projectPath,
+            provider=req.provider,
+            model=req.model,
+            api_key=x_provider_key,
+            allow_code=req.allowCode,
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -194,6 +194,9 @@ export default function Canvas() {
         toolPolicy: { tools: [], deny: [] },
         memoryRef: type === "memory" ? `${id}.md` : undefined,
         data: {},
+        runHistory: [],
+        resourceRefs: [],
+        metadata: {},
       };
       useGraphStore.getState().addNode(newNode);
     },

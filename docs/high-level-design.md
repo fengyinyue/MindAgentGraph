@@ -1,293 +1,214 @@
-# 概要设计文档 — MindAgentGraph
+# 概要设计 — MindAgentGraph MVP
 
-## 1. 整体架构概览
+> 输入：`docs/proposal.md` 与当前代码库分析。目标：把产品提案收敛为当前仓库可执行的 MVP 架构。
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        Tauri 2.x Shell                          │
-│  ┌───────────────────────────────────────────────────────────┐  │
-│  │                   React Frontend (Vite)                     │  │
-│  │  ┌─────────┐  ┌──────────────┐  ┌────────────────────────┐ │  │
-│  │  │ 左侧面板 │  │   中间画布     │  │      右侧面板          │ │  │
-│  │  │ 项目树   │  │  ReactFlow   │  │   NodeInspector       │ │  │
-│  │  │ Agent列表│  │  无限画布     │  │   Memory/Prompt编辑    │ │  │
-│  │  └─────────┘  └──────────────┘  └────────────────────────┘ │  │
-│  │  ┌──────────────────────────────────────────────────────────┐ │  │
-│  │  │                    底部面板                               │ │  │
-│  │  │          AI日志  │  Agent通信  │  Token使用              │ │  │
-│  │  └──────────────────────────────────────────────────────────┘ │  │
-│  └───────────────────────────────────────────────────────────┘  │
-│                                                                   │
-│  ┌──────────────────────┐  ┌──────────────────────────────────┐  │
-│  │   Tauri Rust Layer   │  │   FastAPI Backend (Sidecar)       │  │
-│  │   - 文件对话框        │  │   - REST API + SSE                │  │
-│  │   - .mag 读写         │  │   - AI Provider 抽象层            │  │
-│  │   - 进程管理          │  │   - Agent 运行时                   │  │
-│  └──────────────────────┘  │   - Memory 服务                    │  │
-│                              │   - 任务队列                      │  │
-│                              └──────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────┘
+## 1. MVP 架构目标
+
+MindAgentGraph MVP 要验证一条闭环：
+
+```text
+用户目标
+  -> Planning 节点生成 DAG
+  -> 用户在画布调整节点与上下文
+  -> 单节点或整图按依赖执行
+  -> 输出、日志、记忆、文件范围回写到项目
 ```
 
-**架构风格：** 分层 + 插件式
-- 前端：UI 面板层 → 状态管理层 → API 通信层
-- 后端：REST/SSE 接口层 → 业务服务层 → Provider 抽象层 → 外部 AI SDK
-- 存储：.mag 文件夹（JSON + Markdown + 资源文件），Git 友好
+当前实现已经具备画布、节点检查器、规划、单节点执行、Code 节点执行和 `.mag` 存储基础。本轮设计不重做架构，重点补齐可用性与可观测性。
 
----
+## 2. 系统分层
 
-## 2. 模块划分
-
-### 2.1 前端模块
-
-| 模块 | 状态 | 职责 |
-|------|------|------|
-| **Canvas (画布)** | ✅ 已有 | ReactFlow 节点图渲染、拖拽、缩放、连线、右键菜单、键盘快捷键 |
-| **NodeInspector (节点检查器)** | ✅ 已有 | 右侧面板：节点属性编辑、Purpose、SystemPrompt、MemoryRef、FileScope、执行输出 |
-| **PlanInput (规划输入)** | ✅ 已有 | 顶部输入栏：Provider 选择 + 目标输入 + 一键生成节点树 |
-| **Toolbar (工具栏)** | ✅ 已有 | 打开/保存/添加节点/运行DAG/项目目录/设置 |
-| **SettingsPanel (设置面板)** | ✅ 已有 | API Key 管理（Anthropic、DeepSeek），localStorage 持久化 |
-| **ProjectExplorer (项目浏览器)** | 🆕 新增 | 左侧面板：节点树形列表、项目文件结构、Agent 列表 |
-| **BottomMonitor (底部监视器)** | 🆕 新增 | AI 日志流、Agent 间通信记录、Token 消耗统计 |
-| **SubGraphEditor (子图编辑器)** | 🆕 新增 | 双击 SubGraph 节点进入嵌套画布，支持面包屑导航 |
-| **ResourcePanel (资源面板)** | 🆕 新增 | 多模态资源绑定界面：图片/视频/音频/3D/文档上传与预览 |
-| **AgentComposer (Agent 编排器)** | 🆕 新增 | Agent 节点消息流可视化、任务分发配置 |
-
-### 2.2 后端模块
-
-| 模块 | 状态 | 职责 |
-|------|------|------|
-| **Planner (规划服务)** | ✅ 已有 | 一句话目标 → LLM 生成 DAG 节点树，支持 tool_use / json_object 模式 |
-| **Runner (节点执行服务)** | ✅ 已有 | 单节点 AI 文本展开，SSE 流式输出，上下文组装（inherit/explicit/isolated） |
-| **CodeRunner (代码执行服务)** | ✅ 已有 | Claude Code CLI 子进程调用，fileScope 约束注入，进程树管理 |
-| **Memory (记忆服务)** | ✅ 已有 | .mag/memory/ 文件读写，路径安全校验，防穿越攻击 |
-| **Provider (AI 抽象层)** | ✅ 已有 | Protocol 模式：Anthropic SDK + DeepSeek (OpenAI SDK)，统一错误处理 |
-| **AgentRuntime (Agent 运行时)** | 🆕 新增 | Agent 节点专用执行器：生命周期管理（spawn/monitor/terminate）、独立上下文沙箱 |
-| **AgentComm (Agent 通信)** | 🆕 新增 | Agent 间消息传递协议、Supervisor 任务分发、结果聚合与冲突解决 |
-| **TaskQueue (任务队列)** | 🆕 新增 | 持久化任务队列：排队、重试、暂停/恢复、优先级调度 |
-| **MCPGateway (MCP 网关)** | 🆕 新增 | Model Context Protocol 服务端，工具注册与发现，权限控制 |
-| **ResourceManager (资源管理)** | 🆕 新增 | 多模态资源 CRUD、缩略图生成、与 .mag/assets/ 的读写 |
-| **OpenAIProvider (OpenAI 适配器)** | 🆕 新增 | OpenAI SDK 适配，复用现有 Provider protocol |
-| **GeminiProvider (Gemini 适配器)** | 🆕 新增 | Google Gemini SDK 适配 |
-| **SemanticIndex (语义索引)** | 🆕 新增 | 长期记忆的向量索引、语义搜索、自动压缩 |
-
-### 2.3 存储层
-
-| 模块 | 状态 | 职责 |
-|------|------|------|
-| **ProjectStorage (.mag)** | ✅ 已有 | project.json + graphs/*.json + memory/*.md + assets/ 文件夹结构 |
-| **GraphSerializer (图序列化)** | ✅ 已有 | 节点/边 ↔ JSON 双向转换，ReactFlow ↔ Zustand ↔ .mag |
-| **MemoryIndex (记忆索引)** | 🆕 新增 | .mag/memory/ 的全文搜索索引，支持语义相似度检索 |
-| **AssetStore (资源存储)** | 🆕 新增 | .mag/assets/ 的文件管理，引用计数，去重 |
-
-### 2.4 Tauri Rust Layer
-
-| 模块 | 状态 | 职责 |
-|------|------|------|
-| **Sidecar (进程管理)** | ✅ 已有 | 后端 FastAPI 进程生命周期，端口协商 |
-| **FileDialog (文件对话框)** | ✅ 已有 | 原生打开/保存文件夹对话框 |
-| **ProjectIO (项目 IO)** | ✅ 已有 | .mag 文件夹读写（Rust 侧） |
-| **Clipboard (剪贴板)** | 🆕 新增 | 节点复制粘贴的跨画布数据交换 |
-
----
-
-## 3. 模块间关系
-
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                         FRONTEND                                  │
-│                                                                    │
-│  ProjectExplorer ──▶ graphStore ◀── Canvas                        │
-│        │                  │              │                          │
-│        │             Zustand           NodeInspector               │
-│        │                  │              │                          │
-│        └──────────────────┼──────────────┘                          │
-│                           │                                         │
-│                    API Layer (api/)                                 │
-│                           │                                         │
-├───────────────────────────┼───────────────────────────────────────┤
-│                      HTTP / SSE                                     │
-├───────────────────────────┼───────────────────────────────────────┤
-│                         BACKEND                                     │
-│                           │                                         │
-│                    ┌──────┴──────┐                                  │
-│                    │   REST API   │                                  │
-│                    └──────┬──────┘                                  │
-│           ┌───────────────┼───────────────┐                         │
-│     ┌─────┴─────┐  ┌──────┴──────┐  ┌─────┴─────┐                  │
-│     │  Planner   │  │   Runner    │  │ AgentRuntime│                │
-│     └─────┬─────┘  └──────┬──────┘  └─────┬─────┘                  │
-│           │               │               │                         │
-│     ┌─────┴───────────────┴───────────────┴─────┐                  │
-│     │            Provider Layer                  │                  │
-│     │  ┌──────────┐ ┌────────┐ ┌────┐ ┌──────┐ │                  │
-│     │  │Anthropic │ │DeepSeek│ │GPT │ │Gemini│ │                  │
-│     │  └──────────┘ └────────┘ └────┘ └──────┘ │                  │
-│     └───────────────────────────────────────────┘                  │
-│                           │                                         │
-│     ┌─────────────────────┼─────────────────────┐                  │
-│     │               Service Layer                │                  │
-│     │  ┌──────┐ ┌──────────┐ ┌───────────────┐  │                  │
-│     │  │Memory│ │TaskQueue │ │MCPGateway     │  │                  │
-│     │  └──────┘ └──────────┘ └───────────────┘  │                  │
-│     │  ┌──────────────┐ ┌────────────────────┐  │                  │
-│     │  │ResourceManager│ │SemanticIndex      │  │                  │
-│     │  └──────────────┘ └────────────────────┘  │                  │
-│     └────────────────────────────────────────────┘                  │
-│                           │                                         │
-│                    ┌──────┴──────┐                                  │
-│                    │  .mag 存储   │                                  │
-│                    └─────────────┘                                  │
-└──────────────────────────────────────────────────────────────────┘
+```text
+Tauri Shell
+  ├─ React Frontend
+  │   ├─ Workspace Layout
+  │   ├─ Canvas / NodeInspector
+  │   ├─ ProjectExplorer
+  │   ├─ BottomMonitor
+  │   └─ Zustand Stores + API Client
+  ├─ Rust Project IO / Sidecar Manager
+  └─ FastAPI Backend
+      ├─ Planner
+      ├─ Node Runner
+      ├─ Code Runner
+      ├─ DAG Executor
+      ├─ Memory Service
+      └─ Provider Layer
 ```
 
-**数据流关键路径：**
+## 3. 模块划分
 
-1. **规划流（Plan Flow）：**
-   用户输入目标 → PlanInput → `/plan` → Planner → LLM Provider → 返回 Graph → graphStore → Canvas 渲染
+### 3.1 Frontend
 
-2. **执行流（Execute Flow）：**
-   用户点击执行 → NodeInspector → `/run/node` → Runner → 组装上下文（Memory + fileScope + parentOutputs） → LLM Provider → SSE 流式返回 → NodeInspector 实时显示
+| 模块 | 当前状态 | MVP 职责 |
+|------|----------|----------|
+| Canvas | 已有 | 渲染 DAG、拖拽节点、连线、删除、选中 |
+| NodeInspector | 已有 | 编辑节点目标、Prompt、Memory、FileScope、ContextMode、执行输出 |
+| PlanInput | 已有 | 输入项目目标并生成节点图 |
+| Toolbar | 已有 | 打开/保存、添加节点、运行、设置、面板切换 |
+| LeftPanel / ProjectExplorer | 外壳已有 | 节点树、文件范围摘要、Agent 类型节点列表 |
+| BottomPanel / BottomMonitor | 外壳已有 | AI 日志、错误反馈、Token 使用、执行队列状态 |
+| graphStore | 已有 | 图状态、选中状态、项目路径 |
+| monitorStore | 新增 | 日志、Token、DAG 执行进度 |
+| panelStore | 已有 | 面板开关、尺寸、活动 Tab |
 
-3. **Agent 协作流（Agent Flow，新增）：**
-   Supervisor 分解任务 → AgentRuntime 分配 → 各 Agent 节点并行执行 → AgentComm 消息通信 → 结果聚合 → 回写 Memory
+### 3.2 Backend
 
-4. **代码生成流（Code Flow）：**
-   用户触发 Code → `/run/node/code` → CodeRunner → 注入 node 上下文到 Claude Code CLI → 子进程执行 → SSE 流式返回 + 文件变更检测
+| 模块 | 当前状态 | MVP 职责 |
+|------|----------|----------|
+| Planner | 已有 | 用户目标生成 Graph |
+| Runner | 已有 | 单节点文本执行，组装节点上下文 |
+| CodeRunner | 已有 | Code 节点调用 CLI，注入 FileScope |
+| Memory | 已有 | `.mag/memory/` Markdown 读写 |
+| Provider | 已有 | Anthropic、DeepSeek 适配 |
+| DAG Executor | 新增/收敛 | 按拓扑顺序执行节点，发出 SSE 进度 |
+| Usage Normalizer | 新增 | 统一 Provider Token/模型信息，写入监控事件 |
 
----
+### 3.3 Shared / Storage
 
-## 4. 技术选型
+| 模块 | 当前状态 | MVP 职责 |
+|------|----------|----------|
+| `shared/types.ts` | 已有 | 前端图与节点类型 |
+| `backend/app/schemas.py` | 已有 | 后端请求/响应模型 |
+| `.mag/project.json` | 已有方向 | 项目元数据 |
+| `.mag/graphs/*.json` | 已有方向 | DAG 图结构 |
+| `.mag/memory/*.md` | 已有 | 节点记忆 |
+| `.mag/logs/*.jsonl` | 新增建议 | 执行日志与错误记录，可选落盘 |
 
-| 层面 | 技术 | 说明 |
-|------|------|------|
-| **桌面壳** | Tauri 2.x (Rust) | 已有，轻量跨平台桌面壳 |
-| **前端框架** | React 18 + TypeScript | 已有 |
-| **构建工具** | Vite | 已有 |
-| **节点画布** | @xyflow/react v12 (ReactFlow) | 已有 |
-| **状态管理** | Zustand v5 | 已有，分 store 管理 |
-| **样式** | Tailwind CSS 3 | 已有，暗色科技风主题 |
-| **后端框架** | Python FastAPI | 已有，REST + SSE |
-| **AI SDK** | Anthropic SDK + OpenAI SDK | 已有，Provider protocol 模式 |
-| **包管理** | uv (Python) + npm (Node) | 已有 |
-| **存储格式** | .mag 文件夹（JSON + MD + 资源） | 已有，Git 友好 |
-| **进程通信** | HTTP/SSE + stdin/stdout | 已有，前后端用 SSE 流式 |
-| **向量检索** | SQLite + sqlite-vec 或 ChromaDB | 语义索引新增依赖 |
-| **任务队列** | 内存队列 + JSON 文件持久化 | 轻量方案，无需 Redis |
+## 4. 关键数据流
 
----
+### 4.1 规划流
 
-## 5. 关键设计决策
-
-### 5.1 前端面板布局演进
-
-当前是 2 列布局（Canvas + NodeInspector），目标 4 区布局：
-
-- **左侧面板（新增）：** 可折叠，320px 宽，包含项目树 + Agent 列表两个 Tab
-- **中间画布（已有）：** 保持 ReactFlow，新增 SubGraph 双击进入嵌套
-- **右侧面板（已有）：** 扩展 NodeInspector，增加 Resource 绑定 Tab
-- **底部面板（新增）：** 可折叠，200px 高，包含 AI 日志 + Agent 通信 + Token 统计三个 Tab
-
-采用 CSS Grid 响应式布局，所有面板均可拖拽调整大小（react-resizable-panels）。
-
-### 5.2 Agent 运行时架构
-
-```
-AgentRuntime
-  ├── AgentSupervisor (总控)
-  │     - 读取 DAG 结构
-  │     - 分解任务
-  │     - 调度 Agent 节点
-  │     - 聚合结果
-  ├── AgentWorker (工作 Agent)
-  │     - 独立上下文沙箱
-  │     - 独立 Memory 空间
-  │     - 独立 fileScope
-  │     - 工具权限控制
-  └── AgentMailbox (消息通信)
-        - 点对点消息
-        - 广播消息
-        - 消息持久化
+```text
+PlanInput
+  -> POST /plan
+  -> Planner
+  -> Provider.plan_graph()
+  -> Graph
+  -> graphStore.setGraph()
+  -> Canvas + ProjectExplorer
 ```
 
-### 5.3 子图（SubGraph）设计
+要求：
 
-- SubGraph 节点在父图中表现为一个节点
-- 双击 SubGraph 节点进入子图画布
-- 子图可以有输入/输出端口（暴露给父图连线）
-- 面包屑导航：`主图 > RoadSystem > LaneGenerator`
-- 存储：子图保存为 `graphs/<subgraph-id>.json`
+- Provider 返回内容必须被校验为 `Graph`。
+- 规划失败时写入 BottomMonitor 日志。
+- 生成节点必须包含 `purpose`/`systemPrompt`/`fileScope` 的最小可编辑字段。
 
-### 5.4 语义索引
+### 4.2 单节点执行流
 
-- 对所有 .mag/memory/*.md 文件建立向量索引
-- 使用本地 embedding 模型（如 sentence-transformers）
-- 支持语义搜索：找到"和这个节点最相关的历史记忆"
-- 自动压缩：当记忆超过阈值时，自动生成摘要替换原文
+```text
+NodeInspector
+  -> POST /run/node or /run/node/code
+  -> Runner / CodeRunner
+  -> Memory + parentOutputs + node fields
+  -> Provider / CLI
+  -> SSE text/error/files/usage/done
+  -> Node output + BottomMonitor
+```
 
-### 5.5 MCP 工具系统
+要求：
 
-- 后端实现 MCP Server（stdio 或 HTTP 传输）
-- 每个 Agent 节点可配置其可用的 MCP 工具列表
-- 工具注册表：MCPGateway 维护全局工具目录
-- 权限控制：node.toolPolicy 控制每个节点的工具白名单/黑名单
+- `inherit` 模式读取 Memory 和上游输出。
+- `explicit` 模式只使用当前节点显式字段和用户输入。
+- `isolated` 模式不读取/写入 Memory。
+- Code 节点必须展示本次 FileScope 注入内容和文件变更。
 
----
+### 4.3 DAG 执行流
 
-## 6. 开发阶段划分
+```text
+Toolbar Run DAG
+  -> POST /run/dag
+  -> DAG Executor
+  -> topological sort
+  -> execute nodes sequentially
+  -> SSE progress/log/error/done
+  -> graphStore node outputs + monitorStore
+```
 
-### Phase 1（当前 MVP 完善）— 已完成约 80%
+MVP 只要求按依赖顺序串行执行。并行执行、Agent 调度、任务队列持久化放到后续阶段。
 
-- [x] 节点 CRUD + 连线 + 拖拽
-- [x] AI 规划（一句话 → 节点树）
-- [x] 节点执行（Explain + Code）
-- [x] Memory 读写 + 路径安全
-- [x] .mag 存储
-- [x] Anthropic / DeepSeek 双 Provider
-- [ ] **左侧面板：项目树 + Agent 列表**（Phase 1 收尾）
-- [ ] **底部面板：AI 日志 + Token 统计**（Phase 1 收尾）
+## 5. 数据模型扩展
 
-### Phase 2（Agent 系统）— 核心差异化
+MVP 扩展必须向后兼容。建议在 `NodeBase` / `Node` 中增加可选字段：
 
-- [ ] AgentRuntime 运行时
-- [ ] Agent 通信协议
-- [ ] Supervisor 调度器
-- [ ] 多 Agent 协作流程
+```typescript
+interface NodeBase {
+  id: string;
+  type: NodeType;
+  title: string;
+  position: Position;
+  contextMode: ContextMode;
+  fileScope: FileScope;
+  toolPolicy: ToolPolicy;
+  memoryRef?: string;
+  systemPrompt?: string;
+  data: Record<string, unknown>;
+  summary?: string;
 
-### Phase 3（高级节点能力）
+  purpose?: string;
+  output?: string;
+  runHistory?: RunRecord[];
+  resourceRefs?: string[];
+  metadata?: Record<string, unknown>;
+}
+```
 
-- [ ] SubGraph 子图系统
-- [ ] 节点分组 + 折叠
-- [ ] 节点注释（便签）
-- [ ] 语义地图
+`Graph` 建议增加：
 
-### Phase 4（生态扩展）
+```typescript
+interface Graph {
+  nodes: NodeBase[];
+  links: Edge[];
+  metadata?: Record<string, unknown>;
+}
+```
 
-- [ ] 多模态资源管理
-- [ ] OpenAI / Gemini Provider
-- [ ] MCP 工具系统
-- [ ] 任务队列持久化
+远期的 `groups`、`subGraphs`、`annotations`、`semanticIndex` 不进入本轮 MVP 数据迁移，避免提前锁死模型。
 
-### Phase 5（游戏引擎连接器）
+## 6. UI 布局
 
-- [ ] UE Blueprint 自动生成
-- [ ] PCG Graph 生成
-- [ ] Behavior Tree 生成
-- [ ] Git 仓库理解
+采用当前 4 区布局继续演进：
 
----
+```text
+┌──────────────┬─────────────────────────┬────────────────┐
+│ Project      │ Toolbar + PlanInput      │ NodeInspector  │
+│ Explorer     │ Canvas                   │                │
+├──────────────┴─────────────────────────┴────────────────┤
+│ BottomMonitor: logs / errors / tokens / DAG progress      │
+└───────────────────────────────────────────────────────────┘
+```
 
-## 7. 与现有代码的兼容性
+设计原则：
 
-| 现有模块 | 变更策略 |
-|----------|----------|
-| **graphStore.ts** | 扩展：增加 subGraphs 状态、groups 状态、annotations 状态 |
-| **NodeBase 类型** | 扩展：增加 groupId、isCollapsed、subGraphRef 等可选字段 |
-| **Canvas.tsx** | 扩展：增加 SubGraph 双击处理、分组框选、折叠动画 |
-| **App.tsx** | 重构：从 2 列布局改为 4 区 Grid 布局 |
-| **schemas.py** | 扩展：对应前端的 NodeBase 扩展字段 |
-| **main.py** | 扩展：新增 Agent、SubGraph、MCP 相关路由 |
-| **runner.py** | 扩展：Agent 执行模式（并行、带消息通信） |
-| **memory.py** | 扩展：语义索引、全文搜索 |
+- 工作台信息密度优先，避免营销式页面。
+- 节点树、画布、检查器之间必须联动选中状态。
+- 底部监视器必须直接呈现执行状态，不用弹窗承载主要反馈。
+- 面板折叠后仍保留清晰的恢复入口。
 
-**向后兼容：** 所有新增字段均为可选（Optional），默认值保持当前行为不变。已有 .mag 文件可正常打开。
+## 7. 阶段边界
+
+### 当前 MVP 收尾
+
+- ProjectExplorer：节点树、文件范围摘要、Agent 列表。
+- BottomMonitor：日志、错误、Token、DAG 进度。
+- 数据模型：节点输出、运行历史、资源引用预留。
+- DAG Executor：顺序拓扑执行与进度事件。
+- Provider/模型配置：统一选择、错误展示、usage 事件。
+
+### 后续阶段
+
+- AgentRuntime、AgentComm、Supervisor。
+- SubGraph、分组、注释、节点模板。
+- 多模态资源管理器。
+- 语义索引和自动上下文压缩。
+- MCP 工具网关。
+- Unreal / Houdini / PCG 深度集成。
+
+## 8. 兼容性策略
+
+- 新字段一律可选，缺失时保持当前行为。
+- `.mag` 旧项目加载时不做强制迁移，只在保存时补全必要字段。
+- 后端 Pydantic schema 使用默认工厂避免空字段报错。
+- 前端组件对 `output`、`runHistory`、`resourceRefs` 均做空值处理。
+- Provider usage 不可用时，BottomMonitor 显示“未提供”，不阻断执行。

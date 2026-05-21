@@ -14,6 +14,7 @@ from app.schemas import Graph, Node, Edge, Position
 from app.services.providers.base import PlanProvider, ProviderError
 from app.services.providers.anthropic_provider import AnthropicProvider
 from app.services.providers.deepseek_provider import DeepSeekProvider
+from app.services.providers.local_cli_provider import LocalCliProvider
 
 _log = logging.getLogger("mag.planner")
 
@@ -22,6 +23,8 @@ DEFAULT_PROVIDER = os.environ.get("MAG_PROVIDER", "anthropic")
 DEFAULT_MODELS = {
     "anthropic": os.environ.get("MAG_MODEL_ANTHROPIC", "claude-sonnet-4-6"),
     "deepseek": os.environ.get("MAG_MODEL_DEEPSEEK", "deepseek-chat"),
+    "local-claude": os.environ.get("MAG_MODEL_LOCAL_CLAUDE", "sonnet"),
+    "local-codex": os.environ.get("MAG_MODEL_LOCAL_CODEX", ""),
 }
 
 PLANNER_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
@@ -93,6 +96,8 @@ EMIT_GRAPH_TOOL = {
 _PROVIDERS: dict[str, PlanProvider] = {
     "anthropic": AnthropicProvider(),
     "deepseek": DeepSeekProvider(),
+    "local-claude": LocalCliProvider("claude"),
+    "local-codex": LocalCliProvider("codex"),
 }
 
 
@@ -107,6 +112,7 @@ def _to_internal_graph(payload: dict[str, Any]) -> Graph:
                 position=Position(x=float(raw["x"]), y=float(raw["y"])),
                 contextMode="inherit",
                 memoryRef=f"{raw['id']}.md" if raw["type"] == "memory" else None,
+                purpose=raw.get("purpose", ""),
                 data={"purpose": raw.get("purpose", "")},
             )
         )

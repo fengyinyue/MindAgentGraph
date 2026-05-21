@@ -1,4 +1,5 @@
 import { usePanelStore } from "@/store/panelStore";
+import ProjectExplorer from "./ProjectExplorer";
 
 export default function LeftPanel() {
   const leftOpen = usePanelStore((s) => s.leftOpen);
@@ -30,8 +31,8 @@ export default function LeftPanel() {
           &#9664;
         </button>
       </div>
-      <div className="flex-1 flex items-center justify-center text-xs text-zinc-500 p-4">
-        节点树 / 文件 / Agent 列表（即将实现）
+      <div className="min-h-0 flex-1">
+        <ProjectExplorer />
       </div>
     </div>
   );

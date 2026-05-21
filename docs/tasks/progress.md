@@ -1,53 +1,51 @@
-# 总体进度跟踪
+# MVP 任务进度
 
-> 最后更新：2026-05-15
+> 根据 `docs/proposal.md` 重新走流程生成。最后更新：2026-05-21。
+
+## 任务文件
+
+| 文件 | 模块 | 状态 | 依赖 |
+|------|------|------|------|
+| `docs/tasks/app-layout-refactor.md` | 4 区布局基础 | done | 无 |
+| `docs/tasks/project-explorer.md` | 左侧 ProjectExplorer | done | app-layout-refactor |
+| `docs/tasks/bottom-monitor.md` | 底部 BottomMonitor | done | app-layout-refactor |
+| `docs/tasks/data-model.md` | 共享数据模型扩展 | done | 无 |
+| `docs/tasks/dag-executor.md` | DAG 顺序执行 | done | data-model, bottom-monitor |
+| `docs/tasks/provider-context.md` | Provider、FileScope、上下文可视化 | done | bottom-monitor, data-model |
+| `docs/tasks/docs-traceability.md` | 需求追踪文档 | done | 全部设计文档 |
+
+## 推荐执行顺序
+
+1. `data-model.md`：先补齐兼容字段，降低后续模块返工。
+2. `bottom-monitor.md`：先建立日志/错误/usage 容器。
+3. `project-explorer.md`：补齐左侧节点树和文件范围可视化。
+4. `provider-context.md`：把 Provider 错误、模型、FileScope、上下文摘要接入监控。
+5. `dag-executor.md`：在已有单节点执行基础上做整图顺序执行。
+6. 实施完成后复核 `requirements-traceability.md`：更新需求映射和验收状态。
 
 ## 整体进度
 
-| 阶段 | 模块 | 状态 | 完成日期 |
-|------|------|------|----------|
-| Phase 1 | M1: App 布局重构 | ✅ 已完成 | 2026-05-15 |
-| Phase 1 | M2: ProjectExplorer 左侧面板 | ⬜ 待开始 | - |
-| Phase 1 | M3: BottomMonitor 底部面板 | ⬜ 待开始 | - |
-| Phase 2 | M4: 数据模型扩展 | ⬜ 待开始 | - |
-| Phase 2 | M5: AgentRuntime 运行时 | ⬜ 待开始 | - |
-| Phase 2 | M6: AgentComm 通信协议 | ⬜ 待开始 | - |
-| Phase 2 | M7: Supervisor 调度器 | ⬜ 待开始 | - |
-| Phase 3 | M8: SubGraph 子图系统 | ⬜ 待开始 | - |
-| Phase 3 | M9: 节点分组与注释 | ⬜ 待开始 | - |
-| Phase 4 | M10: SemanticIndex 语义索引 | ⬜ 待开始 | - |
-| Phase 4 | M11: TaskQueue 任务队列 | ⬜ 待开始 | - |
-| Phase 4 | M12: ResourceManager 资源管理 | ⬜ 待开始 | - |
-| Phase 4 | M13: 新 Provider 适配器 | ⬜ 待开始 | - |
-| Phase 5 | M14: MCPGateway MCP 网关 | ⬜ 待开始 | - |
-| - | M15: API 路由汇总 | ⬜ 待开始 | - |
+| 类别 | 状态 |
+|------|------|
+| 产品提案 | done |
+| 现有代码库分析 | done |
+| 概要设计 | done |
+| 详细设计 | done |
+| 任务拆解 | done |
+| 实现 | done |
+| 验证 | done |
 
-## 模块依赖关系
+## 跨模块约束
 
-```
-M1 (布局) ─────────────────────────────────────────────┐
-                                                        │
-M2 (左面板) ← M1 ──────────────────────────────────────┤
-M3 (底面板) ← M1 ──────────────────────────────────────┤
-                                                        │
-M4 (类型扩展) ← 无依赖 ─────────────────────────────────┤
-                                                        │
-M5 (AgentRuntime) ← runner.py, Provider ────────────────┤
-M6 (AgentComm) ← 无依赖 ────────────────────────────────┤
-M7 (Supervisor) ← M5, M6, M11 ─────────────────────────┤
-                                                        │
-M8 (SubGraph) ← M4, graphStore ────────────────────────┤
-M9 (分组注释) ← Canvas.tsx ─────────────────────────────┤
-                                                        │
-M10 (SemanticIndex) ← memory.py ────────────────────────┤
-M11 (TaskQueue) ← 无依赖 ───────────────────────────────┤
-M12 (ResourceManager) ← M4 ────────────────────────────┤
-M13 (Providers) ← base.py ─────────────────────────────┤
-M14 (MCPGateway) ← M5 ─────────────────────────────────┤
-```
+- 不实现完整多 Agent 运行时。
+- 不实现强制文件沙箱。
+- 不实现实时云同步、多用户协作、插件市场。
+- 不把远期 SubGraph、SemanticIndex、MCPGateway 作为 MVP 阻塞项。
+- 所有新增数据字段必须向后兼容旧 `.mag` 项目。
 
-## 风险与注意事项
+## 质量门槛
 
-- M1 布局重构后，需确保 Canvas 组件的 ReactFlow 渲染不受面板尺寸变化影响（`react-resizable-panels` 的 `resize` 事件需触发 ReactFlow 的 `fitView` 或 `resize`）
-- M2/M3 内容可后续填充，当前只需占位外壳
-- `react-resizable-panels` 新增依赖，需确认与 React 18 兼容
+- 前端改动后运行 `npm --prefix frontend run lint`。
+- 前端构建相关改动后运行 `npm --prefix frontend run build`。
+- 后端改动后运行 `uv run pytest`；若环境不可用，记录原因。
+- DAG 执行相关改动必须手测：成功执行、循环拒绝、Provider 错误、Code 节点跳过/显式执行策略。

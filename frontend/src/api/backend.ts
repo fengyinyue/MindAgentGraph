@@ -1,4 +1,5 @@
 import type { ContextMode, Graph } from "@shared/types";
+import type { DagProgress, TokenUsage } from "@/store/monitorStore";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
@@ -27,7 +28,7 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
-export type Provider = "anthropic" | "deepseek";
+export type Provider = "anthropic" | "deepseek" | "local-claude" | "local-codex";
 
 export async function planGraph(
   goal: string,
@@ -69,6 +70,9 @@ export interface RunNodeCallbacks {
   onText: (chunk: string) => void;
   onDone: () => void;
   onError: (message: string) => void;
+  onLog?: (entry: { level?: "info" | "warn" | "error"; source?: string; status?: string; message?: string; nodeId?: string; nodeTitle?: string }) => void;
+  onUsage?: (usage: Partial<TokenUsage>) => void;
+  onProgress?: (progress: Partial<DagProgress>) => void;
   signal?: AbortSignal;
 }
 
@@ -131,6 +135,12 @@ export async function runNodeStream(
             cb.onError(event.data);
           }
           return;
+        } else if (event.type === "log") {
+          cb.onLog?.(parseJson(event.data, { message: event.data }));
+        } else if (event.type === "usage") {
+          cb.onUsage?.(parseJson(event.data, {}));
+        } else if (event.type === "progress") {
+          cb.onProgress?.(parseJson(event.data, {}));
         }
       }
     }
@@ -166,6 +176,9 @@ export interface CodeRunCallbacks {
   onFiles: (files: string[]) => void;
   onDone: () => void;
   onError: (message: string) => void;
+  onLog?: RunNodeCallbacks["onLog"];
+  onUsage?: RunNodeCallbacks["onUsage"];
+  onProgress?: RunNodeCallbacks["onProgress"];
   signal?: AbortSignal;
 }
 
@@ -207,6 +220,12 @@ export async function runNodeCode(
         } else if (event.type === "error") {
           try { cb.onError(JSON.parse(event.data).message ?? event.data); } catch { cb.onError(event.data); }
           return;
+        } else if (event.type === "log") {
+          cb.onLog?.(parseJson(event.data, { message: event.data }));
+        } else if (event.type === "usage") {
+          cb.onUsage?.(parseJson(event.data, {}));
+        } else if (event.type === "progress") {
+          cb.onProgress?.(parseJson(event.data, {}));
         }
       }
     }
@@ -229,6 +248,83 @@ export async function cancelCodeRun(runId: string): Promise<boolean> {
   return data.cancelled === true;
 }
 
+export interface RunDagInput {
+  graph: Graph;
+  projectPath?: string | null;
+  provider?: Provider;
+  model?: string;
+  apiKey?: string;
+  allowCode?: boolean;
+}
+
+export interface RunDagCallbacks {
+  onText: (nodeId: string, chunk: string) => void;
+  onProgress: (progress: DagProgress & { output?: string }) => void;
+  onLog: (entry: { level?: "info" | "warn" | "error"; source?: string; status?: string; message?: string; nodeId?: string; nodeTitle?: string }) => void;
+  onDone: (results: Record<string, string>) => void;
+  onError: (message: string, nodeId?: string) => void;
+  signal?: AbortSignal;
+}
+
+export async function runDagStream(input: RunDagInput, cb: RunDagCallbacks): Promise<void> {
+  const url = await getBackendUrl();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (input.apiKey) headers["X-Provider-Key"] = input.apiKey;
+  const res = await fetch(`${url}/run/dag`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      graph: input.graph,
+      projectPath: input.projectPath,
+      provider: input.provider,
+      model: input.model,
+      allowCode: input.allowCode ?? false,
+    }),
+    signal: cb.signal,
+  });
+  if (!res.ok || !res.body) {
+    cb.onError(`/run/dag failed: ${res.status}`);
+    return;
+  }
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const event = parseSseEvent(raw);
+        if (!event) continue;
+        if (event.type === "text") {
+          const data = parseJson<{ nodeId?: string; chunk?: string }>(event.data, {});
+          if (data.nodeId && typeof data.chunk === "string") cb.onText(data.nodeId, data.chunk);
+        } else if (event.type === "progress") {
+          cb.onProgress(parseJson(event.data, {}) as DagProgress & { output?: string });
+        } else if (event.type === "log") {
+          cb.onLog(parseJson(event.data, { message: event.data }));
+        } else if (event.type === "done") {
+          const data = parseJson<{ results?: Record<string, string> }>(event.data, {});
+          cb.onDone(data.results ?? {});
+          return;
+        } else if (event.type === "error") {
+          const data = parseJson<{ message?: string; nodeId?: string }>(event.data, { message: event.data });
+          cb.onError(data.message ?? event.data, data.nodeId);
+          return;
+        }
+      }
+    }
+    cb.onDone({});
+  } catch (e) {
+    if ((e as Error).name === "AbortError") return;
+    cb.onError(e instanceof Error ? e.message : String(e));
+  }
+}
+
 function parseSseEvent(raw: string): { type: string; data: string } | null {
   let type = "message";
   const dataLines: string[] = [];
@@ -238,4 +334,12 @@ function parseSseEvent(raw: string): { type: string; data: string } | null {
   }
   if (dataLines.length === 0) return null;
   return { type, data: dataLines.join("\n") };
+}
+
+function parseJson<T>(raw: string, fallback: T): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return fallback;
+  }
 }

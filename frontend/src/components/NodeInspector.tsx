@@ -20,11 +20,11 @@ export default function NodeInspector() {
   }
 
   const isRunning = runningId === node.id;
-  const output = (node.data?.output as string | undefined) ?? "";
+  const output = node.output ?? (node.data?.output as string | undefined) ?? "";
   const codeOutput = (node.data?.codeOutput as string | undefined) ?? "";
   const error = (node.data?.error as string | undefined) ?? "";
   const codeError = (node.data?.codeError as string | undefined) ?? "";
-  const purpose = (node.data?.purpose as string | undefined) ?? "";
+  const purpose = node.purpose ?? (node.data?.purpose as string | undefined) ?? "";
   const generatedFiles = (node.data?.generatedFiles as string[] | undefined) ?? [];
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
@@ -64,6 +64,9 @@ export default function NodeInspector() {
               <option value="explicit">explicit</option>
               <option value="isolated">isolated</option>
             </select>
+            <div className="mt-1 text-[11px] text-zinc-600 leading-snug">
+              {contextHint(node.contextMode)}
+            </div>
           </div>
         </div>
         <div>
@@ -72,7 +75,10 @@ export default function NodeInspector() {
             className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16"
             value={purpose}
             placeholder="这个节点自己的任务说明"
-            onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { purpose: e.target.value })}
+            onChange={(e) => {
+              updateNode(node.id, { purpose: e.target.value });
+              useGraphStore.getState().patchNodeData(node.id, { purpose: e.target.value });
+            }}
           />
         </div>
         <div>
@@ -211,7 +217,30 @@ export default function NodeInspector() {
             </pre>
           </div>
         </details>
+
+        {node.runHistory && node.runHistory.length > 0 ? (
+          <details className="text-xs">
+            <summary className="text-zinc-500 cursor-pointer select-none">
+              Run History
+            </summary>
+            <div className="mt-2 space-y-1">
+              {node.runHistory.slice(-5).map((run) => (
+                <div key={run.id} className="rounded bg-canvas px-2 py-1 text-[11px] text-zinc-400">
+                  <span className="text-zinc-300">{run.status}</span>
+                  <span className="ml-2">{run.provider ?? "provider"}</span>
+                  <span className="ml-2">{new Date(run.startedAt).toLocaleTimeString()}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );
+}
+
+function contextHint(mode: "inherit" | "explicit" | "isolated"): string {
+  if (mode === "inherit") return "继承上游输出，并读取 Memory。";
+  if (mode === "isolated") return "隔离执行，不继承上游，不读写 Memory。";
+  return "仅使用当前节点字段和本次输入。";
 }

@@ -32,6 +32,18 @@ export interface ToolPolicy {
   deny: string[];
 }
 
+export interface RunRecord {
+  id: string;
+  startedAt: string;
+  finishedAt?: string;
+  status: "running" | "done" | "error" | "cancelled";
+  provider?: string;
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  error?: string;
+}
+
 export interface NodeBase {
   id: string;
   type: NodeType;
@@ -44,6 +56,11 @@ export interface NodeBase {
   systemPrompt?: string;
   data: Record<string, unknown>;
   summary?: string;
+  purpose?: string;
+  output?: string;
+  runHistory?: RunRecord[];
+  resourceRefs?: string[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface Edge {
@@ -61,6 +78,7 @@ export interface Edge {
 export interface Graph {
   nodes: NodeBase[];
   links: Edge[];
+  metadata?: Record<string, unknown>;
 }
 
 export interface ProjectMeta {
