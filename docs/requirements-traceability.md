@@ -1,6 +1,6 @@
 # 需求追踪矩阵 — MindAgentGraph MVP
 
-> 来源：`docs/proposal.md`。最后更新：2026-05-21。
+> 来源：`docs/proposal.md`。最后更新：2026-05-22。
 
 ## 状态说明
 
@@ -17,7 +17,10 @@
 |------|------|----------|----------|----------|
 | 可视化 DAG 节点画布 | `done` | `frontend/src/components/Canvas.tsx`, `frontend/src/store/graphStore.ts` | `docs/tasks/app-layout-refactor.md` | 手动创建/拖拽/连线节点 |
 | 手动创建、编辑、拖拽、连接、删除节点 | `done` | Canvas、Toolbar、NodeInspector、graphStore | `docs/tasks/app-layout-refactor.md` | 手测节点 CRUD 和连线 |
-| AI 根据目标自动生成节点图 | `done` | `frontend/src/components/PlanInput.tsx`, `backend/app/services/planner.py` | 已有能力 | 调用 `/plan` 并渲染返回 Graph |
+| Planning 节点 Explain 生成规划文本 | `done` | `runner.py`, `NodeInspector`, `useRunNode.ts` | 已有能力 | Planning 节点可执行 Explain 并写入 output |
+| Planning 节点基于规划文本 Generate Nodes | `done` | `/plan/expand`, `planner.py`, `useRunNode.ts`, Canvas/NodeInspector | 已有能力 | Planning 节点有 output 后可展开子节点图 |
+| Project Scan 节点扫描已有工程 | `done` | `project_scanner.py`, `/project/scan`, `useRunNode.ts`, NodeInspector | `docs/tasks/project-scan-node.md` | 选择 projectDir 后只读扫描并写入 node.output |
+| Code Analysis 节点只读分析代码 | `done` | `code_analysis_runner.py`, `/run/node/code-analysis`, `useRunNode.ts`, NodeInspector | `docs/tasks/code-analysis-node.md` | 选择 projectDir 后调用 Claude Code 只读分析并写入 node.output |
 | 节点级 Prompt | `done` | `NodeInspector`, `runner.py`, `code_runner.py` | `docs/tasks/provider-context.md` | 执行节点时注入 systemPrompt |
 | 节点级 Memory | `done` | `backend/app/services/memory.py`, `main.py` | `docs/tasks/provider-context.md` | inherit 写入/读取 `.mag/memory/` |
 | 节点级 FileScope | `done` | `NodeInspector`, `ProjectExplorer`, `code_runner.py`, `useRunNode.ts` | `docs/tasks/provider-context.md` | Code 节点日志显示 FileScope，普通执行显示摘要 |
@@ -55,11 +58,13 @@
 
 ## 当前优先级
 
-1. 数据模型扩展：`docs/tasks/data-model.md`
-2. 底部监视器：`docs/tasks/bottom-monitor.md`
-3. 左侧项目浏览器：`docs/tasks/project-explorer.md`
-4. Provider/FileScope/上下文可视化：`docs/tasks/provider-context.md`
-5. DAG 顺序执行：`docs/tasks/dag-executor.md`
+1. Project Scan / Repo Context 节点：`docs/tasks/project-scan-node.md`
+2. Code Analysis 节点：`docs/tasks/code-analysis-node.md`
+3. 数据模型扩展：`docs/tasks/data-model.md`
+4. 底部监视器：`docs/tasks/bottom-monitor.md`
+5. 左侧项目浏览器：`docs/tasks/project-explorer.md`
+6. Provider/FileScope/上下文可视化：`docs/tasks/provider-context.md`
+7. DAG 顺序执行：`docs/tasks/dag-executor.md`
 
 ## 残余风险
 
@@ -67,3 +72,5 @@
 - Code 节点批量执行有修改工程文件风险，MVP 默认应跳过或要求用户显式允许。
 - Token usage 取决于 Provider 返回能力，不能作为阻断执行的硬依赖。
 - `.mag` 旧项目兼容需要在数据模型扩展后专门手测。
+- Project Scan 的扫描摘要需要控制长度，否则会把过多项目上下文塞入下游节点。
+- Code Analysis 的只读约束依赖 Claude Code CLI 工具参数和 prompt 共同保证，仍应把真正改文件留给 Code 节点。

@@ -102,6 +102,40 @@ async def run_dag_stream(
             })
             continue
 
+        if node.type == "project_scan":
+            yield sse("log", {
+                "level": "warn",
+                "source": "dag",
+                "status": "SKIPPED",
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "message": "跳过 Project Scan 节点；请先单独选择工程目录并执行扫描。",
+            })
+            yield sse("progress", {
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "status": "skipped",
+                "message": "Project Scan 需要 projectDir，MVP 中请单独执行。",
+            })
+            continue
+
+        if node.type == "code_analysis":
+            yield sse("log", {
+                "level": "warn",
+                "source": "dag",
+                "status": "SKIPPED",
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "message": "跳过 Code Analysis 节点；请先单独选择工程目录并执行只读分析。",
+            })
+            yield sse("progress", {
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "status": "skipped",
+                "message": "Code Analysis 需要 projectDir，MVP 中请单独执行。",
+            })
+            continue
+
         if node.type == "code" and not allow_code:
             yield sse("log", {
                 "level": "warn",

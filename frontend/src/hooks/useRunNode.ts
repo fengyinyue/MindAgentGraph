@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { create } from "zustand";
-import { cancelCodeRun, expandPlan, runDagStream, runNodeCode, runNodeStream } from "@/api/backend";
+import { cancelCodeRun, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream, scanProject } from "@/api/backend";
+import type { CodeDiffInfo } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
@@ -63,6 +64,34 @@ function collectUpstreamOutputs(nodes: NodeBase[], links: Edge[], nodeId: string
   return Object.keys(outputs).length ? outputs : undefined;
 }
 
+function collectUpstreamNodeIds(links: Edge[], nodeId: string): Set<string> {
+  const visiting = new Set<string>();
+  const result = new Set<string>();
+  const visitParents = (id: string) => {
+    if (visiting.has(id)) return;
+    visiting.add(id);
+    for (const link of links.filter((l) => l.target === id)) {
+      result.add(link.source);
+      visitParents(link.source);
+    }
+    visiting.delete(id);
+  };
+  visitParents(nodeId);
+  return result;
+}
+
+function summarizeNodeForExpand(node: NodeBase) {
+  const text = outputText(node).trim();
+  return {
+    id: node.id,
+    type: node.type,
+    title: node.title,
+    purpose: node.purpose ?? (node.data?.purpose as string | undefined) ?? "",
+    hasOutput: text.length > 0,
+    outputSummary: text ? text.slice(0, 1200) : undefined,
+  };
+}
+
 function toRunPayload(node: NodeBase) {
   return {
     id: node.id,
@@ -101,6 +130,197 @@ export function useRunNode() {
       const node = state.nodes.find((n) => n.id === nodeId);
       if (!node) return false;
       if (useRunState.getState().runningId) return false;
+
+      if (node.type === "project_scan") {
+        const projectDir = state.projectDir;
+        if (!projectDir) {
+          const message = "未设置工程目录，请先在工具栏选择 Project Dir。";
+          state.patchNodeData(nodeId, { error: message, status: "error" });
+          useMonitorStore.getState().addLog({
+            level: "warn",
+            source: "node",
+            status: "SKIPPED",
+            nodeId,
+            nodeTitle: node.title,
+            message,
+          });
+          return false;
+        }
+
+        const runRecordId = crypto.randomUUID();
+        appendRunRecord(node, {
+          id: runRecordId,
+          startedAt: new Date().toISOString(),
+          status: "running",
+          provider: "project-scan",
+        });
+        state.patchNodeData(nodeId, { output: "", error: undefined, status: "running" });
+        state.updateNode(nodeId, { output: "" });
+        useMonitorStore.getState().addLog({
+          level: "info",
+          source: "node",
+          status: "START",
+          nodeId,
+          nodeTitle: node.title,
+          message: `Project scan started (${projectDir})`,
+        });
+        setRunning(nodeId);
+
+        try {
+          const result = await scanProject({
+            node: toRunPayload(node),
+            projectDir,
+            projectPath: state.projectPath,
+            fileScopeAllow: node.fileScope.allow,
+            fileScopeDeny: node.fileScope.deny,
+          });
+          useGraphStore.getState().patchNodeData(nodeId, {
+            output: result.summary,
+            scanResult: result,
+            suggestedFileScope: result.suggestedFileScope,
+            status: "done",
+          });
+          useGraphStore.getState().updateNode(nodeId, { output: result.summary });
+          finishRunRecord(nodeId, runRecordId, { status: "done", finishedAt: new Date().toISOString() });
+          useMonitorStore.getState().addLog({
+            level: "info",
+            source: "node",
+            status: "DONE",
+            nodeId,
+            nodeTitle: node.title,
+            message: `Project scan done (${result.detectedStack.length ? result.detectedStack.join(", ") : "stack unknown"})`,
+          });
+          return true;
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          useGraphStore.getState().patchNodeData(nodeId, { error: message, status: "error" });
+          finishRunRecord(nodeId, runRecordId, { status: "error", finishedAt: new Date().toISOString(), error: message });
+          useMonitorStore.getState().addLog({
+            level: "error",
+            source: "node",
+            status: "ERROR",
+            nodeId,
+            nodeTitle: node.title,
+            message,
+          });
+          return false;
+        } finally {
+          setRunning(null);
+        }
+      }
+
+      if (node.type === "code_analysis") {
+        const projectDir = state.projectDir;
+        if (!projectDir) {
+          const message = "未设置工程目录，请先在工具栏选择 Project Dir。";
+          state.patchNodeData(nodeId, { error: message, status: "error" });
+          useMonitorStore.getState().addLog({
+            level: "warn",
+            source: "node",
+            status: "SKIPPED",
+            nodeId,
+            nodeTitle: node.title,
+            message,
+          });
+          return false;
+        }
+
+        const parentOutputs = node.contextMode === "inherit"
+          ? collectUpstreamOutputs(state.nodes, state.links, node.id)
+          : undefined;
+        const provider = useProviderStore.getState().provider;
+        const model = useProviderStore.getState().getModel(provider);
+        const runRecordId = crypto.randomUUID();
+        appendRunRecord(node, {
+          id: runRecordId,
+          startedAt: new Date().toISOString(),
+          status: "running",
+          provider: "claude-code-analysis",
+          model,
+        });
+        state.patchNodeData(nodeId, { output: "", error: undefined, status: "running" });
+        state.updateNode(nodeId, { output: "" });
+        useMonitorStore.getState().addLog({
+          level: "info",
+          source: "node",
+          status: "START",
+          nodeId,
+          nodeTitle: node.title,
+          message: `Claude Code analysis started (${model || "default"}, read-only)`,
+        });
+        setRunning(nodeId);
+
+        const ctrl = new AbortController();
+        const runId = crypto.randomUUID();
+        activeAbort = ctrl;
+        activeCodeRunId = runId;
+        let acc = "";
+        let ok = true;
+        await runNodeCodeAnalysis(
+          {
+            node: toRunPayload(node),
+            projectDir,
+            projectPath: state.projectPath,
+            fileScopeAllow: node.fileScope.allow,
+            fileScopeDeny: node.fileScope.deny,
+            parentOutputs,
+            userPrompt: opts.userPrompt,
+            model,
+            runId,
+          },
+          {
+            onText: (chunk) => {
+              if (!acc) {
+                useMonitorStore.getState().addLog({
+                  level: "info",
+                  source: "node",
+                  status: "RUNNING",
+                  nodeId,
+                  nodeTitle: node.title,
+                  message: "Claude Code analysis receiving output",
+                });
+              }
+              acc += chunk;
+              useGraphStore.getState().patchNodeData(nodeId, { output: acc, status: "running" });
+              useGraphStore.getState().updateNode(nodeId, { output: acc });
+            },
+            onDone: () => {
+              finishRunRecord(nodeId, runRecordId, { status: "done", finishedAt: new Date().toISOString() });
+              useGraphStore.getState().patchNodeData(nodeId, { status: "done" });
+              useMonitorStore.getState().addLog({
+                level: "info",
+                source: "node",
+                status: "DONE",
+                nodeId,
+                nodeTitle: node.title,
+                message: "Claude Code analysis done",
+              });
+              setRunning(null);
+              if (activeAbort === ctrl) activeAbort = null;
+              if (activeCodeRunId === runId) activeCodeRunId = null;
+            },
+            onError: (message) => {
+              ok = false;
+              finishRunRecord(nodeId, runRecordId, { status: "error", finishedAt: new Date().toISOString(), error: message });
+              useGraphStore.getState().patchNodeData(nodeId, { error: message, status: "error" });
+              useMonitorStore.getState().addLog({
+                level: "error",
+                source: "node",
+                status: "ERROR",
+                nodeId,
+                nodeTitle: node.title,
+                message,
+              });
+              setRunning(null);
+              if (activeAbort === ctrl) activeAbort = null;
+              if (activeCodeRunId === runId) activeCodeRunId = null;
+            },
+            signal: ctrl.signal,
+          },
+        );
+        if (activeCodeRunId === runId) activeCodeRunId = null;
+        return ok && !ctrl.signal.aborted;
+      }
 
       const provider = useProviderStore.getState().provider;
       const model = useProviderStore.getState().getModel(provider);
@@ -289,7 +509,7 @@ export function useRunNode() {
         });
       }
 
-      state.patchNodeData(nodeId, { codeOutput: "", codeError: undefined, generatedFiles: undefined });
+      state.patchNodeData(nodeId, { codeOutput: "", codeError: undefined, generatedFiles: undefined, codeDiff: undefined });
       const runRecordId = crypto.randomUUID();
       appendRunRecord(node, {
         id: runRecordId,
@@ -314,6 +534,8 @@ export function useRunNode() {
       activeCodeRunId = runId;
       let acc = "";
       let ok = true;
+      let changedFiles: string[] = [];
+      let codeDiff: CodeDiffInfo | undefined;
 
       await runNodeCode(
         {
@@ -344,6 +566,7 @@ export function useRunNode() {
             useGraphStore.getState().updateNode(nodeId, { output: acc });
           },
           onFiles: (files) => {
+            changedFiles = files;
             useGraphStore.getState().patchNodeData(nodeId, { generatedFiles: files });
             useMonitorStore.getState().addLog({
               level: "info",
@@ -354,8 +577,29 @@ export function useRunNode() {
               message: `Files changed: ${files.length ? files.join(", ") : "none"}`,
             });
           },
+          onDiff: (diff) => {
+            codeDiff = diff;
+            useGraphStore.getState().patchNodeData(nodeId, { codeDiff: diff });
+            useMonitorStore.getState().addLog({
+              level: diff.available && diff.diff ? "info" : "warn",
+              source: "code",
+              status: "DIFF",
+              nodeId,
+              nodeTitle: node.title,
+              message: diff.diff
+                ? `Diff captured (${diff.diff.length} chars${diff.truncated ? ", truncated" : ""})`
+                : `No diff captured${diff.warnings.length ? `: ${diff.warnings.join("; ")}` : ""}`,
+            });
+          },
           onDone: () => {
-            finishRunRecord(nodeId, runRecordId, { status: "done", finishedAt: new Date().toISOString() });
+            finishRunRecord(nodeId, runRecordId, {
+              status: "done",
+              finishedAt: new Date().toISOString(),
+              changedFiles,
+              diff: codeDiff?.diff,
+              diffTruncated: codeDiff?.truncated,
+              diffWarnings: codeDiff?.warnings,
+            });
             useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", nodeId, nodeTitle: node.title, message: "Code run done" });
             setRunning(null);
             if (activeAbort === ctrl) activeAbort = null;
@@ -363,7 +607,15 @@ export function useRunNode() {
           },
           onError: (message) => {
             ok = false;
-            finishRunRecord(nodeId, runRecordId, { status: "error", finishedAt: new Date().toISOString(), error: message });
+            finishRunRecord(nodeId, runRecordId, {
+              status: "error",
+              finishedAt: new Date().toISOString(),
+              error: message,
+              changedFiles,
+              diff: codeDiff?.diff,
+              diffTruncated: codeDiff?.truncated,
+              diffWarnings: codeDiff?.warnings,
+            });
             useGraphStore.getState().patchNodeData(nodeId, { codeError: message });
             useMonitorStore.getState().addLog({ level: "error", source: "code", status: "ERROR", nodeId, nodeTitle: node.title, message });
             setRunning(null);
@@ -414,7 +666,22 @@ export function useRunNode() {
       setRunning(planningNodeId);
 
       try {
-        const result = await expandPlan(planText, { provider, model, apiKey });
+        const upstreamIds = collectUpstreamNodeIds(state.links, planningNodeId);
+        const existingNodes = state.nodes
+          .filter((n) =>
+            upstreamIds.has(n.id) ||
+            n.type === "project_scan" ||
+            n.type === "code_analysis"
+          )
+          .map(summarizeNodeForExpand);
+        const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, planningNodeId);
+        const result = await expandPlan(planText, {
+          provider,
+          model,
+          apiKey,
+          existingNodes,
+          upstreamOutputs,
+        });
 
         // Map old AI-generated IDs to new UUIDs
         const idMap = new Map<string, string>();
@@ -430,7 +697,7 @@ export function useRunNode() {
           type: raw.type as NodeBase["type"],
           title: raw.title,
           position: { x: baseX + raw.x, y: baseY + raw.y },
-          contextMode: "inherit" as const,
+          contextMode: raw.type === "project_scan" ? "isolated" as const : "inherit" as const,
           fileScope: { allow: [], deny: [] },
           toolPolicy: { tools: [], deny: [] },
           memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,

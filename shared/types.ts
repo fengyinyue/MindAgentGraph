@@ -3,6 +3,8 @@ export type NodeType =
   | "planning"
   | "memory"
   | "filescope"
+  | "project_scan"
+  | "code_analysis"
   | "code"
   | "api"
   | "asset"
@@ -12,7 +14,7 @@ export type NodeType =
 
 export const NODE_TYPES: NodeType[] = [
   "prompt", "planning", "memory", "filescope",
-  "code", "api", "asset", "agent", "task", "semantic",
+  "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
 ];
 
 export type ContextMode = "inherit" | "explicit" | "isolated";
@@ -42,6 +44,10 @@ export interface RunRecord {
   inputTokens?: number;
   outputTokens?: number;
   error?: string;
+  changedFiles?: string[];
+  diff?: string;
+  diffTruncated?: boolean;
+  diffWarnings?: string[];
 }
 
 export interface NodeBase {

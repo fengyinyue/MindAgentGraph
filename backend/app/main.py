@@ -17,7 +17,7 @@ from typing import Annotated, Optional
 
 import dotenv
 import uvicorn
-from fastapi import FastAPI, Header
+from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
@@ -33,10 +33,12 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ProjectScanRequest, ProjectScanResult
 from app.services.planner import expand_plan, plan_graph
+from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_claude_run, run_node_with_claude
+from app.services.code_analysis_runner import run_code_analysis_with_claude
 from app.services.memory import read_memory, write_memory
 from app.services.dag_executor import run_dag_stream
 
@@ -84,10 +86,28 @@ async def plan_expand(
     """将规划文本展开为子节点+连线，返回 AI 原始 emit_graph 结果。"""
     return await expand_plan(
         req.plan_text,
+        existing_nodes=[node.model_dump() for node in req.existing_nodes],
+        upstream_outputs=req.upstream_outputs,
         provider=req.provider,
         model=req.model,
         api_key=x_provider_key,
     )
+
+
+@app.post("/project/scan", response_model=ProjectScanResult)
+async def project_scan(req: ProjectScanRequest) -> ProjectScanResult:
+    """只读扫描已有工程，生成 Project Scan 节点上下文。"""
+    try:
+        return scan_project(
+            project_dir=req.projectDir,
+            purpose=req.node.purpose or "",
+            file_scope_allow=req.fileScopeAllow,
+            file_scope_deny=req.fileScopeDeny,
+            max_files=req.maxFiles,
+            max_bytes_per_file=req.maxBytesPerFile,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @app.post("/run/node")
@@ -161,13 +181,66 @@ async def cancel_node_code(req: CodeCancelRequest) -> dict[str, bool]:
     return {"cancelled": cancelled}
 
 
+@app.post("/run/node/code-analysis")
+async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
+    """SSE stream of read-only Claude Code analysis output."""
+
+    async def gen():
+        try:
+            memory_text = None
+            if req.node.contextMode == "inherit":
+                memory_text = read_memory(req.projectPath, req.node.memoryRef)
+
+            output_parts: list[str] = []
+            async for chunk in run_code_analysis_with_claude(
+                node_title=req.node.title,
+                node_purpose=req.node.purpose or "",
+                project_dir=req.projectDir,
+                file_scope_allow=req.fileScopeAllow,
+                file_scope_deny=req.fileScopeDeny,
+                parent_outputs=req.parentOutputs,
+                user_prompt=req.userPrompt,
+                context_mode=req.node.contextMode,
+                memory_text=memory_text,
+                system_prompt=req.node.systemPrompt,
+                model=req.model,
+                run_id=req.runId,
+            ):
+                output_parts.append(chunk)
+                yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+            if req.node.contextMode != "isolated":
+                write_memory(
+                    req.projectPath,
+                    req.node.memoryRef,
+                    "".join(output_parts),
+                    node_title=req.node.title,
+                )
+            yield "event: done\ndata: {}\n\n"
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.post("/run/node/code")
 async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
     """SSE stream of Claude Code CLI output.
 
-    Same SSE wire format as /run/node, with one extra event type:
+    Same SSE wire format as /run/node, with extra event types:
       event: files\\n
       data: ["+ src/a.py", "~ src/b.py"]\\n
+      event: diff\\n
+      data: {"diff": "...", "truncated": false}\\n
     """
 
     async def gen():
@@ -192,11 +265,14 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 model=req.model,
                 run_id=req.runId,
             ):
-                # Check for the special __files__ marker (may have leading whitespace).
+                # Check for special metadata markers (may have leading whitespace).
                 stripped = chunk.strip()
                 if stripped.startswith("__files__:"):
                     files_json = stripped[len("__files__:"):].strip()
                     yield f"event: files\ndata: {files_json}\n\n"
+                elif stripped.startswith("__diff__:"):
+                    diff_json = stripped[len("__diff__:"):].strip()
+                    yield f"event: diff\ndata: {diff_json}\n\n"
                 else:
                     output_parts.append(chunk)
                     yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"

@@ -8,7 +8,10 @@ MindAgentGraph MVP 要验证一条闭环：
 
 ```text
 用户目标
-  -> Planning 节点生成 DAG
+  -> Planning 节点生成规划文本
+  -> Generate Nodes 展开 DAG
+  -> 如基于已有项目，先执行 Project Scan 节点沉淀工程上下文
+  -> 必要时执行 Code Analysis 节点，让 Claude Code 只读理解真实代码
   -> 用户在画布调整节点与上下文
   -> 单节点或整图按依赖执行
   -> 输出、日志、记忆、文件范围回写到项目
@@ -29,6 +32,8 @@ Tauri Shell
   ├─ Rust Project IO / Sidecar Manager
   └─ FastAPI Backend
       ├─ Planner
+      ├─ Project Scanner
+      ├─ Code Analysis Runner
       ├─ Node Runner
       ├─ Code Runner
       ├─ DAG Executor
@@ -57,6 +62,8 @@ Tauri Shell
 | 模块 | 当前状态 | MVP 职责 |
 |------|----------|----------|
 | Planner | 已有 | 用户目标生成 Graph |
+| ProjectScanner | 已有 | 只读扫描已有工程，生成项目摘要、关键文件、技术栈、改动边界建议 |
+| CodeAnalysisRunner | 已有 | 调用 Claude Code 只读分析项目代码，输出实现入口、风险和改动建议 |
 | Runner | 已有 | 单节点文本执行，组装节点上下文 |
 | CodeRunner | 已有 | Code 节点调用 CLI，注入 FileScope |
 | Memory | 已有 | `.mag/memory/` Markdown 读写 |
@@ -80,11 +87,14 @@ Tauri Shell
 ### 4.1 规划流
 
 ```text
-PlanInput
-  -> POST /plan
-  -> Planner
-  -> Provider.plan_graph()
-  -> Graph
+Planning Node Explain
+  -> POST /run/node
+  -> Runner
+  -> Planning output
+  -> Generate Nodes
+  -> POST /plan/expand
+  -> Planner.expand_plan()
+  -> child nodes + links
   -> graphStore.setGraph()
   -> Canvas + ProjectExplorer
 ```
@@ -94,6 +104,42 @@ PlanInput
 - Provider 返回内容必须被校验为 `Graph`。
 - 规划失败时写入 BottomMonitor 日志。
 - 生成节点必须包含 `purpose`/`systemPrompt`/`fileScope` 的最小可编辑字段。
+- 当规划文本包含已有项目改造意图时，展开结果应包含 Project Scan 节点，并让后续实现节点依赖它。
+
+### 4.1.1 已有项目上下文扫描流
+
+```text
+Project Scan node
+  -> POST /project/scan
+  -> ProjectScanner
+  -> read-only filesystem summary
+  -> node.output + optional memoryRef
+  -> downstream Planning / Prompt / Code nodes inherit output
+```
+
+要求：
+
+- Project Scan 只读访问 `projectDir`，不修改文件。
+- 扫描输出包含技术栈、目录结构、关键入口、测试/构建命令、风险文件和建议 FileScope。
+- 如果未选择 `projectDir`，前端应禁用运行并提示用户先选择工程目录。
+- 输出长度要可控，优先摘要和关键文件，不把大量源码塞入节点输出。
+
+### 4.1.2 代码深度分析流
+
+```text
+Code Analysis node
+  -> POST /run/node/code-analysis
+  -> Claude Code CLI (read-only tools)
+  -> node.output
+  -> downstream Code node inherits output
+```
+
+要求：
+
+- Code Analysis 需要 `projectDir`，默认继承 Project Scan 输出。
+- Claude Code 只允许读取、搜索和列目录，不允许编辑或写文件。
+- 输出聚焦真实代码的实现入口、相关文件、风险和后续 Code 节点执行建议。
+- DAG 批量执行中默认跳过 Code Analysis，避免在没有 projectDir 或用户意图不明确时自动触发本地 CLI。
 
 ### 4.2 单节点执行流
 
@@ -198,6 +244,7 @@ interface Graph {
 
 ### 后续阶段
 
+- Project Scan / Repo Context 节点：让已有项目开发先沉淀工程上下文。
 - AgentRuntime、AgentComm、Supervisor。
 - SubGraph、分组、注释、节点模板。
 - 多模态资源管理器。

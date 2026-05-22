@@ -8,6 +8,7 @@ and appends a special marker event so the frontend can show a file list.
 
 from __future__ import annotations
 import asyncio
+import difflib
 import os
 import shutil
 import signal
@@ -15,6 +16,9 @@ import subprocess
 import sys
 import uuid
 from typing import AsyncIterator
+
+CODE_DIFF_MAX_BYTES = 200_000
+SNAPSHOT_MAX_BYTES = 1_000_000
 
 CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要提问、不要解释、不要等确认。
 
@@ -50,6 +54,111 @@ CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要�
 
 
 _ACTIVE_CLAUDE_RUNS: dict[str, asyncio.subprocess.Process] = {}
+
+
+def _normalize_rel_path(path: str) -> str | None:
+    rel = path.replace("\\", "/").strip()
+    if not rel or rel.startswith("/") or rel.startswith("../") or "/../" in rel:
+        return None
+    if rel.startswith(".mag_") or "/.mag_" in rel or rel.startswith(".git/"):
+        return None
+    return rel
+
+
+def _is_text_bytes(data: bytes) -> bool:
+    return b"\x00" not in data
+
+
+async def _run_git(
+    project_dir: str,
+    args: list[str],
+    *,
+    timeout: float = 10,
+) -> tuple[int, str, str]:
+    proc = await asyncio.create_subprocess_exec(
+        "git",
+        *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=project_dir,
+    )
+    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    return (
+        proc.returncode or 0,
+        stdout.decode("utf-8", "replace"),
+        stderr.decode("utf-8", "replace"),
+    )
+
+
+async def _is_git_repo(project_dir: str) -> bool:
+    try:
+        code, stdout, _ = await _run_git(project_dir, ["rev-parse", "--is-inside-work-tree"])
+        return code == 0 and stdout.strip() == "true"
+    except Exception:
+        return False
+
+
+async def _git_status_map(project_dir: str) -> dict[str, str]:
+    try:
+        code, stdout, _ = await _run_git(project_dir, ["status", "--porcelain", "-uall"], timeout=10)
+        if code != 0:
+            return {}
+        statuses: dict[str, str] = {}
+        for line in stdout.splitlines():
+            if not line:
+                continue
+            status_code = line[:2].strip()
+            path = line[3:].strip()
+            if " -> " in path:
+                path = path.rsplit(" -> ", 1)[1]
+            rel = _normalize_rel_path(path.strip('"'))
+            if rel:
+                statuses[rel] = status_code
+        return statuses
+    except Exception:
+        return {}
+
+
+def _read_text_snapshot(project_dir: str, rel_path: str) -> str | None:
+    rel = _normalize_rel_path(rel_path)
+    if not rel:
+        return None
+    abs_path = os.path.abspath(os.path.join(project_dir, rel))
+    root = os.path.abspath(project_dir)
+    if not (abs_path == root or abs_path.startswith(root + os.sep)):
+        return None
+    if not os.path.isfile(abs_path):
+        return ""
+    try:
+        if os.path.getsize(abs_path) > SNAPSHOT_MAX_BYTES:
+            return None
+        with open(abs_path, "rb") as f:
+            data = f.read()
+        if not _is_text_bytes(data):
+            return None
+        return data.decode("utf-8", "replace")
+    except OSError:
+        return None
+
+
+async def _git_head_text(project_dir: str, rel_path: str) -> str | None:
+    rel = _normalize_rel_path(rel_path)
+    if not rel:
+        return None
+    try:
+        code, stdout, _ = await _run_git(project_dir, ["show", f"HEAD:{rel}"], timeout=10)
+        if code != 0:
+            return None
+        return stdout
+    except Exception:
+        return None
+
+
+async def _snapshot_dirty_files(project_dir: str, status_map: dict[str, str]) -> dict[str, str | None]:
+    snapshots: dict[str, str | None] = {}
+    for rel in status_map:
+        snapshots[rel] = _read_text_snapshot(project_dir, rel)
+    return snapshots
 
 
 def _log_claude(run_id: str, status: str, detail: str = "") -> None:
@@ -152,36 +261,56 @@ def _assemble_prompt(
     )
 
 
-async def _detect_changed_files(project_dir: str, before_marker_file: str | None) -> list[str]:
+def _mtime_after_marker(project_dir: str, rel_path: str, before_marker_file: str | None) -> bool:
+    if not before_marker_file or not os.path.exists(before_marker_file):
+        return False
+    rel = _normalize_rel_path(rel_path)
+    if not rel:
+        return False
+    try:
+        abs_path = os.path.join(project_dir, rel)
+        return os.path.exists(abs_path) and os.path.getmtime(abs_path) > os.path.getmtime(before_marker_file)
+    except OSError:
+        return False
+
+
+def _status_prefix(status_code: str) -> str:
+    if status_code in {"??", "A", "AM"}:
+        return "+"
+    if status_code == "D":
+        return "-"
+    if status_code.startswith("R"):
+        return "R"
+    if status_code:
+        return "~"
+    return "~"
+
+
+async def _detect_changed_files(
+    project_dir: str,
+    before_marker_file: str | None,
+    before_status: dict[str, str] | None = None,
+) -> list[str]:
     """Return files created or modified since before_marker was written.
 
-    Prefers ``git diff --name-status``; falls back to checking mtime.
+    Prefers git status before/after comparison; falls back to checking mtime.
     """
-    # Git-based detection (use status porcelain for new + modified files)
-    if os.path.isdir(os.path.join(project_dir, ".git")):
+    # Git-based detection. Compare before/after status and mtime to avoid
+    # reporting unrelated dirty files that existed before this run.
+    if await _is_git_repo(project_dir):
         try:
-            proc = await asyncio.create_subprocess_exec(
-                "git", "status", "--porcelain",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.DEVNULL,
-                cwd=project_dir,
-            )
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+            before_status = before_status or {}
+            after_status = await _git_status_map(project_dir)
             files: list[str] = []
-            for line in stdout.decode("utf-8", "replace").strip().split("\n"):
-                if not line:
+            for path in sorted(set(before_status) | set(after_status)):
+                rel = _normalize_rel_path(path)
+                if not rel:
                     continue
-                # git status --porcelain: "XY filename" where X=index Y=worktree
-                status_code = line[:2].strip()
-                path = line[3:].strip()
-                # Filter noise.
-                if path.startswith("__pycache__") or path.startswith(".mag_"):
+                before = before_status.get(rel)
+                after = after_status.get(rel)
+                if before == after and not _mtime_after_marker(project_dir, rel, before_marker_file):
                     continue
-                prefix = {
-                    "??": "+", "A": "+", "M": "~", "AM": "+",
-                    "D": "-", "R": "→",
-                }.get(status_code, status_code)
-                files.append(f"{prefix} {path}")
+                files.append(f"{_status_prefix(after or before or 'M')} {rel}")
             return files
         except Exception:
             pass
@@ -208,6 +337,95 @@ async def _detect_changed_files(project_dir: str, before_marker_file: str | None
     return []
 
 
+def _extract_changed_rel_paths(changed_files: list[str]) -> list[str]:
+    rels: list[str] = []
+    for item in changed_files:
+        rel = item[2:].strip() if len(item) > 2 and item[1] == " " else item.strip()
+        normalized = _normalize_rel_path(rel)
+        if normalized:
+            rels.append(normalized)
+    return rels
+
+
+def _append_limited(parts: list[str], text: str, max_bytes: int) -> bool:
+    current = sum(len(part.encode("utf-8", "replace")) for part in parts)
+    remaining = max_bytes - current
+    if remaining <= 0:
+        return True
+    data = text.encode("utf-8", "replace")
+    if len(data) <= remaining:
+        parts.append(text)
+        return False
+    parts.append(data[:remaining].decode("utf-8", "replace"))
+    return True
+
+
+async def _capture_code_diff(
+    project_dir: str,
+    changed_files: list[str],
+    before_status: dict[str, str],
+    before_snapshots: dict[str, str | None],
+) -> dict[str, object]:
+    warnings: list[str] = []
+    if not await _is_git_repo(project_dir):
+        return {
+            "available": False,
+            "isGitRepo": False,
+            "changedFiles": changed_files,
+            "diff": "",
+            "truncated": False,
+            "warnings": ["Diff capture requires a Git working tree."],
+        }
+
+    after_status = await _git_status_map(project_dir)
+    parts: list[str] = []
+    truncated = False
+    for rel in _extract_changed_rel_paths(changed_files):
+        if rel in before_snapshots:
+            before_text = before_snapshots[rel]
+        elif after_status.get(rel) == "??":
+            before_text = ""
+        else:
+            before_text = await _git_head_text(project_dir, rel)
+            if before_text is None:
+                before_text = ""
+
+        after_text = _read_text_snapshot(project_dir, rel)
+        if before_text is None or after_text is None:
+            warnings.append(f"Skipped binary or large file diff: {rel}")
+            continue
+
+        if before_text == after_text:
+            continue
+
+        diff = "".join(
+            difflib.unified_diff(
+                before_text.splitlines(keepends=True),
+                after_text.splitlines(keepends=True),
+                fromfile=f"a/{rel}",
+                tofile=f"b/{rel}",
+            )
+        )
+        if not diff:
+            continue
+        truncated = _append_limited(parts, diff, CODE_DIFF_MAX_BYTES)
+        if truncated:
+            warnings.append(f"Diff truncated at {CODE_DIFF_MAX_BYTES} bytes.")
+            break
+
+    if changed_files and not parts:
+        warnings.append("No text diff was captured for files changed during this run.")
+
+    return {
+        "available": True,
+        "isGitRepo": True,
+        "changedFiles": changed_files,
+        "diff": "".join(parts),
+        "truncated": truncated,
+        "warnings": warnings,
+    }
+
+
 async def run_node_with_claude(
     *,
     node_title: str,
@@ -224,8 +442,7 @@ async def run_node_with_claude(
     model: str | None = None,
     run_id: str | None = None,
 ) -> AsyncIterator[str]:
-    """Yield stdout chunks from ``claude --print``, then a final
-    ``__files__:["+ src/a.py", ...]`` marker line."""
+    """Yield stdout chunks from ``claude --print``, then final metadata markers."""
     effective_run_id = run_id or f"local-{uuid.uuid4().hex[:8]}"
     _log_claude(effective_run_id, "START", f"node={node_title!r} cwd={project_dir}")
     if not os.path.isdir(project_dir):
@@ -247,7 +464,10 @@ async def run_node_with_claude(
         system_prompt=system_prompt,
     )
 
-    # Marker file for timestamp-based file detection
+    before_status = await _git_status_map(project_dir) if await _is_git_repo(project_dir) else {}
+    before_snapshots = await _snapshot_dirty_files(project_dir, before_status) if before_status else {}
+
+    # Marker file for timestamp-based file detection.
     marker = os.path.join(project_dir, ".mag_code_run_marker")
     try:
         with open(marker, "w") as f:
@@ -270,6 +490,7 @@ async def run_node_with_claude(
             f"**prompt 预览**：\n```\n{prompt[:1200]}\n```\n"
         )
         yield f"__files__:{[]}"
+        yield "__diff__:{\"available\":false,\"isGitRepo\":false,\"changedFiles\":[],\"diff\":\"\",\"truncated\":false,\"warnings\":[\"Claude Code CLI was not found.\"]}"
         return
 
     proc = None
@@ -318,7 +539,8 @@ async def run_node_with_claude(
             yield f"\n[claude exited with code {proc.returncode}]"
 
         # Detect changed files (only on clean completion).
-        changed = await _detect_changed_files(project_dir, marker)
+        changed = await _detect_changed_files(project_dir, marker, before_status)
+        diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
         _log_claude(effective_run_id, "DONE", f"files={len(changed)}")
 
     except asyncio.CancelledError:
@@ -330,10 +552,19 @@ async def run_node_with_claude(
         _log_claude(effective_run_id, "ERROR", "claude command not found")
         yield "\n[error] `claude` 命令未找到。请确认 Claude Code 已安装。\n"
         changed = []
+        diff_info = {
+            "available": False,
+            "isGitRepo": False,
+            "changedFiles": [],
+            "diff": "",
+            "truncated": False,
+            "warnings": ["Claude Code CLI was not found."],
+        }
     except Exception as e:
         _log_claude(effective_run_id, "ERROR", str(e))
         yield f"\n[error] 执行异常: {e}\n"
-        changed = await _detect_changed_files(project_dir, marker)
+        changed = await _detect_changed_files(project_dir, marker, before_status)
+        diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
 
     finally:
         _ACTIVE_CLAUDE_RUNS.pop(effective_run_id, None)
@@ -347,3 +578,4 @@ async def run_node_with_claude(
     # Final marker (yield as a separate chunk so main.py can detect it cleanly).
     import json as _json
     yield f"__files__:{_json.dumps(changed)}"
+    yield f"__diff__:{_json.dumps(diff_info)}"

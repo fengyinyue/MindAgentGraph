@@ -33,10 +33,13 @@ export default function NodeInspector() {
   const codeError = (node.data?.codeError as string | undefined) ?? "";
   const purpose = node.purpose ?? (node.data?.purpose as string | undefined) ?? "";
   const generatedFiles = (node.data?.generatedFiles as string[] | undefined) ?? [];
+  const codeDiff = node.data?.codeDiff as { diff?: string; truncated?: boolean; warnings?: string[] } | undefined;
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
   const isPlanningNode = node.type === "planning";
+  const isProjectScanNode = node.type === "project_scan";
+  const isCodeAnalysisNode = node.type === "code_analysis";
   const canGenerateNodes = isPlanningNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
@@ -135,9 +138,10 @@ export default function NodeInspector() {
               <button
                 className="px-3 py-1.5 bg-accent rounded text-xs disabled:opacity-50"
                 onClick={() => run(node.id)}
-                disabled={runningId !== null}
+                disabled={runningId !== null || ((isProjectScanNode || isCodeAnalysisNode) && !projectDir)}
+                title={(isProjectScanNode || isCodeAnalysisNode) && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
               >
-                ▶ Explain
+                {isProjectScanNode ? "⌕ Scan Project" : isCodeAnalysisNode ? "◇ Analyze Code" : "▶ Explain"}
               </button>
               {canGenerateNodes ? (
                 <button
@@ -199,6 +203,22 @@ export default function NodeInspector() {
               ))}
             </div>
           </div>
+        ) : null}
+
+        {codeDiff?.diff ? (
+          <details className="text-xs">
+            <summary className="text-zinc-500 cursor-pointer select-none">
+              Code Diff{codeDiff.truncated ? " (truncated)" : ""}
+            </summary>
+            <pre className="mt-2 bg-canvas p-2 rounded whitespace-pre-wrap font-mono leading-relaxed max-h-96 overflow-y-auto text-[11px]">
+{codeDiff.diff}
+            </pre>
+            {codeDiff.warnings && codeDiff.warnings.length > 0 ? (
+              <div className="mt-1 text-[11px] text-amber-400">
+                {codeDiff.warnings.join(" ")}
+              </div>
+            ) : null}
+          </details>
         ) : null}
 
         {needsConfirmation ? (
@@ -282,6 +302,10 @@ export default function NodeInspector() {
               <div className="text-zinc-600 text-xs italic">
                 {isCodeNode
                   ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码"
+                  : isProjectScanNode
+                    ? "选择 Project Dir 后点 ⌕ Scan Project 扫描已有工程"
+                    : isCodeAnalysisNode
+                      ? "连接 Project Scan 后点 ◇ Analyze Code 让 Claude Code 只读分析代码"
                   : isPlanningNode
                     ? "填写 Purpose 后点 ▶ Explain 生成规划，再用 ✦ Generate Nodes 展开子节点"
                     : "点 ▶ Explain 文本展开"}
@@ -338,6 +362,7 @@ export default function NodeInspector() {
                   <span className="text-zinc-300">{run.status}</span>
                   <span className="ml-2">{run.provider ?? "provider"}</span>
                   <span className="ml-2">{new Date(run.startedAt).toLocaleTimeString()}</span>
+                  {run.diff ? <span className="ml-2 text-emerald-400">diff</span> : null}
                 </div>
               ))}
             </div>

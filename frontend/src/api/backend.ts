@@ -171,9 +171,19 @@ export interface CodeRunInput {
   runId?: string;
 }
 
+export interface CodeDiffInfo {
+  available: boolean;
+  isGitRepo: boolean;
+  changedFiles: string[];
+  diff: string;
+  truncated: boolean;
+  warnings: string[];
+}
+
 export interface CodeRunCallbacks {
   onText: (chunk: string) => void;
   onFiles: (files: string[]) => void;
+  onDiff?: (diff: CodeDiffInfo) => void;
   onDone: () => void;
   onError: (message: string) => void;
   onLog?: RunNodeCallbacks["onLog"];
@@ -181,6 +191,8 @@ export interface CodeRunCallbacks {
   onProgress?: RunNodeCallbacks["onProgress"];
   signal?: AbortSignal;
 }
+
+export type CodeAnalysisInput = Omit<CodeRunInput, "runId"> & { runId?: string };
 
 export async function runNodeCode(
   input: CodeRunInput,
@@ -215,6 +227,15 @@ export async function runNodeCode(
           try { cb.onText(JSON.parse(event.data)); } catch { cb.onText(event.data); }
         } else if (event.type === "files") {
           try { cb.onFiles(JSON.parse(event.data)); } catch { /* ignore */ }
+        } else if (event.type === "diff") {
+          cb.onDiff?.(parseJson<CodeDiffInfo>(event.data, {
+            available: false,
+            isGitRepo: false,
+            changedFiles: [],
+            diff: "",
+            truncated: false,
+            warnings: ["Failed to parse diff event."],
+          }));
         } else if (event.type === "done") {
           cb.onDone(); return;
         } else if (event.type === "error") {
@@ -236,6 +257,93 @@ export async function runNodeCode(
   }
 }
 
+export async function runNodeCodeAnalysis(
+  input: CodeAnalysisInput,
+  cb: Omit<CodeRunCallbacks, "onFiles" | "onDiff">,
+): Promise<void> {
+  const url = await getBackendUrl();
+  const res = await fetch(`${url}/run/node/code-analysis`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+    signal: cb.signal,
+  });
+  if (!res.ok || !res.body) {
+    cb.onError(`/run/node/code-analysis failed: ${res.status}`);
+    return;
+  }
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  try {
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += value;
+      let idx;
+      while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        const raw = buffer.slice(0, idx);
+        buffer = buffer.slice(idx + 2);
+        const event = parseSseEvent(raw);
+        if (!event) continue;
+        if (event.type === "text") {
+          try { cb.onText(JSON.parse(event.data)); } catch { cb.onText(event.data); }
+        } else if (event.type === "done") {
+          cb.onDone(); return;
+        } else if (event.type === "error") {
+          try { cb.onError(JSON.parse(event.data).message ?? event.data); } catch { cb.onError(event.data); }
+          return;
+        } else if (event.type === "log") {
+          cb.onLog?.(parseJson(event.data, { message: event.data }));
+        } else if (event.type === "usage") {
+          cb.onUsage?.(parseJson(event.data, {}));
+        } else if (event.type === "progress") {
+          cb.onProgress?.(parseJson(event.data, {}));
+        }
+      }
+    }
+    cb.onDone();
+  } catch (e) {
+    if ((e as Error).name === "AbortError") return;
+    cb.onError(e instanceof Error ? e.message : String(e));
+  }
+}
+
+export interface ProjectScanResult {
+  summary: string;
+  files: Array<{ path: string; kind: string; reason?: string }>;
+  detectedStack: string[];
+  suggestedFileScope: {
+    allow: string[];
+    deny: string[];
+  };
+  commands: Array<{ name: string; command: string }>;
+  warnings: string[];
+}
+
+export interface ProjectScanInput {
+  node: RunNodeInput["node"];
+  projectDir: string;
+  projectPath?: string | null;
+  fileScopeAllow?: string[];
+  fileScopeDeny?: string[];
+  maxFiles?: number;
+  maxBytesPerFile?: number;
+}
+
+export async function scanProject(input: ProjectScanInput): Promise<ProjectScanResult> {
+  const url = await getBackendUrl();
+  const res = await fetch(`${url}/project/scan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    throw new Error(`/project/scan failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
 export interface ExpandPlanResult {
   nodes: Array<{
     id: string;
@@ -252,9 +360,24 @@ export interface ExpandPlanResult {
   }>;
 }
 
+export interface ExpandNodeSummary {
+  id: string;
+  type: string;
+  title: string;
+  purpose?: string;
+  hasOutput: boolean;
+  outputSummary?: string;
+}
+
 export async function expandPlan(
   planText: string,
-  opts: { provider?: Provider; model?: string; apiKey?: string } = {},
+  opts: {
+    provider?: Provider;
+    model?: string;
+    apiKey?: string;
+    existingNodes?: ExpandNodeSummary[];
+    upstreamOutputs?: Record<string, string>;
+  } = {},
 ): Promise<ExpandPlanResult> {
   const url = await getBackendUrl();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -262,7 +385,13 @@ export async function expandPlan(
   const res = await fetch(`${url}/plan/expand`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ plan_text: planText, provider: opts.provider, model: opts.model }),
+    body: JSON.stringify({
+      plan_text: planText,
+      existing_nodes: opts.existingNodes ?? [],
+      upstream_outputs: opts.upstreamOutputs ?? {},
+      provider: opts.provider,
+      model: opts.model,
+    }),
   });
   if (!res.ok) {
     throw new Error(`/plan/expand failed: ${res.status} ${await res.text()}`);

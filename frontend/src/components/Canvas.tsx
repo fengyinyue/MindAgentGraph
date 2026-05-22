@@ -24,6 +24,8 @@ const typeColor: Record<string, string> = {
   planning: "#9b6cef",
   memory: "#ef9b6c",
   filescope: "#6cefb6",
+  project_scan: "#38bdf8",
+  code_analysis: "#22d3ee",
   code: "#ef6c8e",
   api: "#efef6c",
   asset: "#ef6cef",
@@ -153,6 +155,8 @@ export default function Canvas() {
     ? (contextMenuNode.data?.codeOutput as string | undefined) ?? ""
     : "";
   const contextMenuCanExplain = contextMenuNode !== undefined;
+  const contextMenuIsProjectScan = contextMenuNode?.type === "project_scan";
+  const contextMenuIsCodeAnalysis = contextMenuNode?.type === "code_analysis";
   const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" && contextMenuOutput;
 
   const decoratedNodes: RFNode[] = useMemo(
@@ -201,9 +205,9 @@ export default function Canvas() {
       const newNode: NodeBase = {
         id,
         type,
-        title: type.charAt(0).toUpperCase() + type.slice(1),
+        title: type === "project_scan" ? "Project Scan" : type === "code_analysis" ? "Code Analysis" : type.charAt(0).toUpperCase() + type.slice(1),
         position,
-        contextMode: "inherit",
+        contextMode: type === "project_scan" ? "isolated" : "inherit",
         fileScope: { allow: [], deny: [] },
         toolPolicy: { tools: [], deny: [] },
         memoryRef: type === "memory" ? `${id}.md` : undefined,
@@ -279,9 +283,10 @@ export default function Canvas() {
                 run(menu.nodeId);
                 closeMenu();
               }}
-              disabled={runningId !== null}
+              disabled={runningId !== null || ((contextMenuIsProjectScan || contextMenuIsCodeAnalysis) && !projectDir)}
+              title={(contextMenuIsProjectScan || contextMenuIsCodeAnalysis) && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
             >
-              ▶ Explain (AI)
+              {contextMenuIsProjectScan ? "⌕ Scan Project" : contextMenuIsCodeAnalysis ? "◇ Analyze Code" : "▶ Explain (AI)"}
             </button>
           ) : null}
           {contextMenuCanGenerateNodes ? (

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 NodeType = Literal[
     "prompt", "planning", "memory", "filescope",
-    "code", "api", "asset", "agent", "task", "semantic",
+    "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
 ProviderName = Literal["anthropic", "deepseek", "local-claude", "local-codex"]
@@ -34,6 +34,10 @@ class RunRecord(BaseModel):
     inputTokens: Optional[int] = None
     outputTokens: Optional[int] = None
     error: Optional[str] = None
+    changedFiles: list[str] = Field(default_factory=list)
+    diff: Optional[str] = None
+    diffTruncated: Optional[bool] = None
+    diffWarnings: list[str] = Field(default_factory=list)
 
 
 class Node(BaseModel):
@@ -122,14 +126,67 @@ class CodeRunRequest(BaseModel):
     runId: Optional[str] = None
 
 
+class CodeAnalysisRequest(BaseModel):
+    node: RunNodeInput
+    projectDir: str
+    projectPath: Optional[str] = None
+    fileScopeAllow: Optional[list[str]] = None
+    fileScopeDeny: Optional[list[str]] = None
+    parentOutputs: Optional[dict[str, str]] = None
+    userPrompt: Optional[str] = None
+    model: Optional[str] = None
+    runId: Optional[str] = None
+
+
 class CodeCancelRequest(BaseModel):
     runId: str
 
 
+class ExpandNodeSummary(BaseModel):
+    id: str
+    type: NodeType
+    title: str
+    purpose: Optional[str] = None
+    hasOutput: bool = False
+    outputSummary: Optional[str] = None
+
+
 class ExpandPlanRequest(BaseModel):
     plan_text: str
+    existing_nodes: list[ExpandNodeSummary] = Field(default_factory=list)
+    upstream_outputs: dict[str, str] = Field(default_factory=dict)
     provider: Optional[ProviderName] = None
     model: Optional[str] = None
+
+
+class ProjectScanRequest(BaseModel):
+    node: RunNodeInput
+    projectDir: str
+    projectPath: Optional[str] = None
+    fileScopeAllow: Optional[list[str]] = None
+    fileScopeDeny: Optional[list[str]] = None
+    maxFiles: int = 200
+    maxBytesPerFile: int = 4000
+
+
+class ProjectScanFile(BaseModel):
+    path: str
+    kind: str
+    reason: Optional[str] = None
+
+
+class ProjectScanCommand(BaseModel):
+    name: str
+    command: str
+
+
+class ProjectScanResult(BaseModel):
+    summary: str
+    files: list[ProjectScanFile] = Field(default_factory=list)
+    detectedStack: list[str] = Field(default_factory=list)
+    suggestedFileScope: FileScope = Field(default_factory=FileScope)
+    commands: list[ProjectScanCommand] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class HealthResponse(BaseModel):

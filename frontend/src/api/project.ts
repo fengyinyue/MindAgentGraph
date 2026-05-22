@@ -64,6 +64,15 @@ function buildMeta(suggestedName: string): ProjectMeta {
   };
 }
 
+function ensureMagName(name: string): string {
+  const trimmed = name.trim();
+  return trimmed.toLowerCase().endsWith(".mag") ? trimmed : `${trimmed}.mag`;
+}
+
+function basename(path: string): string {
+  return path.split(/[/\\]/).filter(Boolean).pop() ?? path;
+}
+
 async function saveProjectToDirectory(
   dir: FileSystemDirectoryHandle,
   meta: ProjectMeta,
@@ -91,7 +100,9 @@ async function saveProjectInBrowser(
 ): Promise<string | null> {
   ensureBrowserDirectoryPicker();
   const parent = await window.showDirectoryPicker({ mode: "readwrite" });
-  const projectName = suggestedName.endsWith(".mag") ? suggestedName : `${suggestedName}.mag`;
+  const promptedName = prompt("Project name", suggestedName);
+  if (!promptedName || !promptedName.trim()) return null;
+  const projectName = ensureMagName(promptedName);
   const dir = await parent.getDirectoryHandle(projectName, { create: true });
   const meta = buildMeta(projectName);
   await saveProjectToDirectory(dir, meta, graph);
@@ -118,16 +129,16 @@ export async function saveProjectDialog(
   if (!isTauri) return saveProjectInBrowser(graph, suggestedName);
 
   const { invoke } = await import("@tauri-apps/api/core");
-  const { open } = await import("@tauri-apps/plugin-dialog");
-  const dir = await open({
-    directory: true,
-    multiple: false,
-    title: `Choose folder to save ${suggestedName}`,
+  const { save } = await import("@tauri-apps/plugin-dialog");
+  const path = await save({
+    title: "Save .mag Project",
+    defaultPath: ensureMagName(suggestedName),
+    filters: [{ name: "MindAgentGraph Project", extensions: ["mag"] }],
   });
-  if (!dir || typeof dir !== "string") return null;
+  if (!path || typeof path !== "string") return null;
 
-  const projectPath = `${dir}/${suggestedName}`;
-  const meta = buildMeta(suggestedName);
+  const projectPath = ensureMagName(path);
+  const meta = buildMeta(basename(projectPath));
   await invoke("save_project", { path: projectPath, payload: { meta, graph } });
   return projectPath;
 }

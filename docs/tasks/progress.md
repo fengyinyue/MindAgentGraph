@@ -1,6 +1,6 @@
 # MVP 任务进度
 
-> 根据 `docs/proposal.md` 重新走流程生成。最后更新：2026-05-21。
+> 根据 `docs/proposal.md` 重新走流程生成。最后更新：2026-05-22。
 
 ## 任务文件
 
@@ -13,6 +13,8 @@
 | `docs/tasks/dag-executor.md` | DAG 顺序执行 | done | data-model, bottom-monitor |
 | `docs/tasks/provider-context.md` | Provider、FileScope、上下文可视化 | done | bottom-monitor, data-model |
 | `docs/tasks/docs-traceability.md` | 需求追踪文档 | done | 全部设计文档 |
+| `docs/tasks/project-scan-node.md` | Project Scan / Repo Context 节点 | done | provider-context, data-model |
+| `docs/tasks/code-analysis-node.md` | Code Analysis 节点 | done | project-scan-node |
 
 ## 推荐执行顺序
 
@@ -22,6 +24,8 @@
 4. `provider-context.md`：把 Provider 错误、模型、FileScope、上下文摘要接入监控。
 5. `dag-executor.md`：在已有单节点执行基础上做整图顺序执行。
 6. 实施完成后复核 `requirements-traceability.md`：更新需求映射和验收状态。
+7. `project-scan-node.md`：为已有项目开发增加只读工程扫描节点，并接入 Planning 展开规则。
+8. `code-analysis-node.md`：用 Claude Code 只读分析真实代码，输出给后续 Code 节点。
 
 ## 整体进度
 
@@ -34,6 +38,9 @@
 | 任务拆解 | done |
 | 实现 | done |
 | 验证 | done |
+| Project Scan 规划 | done |
+| Project Scan 实现 | done |
+| Code Analysis 实现 | done |
 
 ## 跨模块约束
 
@@ -42,6 +49,8 @@
 - 不实现实时云同步、多用户协作、插件市场。
 - 不把远期 SubGraph、SemanticIndex、MCPGateway 作为 MVP 阻塞项。
 - 所有新增数据字段必须向后兼容旧 `.mag` 项目。
+- Project Scan 只读扫描已有工程，不自动修改文件，不替代强制文件沙箱。
+- Code Analysis 只读调用 Claude Code，不自动修改文件，默认不参与 DAG 批量执行。
 
 ## 质量门槛
 

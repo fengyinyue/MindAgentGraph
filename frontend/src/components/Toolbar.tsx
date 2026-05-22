@@ -40,7 +40,8 @@ export default function Toolbar() {
 
   const onSave = async () => {
     try {
-      const path = await saveProjectDialog({ nodes, links });
+      const suggestedName = projectPath?.split(/[/\\]/).filter(Boolean).pop() ?? "untitled.mag";
+      const path = await saveProjectDialog({ nodes, links }, suggestedName);
       if (path) setProjectPath(path);
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));

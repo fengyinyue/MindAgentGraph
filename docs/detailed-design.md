@@ -327,6 +327,188 @@ def topological_sort(nodes: list[Node], links: list[Edge]) -> list[str]:
 - `planned`
 - `deferred`
 
+## M8：Project Scan / Repo Context 节点 `[new]`
+
+### 责任
+
+支持在已有项目上开发时先建立工程上下文：
+
+- 只读扫描用户选择的 `projectDir`。
+- 输出项目技术栈、目录结构、关键入口文件、测试/构建命令、可能的改动边界和风险。
+- 作为后续 Planning、Prompt、Task、Code 节点的上游上下文。
+- 在 Planning 节点 `Generate Nodes` 时，针对已有项目改造目标自动生成该节点。
+
+### 节点类型
+
+新增节点类型：
+
+```typescript
+export type NodeType = ... | "project_scan";
+```
+
+后端同步扩展：
+
+```python
+NodeType = Literal[..., "project_scan"]
+```
+
+命名建议：
+
+- UI 显示名：`Project Scan`
+- 默认标题：`Project Scan`
+- 默认 `contextMode`：`isolated`
+- 默认 `fileScope`：空，表示先扫描项目摘要；用户可用 allow/deny 限定扫描范围
+
+### 文件
+
+- `shared/types.ts` `[modify]`
+- `backend/app/schemas.py` `[modify]`
+- `backend/app/services/project_scanner.py` `[new]`
+- `backend/app/main.py` `[modify]`
+- `backend/app/services/planner.py` `[modify]`
+- `frontend/src/api/backend.ts` `[modify]`
+- `frontend/src/hooks/useRunNode.ts` `[modify]`
+- `frontend/src/components/Canvas.tsx` `[modify]`
+- `frontend/src/components/NodeInspector.tsx` `[modify]`
+- `frontend/src/components/ProjectExplorer.tsx` `[modify if needed]`
+
+### 后端接口
+
+```python
+class ProjectScanRequest(BaseModel):
+    node: RunNodeInput
+    projectDir: str
+    projectPath: Optional[str] = None
+    fileScopeAllow: Optional[list[str]] = None
+    fileScopeDeny: Optional[list[str]] = None
+    maxFiles: int = 200
+    maxBytesPerFile: int = 4000
+
+@app.post("/project/scan")
+async def project_scan(req: ProjectScanRequest) -> dict[str, Any]:
+    ...
+```
+
+响应：
+
+```typescript
+interface ProjectScanResult {
+  summary: string;
+  files: Array<{ path: string; kind: string; reason?: string }>;
+  detectedStack: string[];
+  suggestedFileScope: { allow: string[]; deny: string[] };
+  commands: Array<{ name: string; command: string }>;
+  warnings: string[];
+}
+```
+
+### 扫描策略
+
+1. 校验 `projectDir` 存在且是目录。
+2. 只在 `projectDir` 内解析路径，禁止 `..` 逃逸。
+3. 默认跳过 `.git`、`node_modules`、`dist`、`build`、`.venv`、`target`、大型二进制和锁定缓存目录。
+4. 优先读取清单文件：`package.json`、`pyproject.toml`、`Cargo.toml`、`README.md`、`tsconfig.json`、`vite.config.*`、`src-tauri/tauri.conf.json` 等。
+5. 基于扩展名和清单文件识别技术栈。
+6. 生成目录摘要和关键文件列表，不输出完整源码。
+7. 根据任务 `purpose` 和扫描结果给出建议 `fileScope.allow/deny`。
+
+### Planner 集成
+
+`EXPAND_SYSTEM` 增加规则：
+
+- 如果规划文本包含“当前项目、已有项目、现有代码、修复、改造、接入、重构”等意图，优先生成 `project_scan` 节点。
+- 后续 `planning`、`prompt`、`task`、`code` 节点应依赖 `project_scan`。
+- 不要为全新项目、纯文案/创作任务或独立代码片段生成 `project_scan`。
+
+### 前端运行逻辑
+
+- `useRunNode.run()` 遇到 `project_scan` 时调用 `/project/scan`，不走普通 LLM Explain。
+- 输出写入 `node.output` 和 `node.data.output`。
+- 若返回 `suggestedFileScope`，可写入 `node.data.suggestedFileScope`，由用户决定是否应用。
+- NodeInspector 对 Project Scan 显示 `Scan Project` 主按钮；没有 `projectDir` 时禁用并提示先选择工程目录。
+- Canvas 右键菜单为 Project Scan 显示 `Scan Project`，不显示 `Generate Code`。
+
+### 错误处理
+
+- 未选择工程目录：前端阻止运行，BottomMonitor 写入 warn。
+- 目录不存在或不可读：后端返回错误，前端写入节点错误状态。
+- 文件过多：扫描截断并在 `warnings` 中说明。
+- 不支持的技术栈：仍输出目录摘要，不阻断。
+
+### 测试
+
+- 后端单元测试：路径逃逸、忽略目录、技术栈识别、FileScope 建议。
+- 前端手测：无 projectDir 禁用、扫描成功写入 output、Planning 展开生成 project_scan。
+- 回归手测：普通 prompt/planning/code 节点运行路径不变。
+
+## M9：Code Analysis 节点 `[new]`
+
+### 责任
+
+在已有项目开发中调用 Claude Code 做只读深度分析：
+
+- 读取 Project Scan 输出和用户目标。
+- 使用 Claude Code 读取/搜索真实代码。
+- 输出模块职责、实现入口、建议改动文件、风险和后续 Code 节点提示。
+- 不修改工程文件。
+
+### 节点类型
+
+```typescript
+export type NodeType = ... | "code_analysis";
+```
+
+后端同步扩展：
+
+```python
+NodeType = Literal[..., "code_analysis"]
+```
+
+### 文件
+
+- `shared/types.ts` `[modify]`
+- `backend/app/schemas.py` `[modify]`
+- `backend/app/services/code_analysis_runner.py` `[new]`
+- `backend/app/main.py` `[modify]`
+- `backend/app/services/planner.py` `[modify]`
+- `frontend/src/api/backend.ts` `[modify]`
+- `frontend/src/hooks/useRunNode.ts` `[modify]`
+- `frontend/src/components/Canvas.tsx` `[modify]`
+- `frontend/src/components/NodeInspector.tsx` `[modify]`
+
+### 后端接口
+
+```python
+class CodeAnalysisRequest(BaseModel):
+    node: RunNodeInput
+    projectDir: str
+    projectPath: Optional[str] = None
+    fileScopeAllow: Optional[list[str]] = None
+    fileScopeDeny: Optional[list[str]] = None
+    parentOutputs: Optional[dict[str, str]] = None
+    userPrompt: Optional[str] = None
+    model: Optional[str] = None
+    runId: Optional[str] = None
+
+@app.post("/run/node/code-analysis")
+async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
+    ...
+```
+
+### Claude Code 策略
+
+- 使用 `claude --print --no-session-persistence --output-format text`。
+- 工具限制为读取/搜索/列目录能力，例如 `Read,Glob,Grep,LS`。
+- Prompt 明确要求只读，不允许创建、修改、删除、移动文件，不运行构建/安装/格式化。
+- 复用 Code 节点取消机制，用户取消时终止本地 Claude Code 进程。
+
+### 前端行为
+
+- `code_analysis` 节点显示 `Analyze Code`。
+- 未选择 `projectDir` 时禁用并提示。
+- 输出写入 `node.output`，供下游 Code 节点继承。
+- DAG 批量执行默认跳过，用户需要单独执行。
+
 ## 质量门槛
 
 每个实现批次完成后至少运行：
