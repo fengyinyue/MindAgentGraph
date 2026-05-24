@@ -103,6 +103,7 @@ class RunDagRequest(BaseModel):
     provider: Optional[ProviderName] = None
     model: Optional[str] = None
     allowCode: bool = False
+    rootNodeId: Optional[str] = None
 
 
 class RunNodeRequest(BaseModel):
@@ -153,6 +154,14 @@ class ExpandNodeSummary(BaseModel):
 
 class ExpandPlanRequest(BaseModel):
     plan_text: str
+    existing_nodes: list[ExpandNodeSummary] = Field(default_factory=list)
+    upstream_outputs: dict[str, str] = Field(default_factory=dict)
+    provider: Optional[ProviderName] = None
+    model: Optional[str] = None
+
+
+class ExpandModulesRequest(BaseModel):
+    analysis_text: str
     existing_nodes: list[ExpandNodeSummary] = Field(default_factory=list)
     upstream_outputs: dict[str, str] = Field(default_factory=dict)
     provider: Optional[ProviderName] = None

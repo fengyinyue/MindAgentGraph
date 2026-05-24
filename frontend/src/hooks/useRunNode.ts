@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { create } from "zustand";
-import { cancelCodeRun, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream, scanProject } from "@/api/backend";
+import { cancelCodeRun, expandModules, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream, scanProject } from "@/api/backend";
 import type { CodeDiffInfo } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
@@ -758,7 +758,132 @@ export function useRunNode() {
     [setRunning],
   );
 
-  const runDag = useCallback(async (): Promise<boolean> => {
+  const expandModuleGraph = useCallback(
+    async (codeAnalysisNodeId: string): Promise<boolean> => {
+      const state = useGraphStore.getState();
+      const codeNode = state.nodes.find((n) => n.id === codeAnalysisNodeId);
+      if (!codeNode || codeNode.type !== "code_analysis") return false;
+      if (useRunState.getState().runningId) return false;
+
+      const analysisText = outputText(codeNode).trim();
+      if (!analysisText) {
+        useMonitorStore.getState().addLog({
+          level: "warn",
+          source: "module-graph",
+          status: "SKIPPED",
+          nodeId: codeAnalysisNodeId,
+          nodeTitle: codeNode.title,
+          message: "Code Analysis 节点还没有 output，请先执行 Analyze Code 生成分析结果。",
+        });
+        return false;
+      }
+
+      const provider = useProviderStore.getState().provider;
+      const model = useProviderStore.getState().getModel(provider);
+      const apiKey = useKeyStore.getState().keys[provider];
+
+      useMonitorStore.getState().addLog({
+        level: "info",
+        source: "module-graph",
+        status: "START",
+        nodeId: codeAnalysisNodeId,
+        nodeTitle: codeNode.title,
+        message: `Module graph expansion started with ${provider}/${model}`,
+      });
+      setRunning(codeAnalysisNodeId);
+
+      try {
+        const upstreamIds = collectUpstreamNodeIds(state.links, codeAnalysisNodeId);
+        const existingNodes = state.nodes
+          .filter((n) =>
+            upstreamIds.has(n.id) ||
+            n.type === "project_scan" ||
+            n.type === "code_analysis"
+          )
+          .map(summarizeNodeForExpand);
+        const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, codeAnalysisNodeId);
+        const result = await expandModules(analysisText, {
+          provider,
+          model,
+          apiKey,
+          existingNodes,
+          upstreamOutputs,
+        });
+
+        const idMap = new Map<string, string>();
+        for (const raw of result.nodes) {
+          idMap.set(raw.id, crypto.randomUUID());
+        }
+
+        const baseX = codeNode.position.x;
+        const baseY = codeNode.position.y + 350;
+
+        const newNodes: NodeBase[] = result.nodes.map((raw) => ({
+          id: idMap.get(raw.id)!,
+          type: raw.type as NodeBase["type"],
+          title: raw.title,
+          position: { x: baseX + raw.x, y: baseY + raw.y },
+          contextMode: "inherit" as const,
+          fileScope: { allow: [], deny: [] },
+          toolPolicy: { tools: [], deny: [] },
+          memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
+          purpose: raw.purpose ?? "",
+          data: { purpose: raw.purpose ?? "" },
+          runHistory: [],
+          resourceRefs: [],
+          metadata: {},
+        }));
+
+        const newEdges: Array<{ id: string; source: string; target: string }> = result.links.map((raw) => ({
+          id: crypto.randomUUID(),
+          source: idMap.get(raw.source) ?? raw.source,
+          target: idMap.get(raw.target) ?? raw.target,
+        }));
+
+        const newTargets = new Set(newEdges.map((e) => e.target));
+        const roots = newNodes.filter((n) => !newTargets.has(n.id));
+        for (const root of roots) {
+          newEdges.push({
+            id: crypto.randomUUID(),
+            source: codeAnalysisNodeId,
+            target: root.id,
+          });
+        }
+
+        const currentState = useGraphStore.getState();
+        useGraphStore.getState().setGraph({
+          nodes: [...currentState.nodes, ...newNodes],
+          links: [...currentState.links, ...newEdges],
+        });
+
+        useMonitorStore.getState().addLog({
+          level: "info",
+          source: "module-graph",
+          status: "DONE",
+          nodeId: codeAnalysisNodeId,
+          nodeTitle: codeNode.title,
+          message: `Expanded into ${newNodes.length} module nodes / ${newEdges.length} links`,
+        });
+        return true;
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        useMonitorStore.getState().addLog({
+          level: "error",
+          source: "module-graph",
+          status: "ERROR",
+          nodeId: codeAnalysisNodeId,
+          nodeTitle: codeNode.title,
+          message,
+        });
+        return false;
+      } finally {
+        setRunning(null);
+      }
+    },
+    [setRunning],
+  );
+
+  const runDag = useCallback(async (rootNodeId?: string): Promise<boolean> => {
     if (dagActive || useRunState.getState().runningId) return false;
     const state = useGraphStore.getState();
     const provider = useProviderStore.getState().provider;
@@ -772,13 +897,19 @@ export function useRunNode() {
           message: `${provider} API Key 未在前端配置，将使用后端环境变量或离线 demo。`,
       });
     }
+    const rootNode = rootNodeId ? state.nodes.find((n) => n.id === rootNodeId) : undefined;
     const runId = crypto.randomUUID();
     const ctrl = new AbortController();
 
     dagActive = true;
     activeAbort = ctrl;
     useMonitorStore.getState().clearDagProgress();
-    useMonitorStore.getState().addLog({ level: "info", source: "dag", status: "START", message: `DAG run started (${provider})` });
+    useMonitorStore.getState().addLog({
+      level: "info", source: "dag", status: "START",
+      message: rootNode
+        ? `Subtree DAG from "${rootNode.title}" started (${provider})`
+        : `DAG run started (${provider})`,
+    });
 
     try {
       let ok = true;
@@ -789,7 +920,8 @@ export function useRunNode() {
           provider,
           model,
           apiKey,
-          allowCode: false,
+          allowCode: true,
+          rootNodeId,
         },
         {
           onText: (nodeId, chunk) => {
@@ -863,5 +995,5 @@ export function useRunNode() {
     useMonitorStore.getState().addLog({ level: "warn", source: "node", status: "CANCELLED", message: "Run cancelled" });
   }, [setRunning]);
 
-  return { run, runCode, expandPlanNodes, runDag, cancel, runningId };
+  return { run, runCode, expandPlanNodes, expandModuleGraph, runDag, cancel, runningId };
 }

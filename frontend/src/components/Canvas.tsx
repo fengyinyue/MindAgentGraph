@@ -141,7 +141,7 @@ export default function Canvas() {
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
-  const { run, runCode, expandPlanNodes, runningId } = useRunNode();
+  const { run, runCode, runDag, expandPlanNodes, expandModuleGraph, runningId } = useRunNode();
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
   const { screenToFlowPosition } = useReactFlow();
@@ -158,6 +158,8 @@ export default function Canvas() {
   const contextMenuIsProjectScan = contextMenuNode?.type === "project_scan";
   const contextMenuIsCodeAnalysis = contextMenuNode?.type === "code_analysis";
   const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" && contextMenuOutput;
+  const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "code_analysis" && contextMenuOutput;
+  const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -299,6 +301,30 @@ export default function Canvas() {
               disabled={runningId !== null}
             >
               ✦ Generate Nodes
+            </button>
+          ) : null}
+          {contextMenuCanGenerateModuleGraph ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                expandModuleGraph(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              ⬡ Generate Module Graph
+            </button>
+          ) : null}
+          {contextMenuHasDownstream ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                runDag(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              ▶ Execute Subtree
             </button>
           ) : null}
           {contextMenuNode?.type === "code" ? (

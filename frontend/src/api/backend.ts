@@ -399,6 +399,36 @@ export async function expandPlan(
   return res.json();
 }
 
+export async function expandModules(
+  analysisText: string,
+  opts: {
+    provider?: Provider;
+    model?: string;
+    apiKey?: string;
+    existingNodes?: ExpandNodeSummary[];
+    upstreamOutputs?: Record<string, string>;
+  } = {},
+): Promise<ExpandPlanResult> {
+  const url = await getBackendUrl();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.apiKey) headers["X-Provider-Key"] = opts.apiKey;
+  const res = await fetch(`${url}/code-analysis/expand-modules`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      analysis_text: analysisText,
+      existing_nodes: opts.existingNodes ?? [],
+      upstream_outputs: opts.upstreamOutputs ?? {},
+      provider: opts.provider,
+      model: opts.model,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`/code-analysis/expand-modules failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
 export async function cancelCodeRun(runId: string): Promise<boolean> {
   const url = await getBackendUrl();
   const res = await fetch(`${url}/run/node/code/cancel`, {
@@ -418,6 +448,7 @@ export interface RunDagInput {
   model?: string;
   apiKey?: string;
   allowCode?: boolean;
+  rootNodeId?: string;
 }
 
 export interface RunDagCallbacks {
@@ -442,6 +473,7 @@ export async function runDagStream(input: RunDagInput, cb: RunDagCallbacks): Pro
       provider: input.provider,
       model: input.model,
       allowCode: input.allowCode ?? false,
+      rootNodeId: input.rootNodeId ?? null,
     }),
     signal: cb.signal,
   });

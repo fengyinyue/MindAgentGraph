@@ -33,8 +33,8 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ProjectScanRequest, ProjectScanResult
-from app.services.planner import expand_plan, plan_graph
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ExpandModulesRequest, ProjectScanRequest, ProjectScanResult
+from app.services.planner import expand_plan, expand_modules, plan_graph
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_claude_run, run_node_with_claude
@@ -86,6 +86,22 @@ async def plan_expand(
     """将规划文本展开为子节点+连线，返回 AI 原始 emit_graph 结果。"""
     return await expand_plan(
         req.plan_text,
+        existing_nodes=[node.model_dump() for node in req.existing_nodes],
+        upstream_outputs=req.upstream_outputs,
+        provider=req.provider,
+        model=req.model,
+        api_key=x_provider_key,
+    )
+
+
+@app.post("/code-analysis/expand-modules")
+async def code_analysis_expand_modules(
+    req: ExpandModulesRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+):
+    """将代码分析文本展开为模块子节点+连线，返回 AI 原始 emit_graph 结果。"""
+    return await expand_modules(
+        req.analysis_text,
         existing_nodes=[node.model_dump() for node in req.existing_nodes],
         upstream_outputs=req.upstream_outputs,
         provider=req.provider,
@@ -313,6 +329,7 @@ async def run_dag(
             model=req.model,
             api_key=x_provider_key,
             allow_code=req.allowCode,
+            root_node_id=req.rootNodeId,
         ),
         media_type="text/event-stream",
         headers={

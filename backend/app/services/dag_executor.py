@@ -58,6 +58,21 @@ def _has_confirmation_request(output: str) -> bool:
     return "```mag-confirmation" in output.lower()
 
 
+def _subgraph_nodes(root_id: str, nodes_by_id: dict[str, Node], outgoing: dict[str, list[str]]) -> set[str]:
+    """Return the set of node IDs reachable from root_id (downstream only)."""
+    reachable: set[str] = set()
+    queue = deque([root_id])
+    while queue:
+        nid = queue.popleft()
+        if nid in reachable:
+            continue
+        reachable.add(nid)
+        for target in outgoing.get(nid, []):
+            if target not in reachable:
+                queue.append(target)
+    return reachable
+
+
 async def run_dag_stream(
     *,
     graph: Graph,
@@ -66,22 +81,49 @@ async def run_dag_stream(
     model: str | None,
     api_key: str | None,
     allow_code: bool = False,
+    root_node_id: str | None = None,
 ) -> AsyncIterator[str]:
     nodes_by_id = {node.id: node for node in graph.nodes}
     parent_ids: dict[str, list[str]] = {node.id: [] for node in graph.nodes}
+    outgoing: dict[str, list[str]] = {node.id: [] for node in graph.nodes}
     for link in graph.links:
         if link.source in nodes_by_id and link.target in nodes_by_id:
             parent_ids[link.target].append(link.source)
+            outgoing[link.source].append(link.target)
 
-    order = topological_sort(graph.nodes, graph.links)
+    if root_node_id is not None:
+        if root_node_id not in nodes_by_id:
+            yield sse("error", {"message": f"root node {root_node_id} not found"})
+            return
+        sub_ids = _subgraph_nodes(root_node_id, nodes_by_id, outgoing)
+        sub_nodes = [nodes_by_id[nid] for nid in sub_ids]
+        sub_links = [l for l in graph.links if l.source in sub_ids and l.target in sub_ids]
+        root_node = nodes_by_id[root_node_id]
+        yield sse("log", {
+            "level": "info",
+            "source": "dag",
+            "status": "START",
+            "message": f"从 {root_node.title} 开始执行子树，共 {len(sub_nodes)} 个节点。",
+        })
+    else:
+        sub_nodes = graph.nodes
+        sub_links = graph.links
+        yield sse("log", {
+            "level": "info",
+            "source": "dag",
+            "status": "START",
+            "message": f"开始执行 DAG，共 {len(sub_nodes)} 个节点。",
+        })
+
+    order = topological_sort(sub_nodes, sub_links)
     results: dict[str, str] = {}
 
-    yield sse("log", {
-        "level": "info",
-        "source": "dag",
-        "status": "START",
-        "message": f"开始执行 DAG，共 {len(order)} 个节点。",
-    })
+    # Pre-seed with root node's existing output so children can inherit it
+    if root_node_id is not None:
+        root_node = nodes_by_id[root_node_id]
+        root_output = root_node.output or ""
+        if root_output.strip():
+            results[root_node_id] = root_output
 
     for node_id in order:
         node = nodes_by_id[node_id]

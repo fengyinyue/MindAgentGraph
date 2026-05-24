@@ -13,7 +13,7 @@ export default function NodeInspector() {
   const node = useGraphStore((s) =>
     s.nodes.find((n) => n.id === selectedId),
   );
-  const { run, runCode, expandPlanNodes, cancel, runningId } = useRunNode();
+  const { run, runCode, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
   const openOutputPanel = useOutputPanelStore((s) => s.open);
@@ -41,6 +41,7 @@ export default function NodeInspector() {
   const isProjectScanNode = node.type === "project_scan";
   const isCodeAnalysisNode = node.type === "code_analysis";
   const canGenerateNodes = isPlanningNode && output.trim().length > 0;
+  const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
   const needsConfirmation = node.data?.status === "needs_confirmation" && confirmation !== null;
@@ -150,6 +151,15 @@ export default function NodeInspector() {
                   disabled={runningId !== null}
                 >
                   ✦ Generate Nodes
+                </button>
+              ) : null}
+              {canGenerateModuleGraph ? (
+                <button
+                  className="px-3 py-1.5 bg-cyan-700 rounded text-xs disabled:opacity-50"
+                  onClick={() => expandModuleGraph(node.id)}
+                  disabled={runningId !== null}
+                >
+                  ⬡ Module Graph
                 </button>
               ) : null}
               {isCodeNode ? (
@@ -305,7 +315,7 @@ export default function NodeInspector() {
                   : isProjectScanNode
                     ? "选择 Project Dir 后点 ⌕ Scan Project 扫描已有工程"
                     : isCodeAnalysisNode
-                      ? "连接 Project Scan 后点 ◇ Analyze Code 让 Claude Code 只读分析代码"
+                      ? "连接 Project Scan 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
                   : isPlanningNode
                     ? "填写 Purpose 后点 ▶ Explain 生成规划，再用 ✦ Generate Nodes 展开子节点"
                     : "点 ▶ Explain 文本展开"}

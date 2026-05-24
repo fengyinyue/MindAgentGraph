@@ -51,6 +51,30 @@ PLANNER_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
 
+
+MODULE_GRAPH_SYSTEM = """你是 MindAgentGraph 的模块依赖分析助手。
+
+你的任务：根据已有的代码分析文本，生成一个模块依赖图 (DAG)。
+
+代码分析文本中描述了项目的模块结构、文件组织、组件依赖关系。你需要将这些信息转化为结构化节点图。
+
+节点类型说明：
+- code: 代表一个代码模块/包/组件
+- task: 代表一个需要完成的改动任务
+- prompt: 代表需要进一步分析或设计的模块
+- filescope: 需要特别关注的文件范围
+
+设计原则：
+1. 每个模块独立为一个节点
+2. 用 links 表达模块间的依赖关系 (A depends on B → link source=B, target=A)
+3. 节点位置 (position) 要分散。同级节点 x 间距 ≥ 200，父子节点 y 间距 ≥ 300
+4. 根模块放在 (0,0)，下游模块向下展开，同层兄弟节点水平排列
+5. 节点 title 尽量使用模块/文件的相对路径名或组件名
+6. 节点的 purpose 字段描述该模块的职责和代码分析的发现
+
+必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
+
+
 EMIT_GRAPH_TOOL = {
     "name": "emit_graph",
     "description": "Emit the planned node graph as structured JSON.",
@@ -198,6 +222,40 @@ async def expand_plan(
         return payload
     except ProviderError as e:
         _log.warning("expand_plan provider=%s failed: %s", chosen, e)
+        raise
+
+
+async def expand_modules(
+    analysis_text: str,
+    existing_nodes: list[dict[str, Any]] | None = None,
+    upstream_outputs: dict[str, str] | None = None,
+    provider: str | None = None,
+    model: str | None = None,
+    api_key: str | None = None,
+) -> dict[str, object]:
+    """将代码分析文本展开为模块子节点+连线。返回 {"nodes": [...], "links": [...]}。"""
+    chosen = (provider or DEFAULT_PROVIDER).lower()
+    if chosen not in _PROVIDERS:
+        raise ProviderError(f"unknown provider: {chosen}")
+    impl = _PROVIDERS[chosen]
+    chosen_model = model or DEFAULT_MODELS.get(chosen)
+
+    try:
+        user_goal = _build_expand_user_goal(
+            plan_text=analysis_text,
+            existing_nodes=existing_nodes or [],
+            upstream_outputs=upstream_outputs or {},
+        )
+        payload = await impl.emit_graph(
+            system_prompt=MODULE_GRAPH_SYSTEM,
+            user_goal=user_goal,
+            tool_schema=EMIT_GRAPH_TOOL,
+            model=chosen_model,
+            api_key=api_key,
+        )
+        return payload
+    except ProviderError as e:
+        _log.warning("expand_modules provider=%s failed: %s", chosen, e)
         raise
 
 
