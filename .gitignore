@@ -37,3 +37,4 @@ Thumbs.db
 *.mag/.cache/
 .env
 .env.local
+.claude/
