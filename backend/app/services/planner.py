@@ -256,6 +256,7 @@ PCG graph rules:
 10. Lay nodes out left-to-right like Unreal PCG / Blueprint dataflow: smaller x means upstream data, larger x means downstream output. Use y only for parallel branches.
 11. Node ids and port ids should be stable lowercase snake_case.
 12. Keep the graph compact but complete: usually 5-12 nodes.
+13. Match the user's language for display text: if the user writes Chinese, node title, purpose, port name, and edge label should be Chinese. Keep id, sourceHandle, targetHandle, and type as lowercase English snake_case.
 
 Controlled PCG node library:
 - Input: Bounds Spline

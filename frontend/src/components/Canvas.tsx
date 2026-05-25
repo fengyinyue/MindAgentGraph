@@ -49,6 +49,10 @@ interface MagNodeData extends Record<string, unknown> {
   needsConfirmation: boolean;
 }
 
+interface MagEdgeData extends Record<string, unknown> {
+  labelText?: string;
+}
+
 function nodeToRf(n: NodeBase): RFNode {
   return {
     id: n.id,
@@ -63,16 +67,15 @@ function nodeToRf(n: NodeBase): RFNode {
 }
 
 function edgeToRf(e: EdgeT): RFEdge {
+  const labelText = e.label ?? (e.channel ? `${e.channel.from} -> ${e.channel.to}` : undefined);
   return {
     id: e.id,
     source: e.source,
     target: e.target,
     sourceHandle: e.sourceHandle ?? undefined,
     targetHandle: e.targetHandle ?? undefined,
-    label: e.label ?? (e.channel ? `${e.channel.from} -> ${e.channel.to}` : undefined),
-    style: e.label ? { strokeWidth: 1.8 } : undefined,
-    labelStyle: e.label ? { fill: "#cbd5e1", fontSize: 11 } : undefined,
-    labelBgStyle: e.label ? { fill: "#111827", fillOpacity: 0.85 } : undefined,
+    data: { labelText } satisfies MagEdgeData,
+    style: labelText ? { strokeWidth: 1.8 } : undefined,
   };
 }
 
@@ -317,6 +320,7 @@ export default function Canvas() {
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const { run, runCode, runDag, expandPlanNodes, expandModuleGraph, runningId } = useRunNode();
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
@@ -357,6 +361,21 @@ export default function Canvas() {
         };
       }),
     [rfNodes, storeNodes, runningId],
+  );
+
+  const decoratedEdges: RFEdge[] = useMemo(
+    () =>
+      rfEdges.map((edge) => {
+        const labelText = (edge.data as MagEdgeData | undefined)?.labelText;
+        const showLabel = Boolean(labelText && (edge.selected || edge.id === hoveredEdgeId));
+        return {
+          ...edge,
+          label: showLabel ? labelText : undefined,
+          labelStyle: showLabel ? { fill: "#cbd5e1", fontSize: 11 } : undefined,
+          labelBgStyle: showLabel ? { fill: "#111827", fillOpacity: 0.85 } : undefined,
+        };
+      }),
+    [rfEdges, hoveredEdgeId],
   );
 
   const onNodeClick = useCallback(
@@ -423,11 +442,13 @@ export default function Canvas() {
     <div className="w-full h-full" onClick={() => { closeMenu(); setPaneMenu(null); }}>
       <ReactFlow
         nodes={decoratedNodes}
-        edges={rfEdges}
+        edges={decoratedEdges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChangeAndSync}
         onEdgesChange={onEdgesChangeAndSync}
         onConnect={onConnectAndSync}
+        onEdgeMouseEnter={(_, edge) => setHoveredEdgeId(edge.id)}
+        onEdgeMouseLeave={() => setHoveredEdgeId(null)}
         onNodeClick={onNodeClick}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={(e) => {

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { create } from "zustand";
 import { cancelCodeRun, expandModules, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream, scanProject } from "@/api/backend";
-import type { CodeDiffInfo } from "@/api/backend";
+import type { CodeDiffInfo, ExpandPlanResult } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
@@ -90,6 +90,89 @@ function summarizeNodeForExpand(node: NodeBase) {
     hasOutput: text.length > 0,
     outputSummary: text ? text.slice(0, 1200) : undefined,
   };
+}
+
+type ExpandedNode = ExpandPlanResult["nodes"][number];
+type ExpandedLink = ExpandPlanResult["links"][number];
+
+function hasExplicitDataPorts(node: ExpandedNode): boolean {
+  return [node.inputs, node.outputs].some((ports) =>
+    Array.isArray(ports) && ports.length > 0,
+  );
+}
+
+function isDataflowExpansion(nodes: ExpandedNode[], links: ExpandedLink[]): boolean {
+  return nodes.some((node) =>
+    hasExplicitDataPorts(node) ||
+    node.title.includes("PCG:") ||
+    node.title.startsWith("Input:") ||
+    node.title.startsWith("Output:"),
+  ) || links.some((link) => Boolean(link.sourceHandle || link.targetHandle));
+}
+
+function layoutExpandedNodes(
+  nodes: ExpandedNode[],
+  links: ExpandedLink[],
+  origin: { x: number; y: number },
+): Map<string, { x: number; y: number }> {
+  const ids = new Set(nodes.map((node) => node.id));
+  const incoming = new Map(nodes.map((node) => [node.id, 0]));
+  const outgoing = new Map(nodes.map((node) => [node.id, [] as string[]]));
+
+  for (const link of links) {
+    if (!ids.has(link.source) || !ids.has(link.target)) continue;
+    outgoing.get(link.source)?.push(link.target);
+    incoming.set(link.target, (incoming.get(link.target) ?? 0) + 1);
+  }
+
+  const queue = nodes
+    .filter((node) => (incoming.get(node.id) ?? 0) === 0)
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((node) => node.id);
+  const rank = new Map(nodes.map((node) => [node.id, 0]));
+  const remainingIncoming = new Map(incoming);
+
+  while (queue.length) {
+    const id = queue.shift()!;
+    for (const target of outgoing.get(id) ?? []) {
+      rank.set(target, Math.max(rank.get(target) ?? 0, (rank.get(id) ?? 0) + 1));
+      remainingIncoming.set(target, (remainingIncoming.get(target) ?? 0) - 1);
+      if ((remainingIncoming.get(target) ?? 0) === 0) {
+        queue.push(target);
+      }
+    }
+  }
+
+  const dataflow = isDataflowExpansion(nodes, links);
+  const rankGap = dataflow ? 340 : 280;
+  const rowGap = dataflow ? 170 : 180;
+  const byRank = new Map<number, ExpandedNode[]>();
+
+  for (const node of nodes) {
+    const nodeRank = rank.get(node.id) ?? 0;
+    byRank.set(nodeRank, [...(byRank.get(nodeRank) ?? []), node]);
+  }
+
+  const positions = new Map<string, { x: number; y: number }>();
+  for (const [nodeRank, rankNodes] of byRank) {
+    const ordered = [...rankNodes].sort((a, b) => a.y - b.y || a.x - b.x || a.title.localeCompare(b.title));
+    const centerOffset = ((ordered.length - 1) * rowGap) / 2;
+    ordered.forEach((node, index) => {
+      if (dataflow) {
+        positions.set(node.id, {
+          x: origin.x + nodeRank * rankGap,
+          y: origin.y + index * rowGap - centerOffset,
+        });
+      } else {
+        positions.set(node.id, {
+          x: origin.x + index * rankGap - ((ordered.length - 1) * rankGap) / 2,
+          y: origin.y + nodeRank * rowGap,
+        });
+      }
+    });
+  }
+
+  return positions;
 }
 
 function toRunPayload(node: NodeBase) {
@@ -689,14 +772,19 @@ export function useRunNode() {
           idMap.set(raw.id, crypto.randomUUID());
         }
 
-        const baseX = planningNode.position.x;
-        const baseY = planningNode.position.y + 350;
+        const positions = layoutExpandedNodes(result.nodes, result.links, {
+          x: planningNode.position.x,
+          y: planningNode.position.y + 350,
+        });
 
         const newNodes: NodeBase[] = result.nodes.map((raw) => ({
           id: idMap.get(raw.id)!,
           type: raw.type as NodeBase["type"],
           title: raw.title,
-          position: { x: baseX + raw.x, y: baseY + raw.y },
+          position: positions.get(raw.id) ?? {
+            x: planningNode.position.x + raw.x,
+            y: planningNode.position.y + 350 + raw.y,
+          },
           contextMode: raw.type === "project_scan" ? "isolated" as const : "inherit" as const,
           fileScope: { allow: [], deny: [] },
           toolPolicy: { tools: [], deny: [] },
@@ -822,14 +910,19 @@ export function useRunNode() {
           idMap.set(raw.id, crypto.randomUUID());
         }
 
-        const baseX = codeNode.position.x;
-        const baseY = codeNode.position.y + 350;
+        const positions = layoutExpandedNodes(result.nodes, result.links, {
+          x: codeNode.position.x,
+          y: codeNode.position.y + 350,
+        });
 
         const newNodes: NodeBase[] = result.nodes.map((raw) => ({
           id: idMap.get(raw.id)!,
           type: raw.type as NodeBase["type"],
           title: raw.title,
-          position: { x: baseX + raw.x, y: baseY + raw.y },
+          position: positions.get(raw.id) ?? {
+            x: codeNode.position.x + raw.x,
+            y: codeNode.position.y + 350 + raw.y,
+          },
           contextMode: "inherit" as const,
           fileScope: { allow: [], deny: [] },
           toolPolicy: { tools: [], deny: [] },
