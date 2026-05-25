@@ -93,13 +93,15 @@ EMIT_GRAPH_TOOL = {
                             "type": "string",
                             "enum": [
                                 "prompt", "planning", "memory", "filescope",
-                                "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
+                                "project_scan", "code_analysis", "code", "api", "asset", "agent", "task",
                             ],
                         },
                         "title": {"type": "string"},
                         "x": {"type": "number"},
                         "y": {"type": "number"},
                         "purpose": {"type": "string", "description": "What this node does"},
+                        "inputs": {"type": "array", "items": {"$ref": "#/$defs/dataPort"}},
+                        "outputs": {"type": "array", "items": {"$ref": "#/$defs/dataPort"}},
                     },
                 },
             },
@@ -111,7 +113,23 @@ EMIT_GRAPH_TOOL = {
                     "properties": {
                         "source": {"type": "string"},
                         "target": {"type": "string"},
-                        "label": {"type": "string"},
+                        "sourceHandle": {"type": "string"},
+                        "targetHandle": {"type": "string"},
+                        "label": {"type": "string", "description": "Data passed from source to target."},
+                    },
+                },
+            },
+        },
+        "$defs": {
+            "dataPort": {
+                "type": "object",
+                "required": ["id", "name", "type"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "type": {
+                        "type": "string",
+                        "enum": ["spline", "point", "polygon", "bounds", "graph", "debug", "asset", "unknown"],
                     },
                 },
             },
@@ -139,7 +157,11 @@ def _to_internal_graph(payload: dict[str, Any]) -> Graph:
                 contextMode="inherit",
                 memoryRef=f"{raw['id']}.md" if raw["type"] == "memory" else None,
                 purpose=raw.get("purpose", ""),
-                data={"purpose": raw.get("purpose", "")},
+                data={
+                    "purpose": raw.get("purpose", ""),
+                    "inputs": _normalize_ports(raw.get("inputs", []), "input"),
+                    "outputs": _normalize_ports(raw.get("outputs", []), "output"),
+                },
             )
         )
     links: list[Edge] = []
@@ -149,10 +171,34 @@ def _to_internal_graph(payload: dict[str, Any]) -> Graph:
                 id=str(uuid.uuid4()),
                 source=raw["source"],
                 target=raw["target"],
+                sourceHandle=raw.get("sourceHandle"),
+                targetHandle=raw.get("targetHandle"),
+                label=raw.get("label"),
                 channel=None,
             )
         )
     return Graph(nodes=nodes, links=links)
+
+
+def _normalize_ports(raw_ports: Any, prefix: str) -> list[dict[str, str]]:
+    if not isinstance(raw_ports, list):
+        return []
+    ports: list[dict[str, str]] = []
+    valid_types = {"spline", "point", "polygon", "bounds", "graph", "debug", "asset", "unknown"}
+    for idx, raw in enumerate(raw_ports):
+        if isinstance(raw, str):
+            ports.append({"id": f"{prefix}_{idx}", "name": raw, "type": "unknown"})
+            continue
+        if not isinstance(raw, dict):
+            continue
+        name = str(raw.get("name") or raw.get("id") or f"{prefix} {idx + 1}")
+        port_type = str(raw.get("type") or "unknown")
+        ports.append({
+            "id": str(raw.get("id") or name.lower().replace(" ", "_")),
+            "name": name,
+            "type": port_type if port_type in valid_types else "unknown",
+        })
+    return ports
 
 
 EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
@@ -191,6 +237,56 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
 
 
+PCG_EXPAND_SYSTEM = """You are a PCG graph architect for MindAgentGraph.
+
+Your task is to convert the user's PCG / Unreal PCG requirement into a dataflow node graph.
+
+Use emit_graph and return only structured nodes and links.
+
+PCG graph rules:
+1. Prefer the controlled PCG node library below, but you may add custom code nodes when the requirement needs an operation not in the library.
+2. All processing nodes must use type="code". Never use type="semantic".
+3. Use type="asset" for explicit inputs/outputs/assets and type="task" for debug/preview/check nodes.
+4. Every node must include explicit inputs and outputs arrays. Each port must be {id, name, type}.
+5. Valid port types are: spline, point, polygon, bounds, graph, debug, asset, unknown.
+6. Every link must include sourceHandle, targetHandle, and label.
+7. sourceHandle must exactly match an output port id on the source node.
+8. targetHandle must exactly match an input port id on the target node.
+9. label should be the data name flowing through the edge.
+10. Lay nodes out left-to-right like Unreal PCG / Blueprint dataflow: smaller x means upstream data, larger x means downstream output. Use y only for parallel branches.
+11. Node ids and port ids should be stable lowercase snake_case.
+12. Keep the graph compact but complete: usually 5-12 nodes.
+
+Controlled PCG node library:
+- Input: Bounds Spline
+  type asset; outputs bounds_spline / spline
+- Input: Main Road Spline
+  type asset; outputs main_road_spline / spline
+- Input: Generated Points
+  type asset; outputs generated_points / point
+- PCG: Spline To Bounds
+  type code; inputs spline / spline; outputs bounds_polygon / polygon, bounds_obb / bounds
+- PCG: Sample Spline
+  type code; inputs spline / spline; outputs sampled_points / point
+- PCG: Generate Grid Seeds
+  type code; inputs bounds_polygon / polygon and optional guide_points / point; outputs grid_seeds / point
+- PCG: Clip By Bounds
+  type code; inputs points / point and bounds_polygon / polygon; outputs clipped_points / point
+- PCG: Connect And Simplify
+  type code; inputs road_points / point and optional guide_points / point; outputs road_graph / graph
+- PCG: Points To Spline
+  type code; inputs road_graph / graph or points / point; outputs splines / spline
+- PCG: Spawn Assets
+  type code; inputs points / point or splines / spline and asset_set / asset; outputs spawned_assets / asset
+- Output: Road Splines
+  type asset; inputs road_splines / spline
+- Debug: Preview
+  type task; inputs any generated data; outputs debug_preview / debug
+
+When creating custom code nodes, make the title start with "PCG:" and describe the operation in purpose.
+"""
+
+
 async def expand_plan(
     plan_text: str,
     existing_nodes: list[dict[str, Any]] | None = None,
@@ -200,6 +296,16 @@ async def expand_plan(
     api_key: str | None = None,
 ) -> dict[str, object]:
     """将规划文本展开为子节点+连线。返回 {"nodes": [...], "links": [...]}。"""
+    if _is_pcg_road_domain_plan(plan_text, upstream_outputs or {}):
+        return await _expand_pcg_plan(
+            plan_text=plan_text,
+            existing_nodes=existing_nodes or [],
+            upstream_outputs=upstream_outputs or {},
+            provider=provider,
+            model=model,
+            api_key=api_key,
+        )
+
     chosen = (provider or DEFAULT_PROVIDER).lower()
     if chosen not in _PROVIDERS:
         raise ProviderError(f"unknown provider: {chosen}")
@@ -223,6 +329,153 @@ async def expand_plan(
     except ProviderError as e:
         _log.warning("expand_plan provider=%s failed: %s", chosen, e)
         raise
+
+
+async def _expand_pcg_plan(
+    *,
+    plan_text: str,
+    existing_nodes: list[dict[str, Any]],
+    upstream_outputs: dict[str, str],
+    provider: str | None,
+    model: str | None,
+    api_key: str | None,
+) -> dict[str, object]:
+    chosen = (provider or DEFAULT_PROVIDER).lower()
+    if chosen not in _PROVIDERS:
+        raise ProviderError(f"unknown provider: {chosen}")
+
+    impl = _PROVIDERS[chosen]
+    chosen_model = model or DEFAULT_MODELS.get(chosen)
+    user_goal = _build_expand_user_goal(
+        plan_text=plan_text,
+        existing_nodes=existing_nodes,
+        upstream_outputs=upstream_outputs,
+    )
+
+    try:
+        payload = await impl.emit_graph(
+            system_prompt=PCG_EXPAND_SYSTEM,
+            user_goal=user_goal,
+            tool_schema=EMIT_GRAPH_TOOL,
+            model=chosen_model,
+            api_key=api_key,
+        )
+    except ProviderError as e:
+        _log.warning("expand_pcg_plan provider=%s failed: %s", chosen, e)
+        raise
+
+    return _validate_pcg_payload(payload)
+
+
+def _validate_pcg_payload(payload: dict[str, Any]) -> dict[str, object]:
+    nodes = payload.get("nodes")
+    links = payload.get("links")
+    if not isinstance(nodes, list) or not isinstance(links, list):
+        raise ProviderError("PCG graph payload must contain nodes and links arrays")
+    if not nodes:
+        raise ProviderError("PCG graph payload must contain at least one node")
+
+    node_ids: set[str] = set()
+    node_ports: dict[str, dict[str, set[str]]] = {}
+    normalized_nodes: list[dict[str, Any]] = []
+
+    for raw in nodes:
+        if not isinstance(raw, dict):
+            raise ProviderError("PCG graph node must be an object")
+        node_id = str(raw.get("id") or "")
+        if not node_id:
+            raise ProviderError("PCG graph node is missing id")
+        if node_id in node_ids:
+            raise ProviderError(f"duplicate PCG node id: {node_id}")
+        node_ids.add(node_id)
+
+        node_type = str(raw.get("type") or "")
+        if node_type == "semantic":
+            raise ProviderError(f"PCG node {node_id} used forbidden type semantic")
+        if node_type not in {"asset", "code", "task"}:
+            raise ProviderError(f"PCG node {node_id} must use asset, code, or task type")
+        if "inputs" not in raw or "outputs" not in raw:
+            raise ProviderError(f"PCG node {node_id} must include inputs and outputs arrays")
+        if not isinstance(raw.get("inputs"), list) or not isinstance(raw.get("outputs"), list):
+            raise ProviderError(f"PCG node {node_id} inputs and outputs must be arrays")
+        for raw_port in [*raw["inputs"], *raw["outputs"]]:
+            if not isinstance(raw_port, dict):
+                raise ProviderError(f"PCG node {node_id} ports must be explicit objects")
+            if not all(isinstance(raw_port.get(key), str) and raw_port.get(key) for key in ("id", "name", "type")):
+                raise ProviderError(f"PCG node {node_id} ports must include id, name, and type")
+            if raw_port["type"] not in {"spline", "point", "polygon", "bounds", "graph", "debug", "asset", "unknown"}:
+                raise ProviderError(f"PCG node {node_id} has invalid port type: {raw_port['type']}")
+
+        inputs = _normalize_ports(raw.get("inputs", []), "input")
+        outputs = _normalize_ports(raw.get("outputs", []), "output")
+        for port in [*inputs, *outputs]:
+            if not port.get("id") or not port.get("name") or not port.get("type"):
+                raise ProviderError(f"PCG node {node_id} has an invalid port")
+
+        node_ports[node_id] = {
+            "inputs": {port["id"] for port in inputs},
+            "outputs": {port["id"] for port in outputs},
+        }
+        normalized_nodes.append({
+            **raw,
+            "type": node_type,
+            "inputs": inputs,
+            "outputs": outputs,
+        })
+
+    normalized_links: list[dict[str, Any]] = []
+    for raw in links:
+        if not isinstance(raw, dict):
+            raise ProviderError("PCG graph link must be an object")
+        source = str(raw.get("source") or "")
+        target = str(raw.get("target") or "")
+        source_handle = str(raw.get("sourceHandle") or "")
+        target_handle = str(raw.get("targetHandle") or "")
+        label = str(raw.get("label") or "")
+        if source not in node_ids:
+            raise ProviderError(f"PCG link references missing source node: {source}")
+        if target not in node_ids:
+            raise ProviderError(f"PCG link references missing target node: {target}")
+        if not source_handle or not target_handle or not label:
+            raise ProviderError(f"PCG link {source}->{target} must include sourceHandle, targetHandle, and label")
+        if source_handle not in node_ports[source]["outputs"]:
+            raise ProviderError(f"PCG link {source}->{target} sourceHandle does not match source outputs: {source_handle}")
+        if target_handle not in node_ports[target]["inputs"]:
+            raise ProviderError(f"PCG link {source}->{target} targetHandle does not match target inputs: {target_handle}")
+        normalized_links.append({
+            **raw,
+            "source": source,
+            "target": target,
+            "sourceHandle": source_handle,
+            "targetHandle": target_handle,
+            "label": label,
+        })
+
+    return {"nodes": normalized_nodes, "links": normalized_links}
+
+
+def _is_pcg_road_domain_plan(plan_text: str, upstream_outputs: dict[str, str]) -> bool:
+    text = "\n".join([plan_text, *upstream_outputs.values()]).lower()
+    if "pcg" not in text:
+        return False
+
+    domain_terms = [
+        "spline",
+        "bounds",
+        "main road",
+        "road graph",
+        "road network",
+        "grid seeds",
+        "points to spline",
+        "路网",
+        "道路",
+        "主路",
+        "范围",
+        "曲线",
+        "样条",
+        "城市",
+    ]
+    return any(term.lower() in text for term in domain_terms)
 
 
 async def expand_modules(

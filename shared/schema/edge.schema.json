@@ -10,6 +10,7 @@
     "sourceHandle": { "type": "string" },
     "target": { "type": "string" },
     "targetHandle": { "type": "string" },
+    "label": { "type": "string" },
     "channel": {
       "type": "object",
       "properties": {

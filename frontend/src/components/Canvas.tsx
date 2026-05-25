@@ -3,7 +3,9 @@ import {
   ReactFlow,
   Background,
   Controls,
+  Handle,
   MiniMap,
+  Position as FlowPosition,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -12,12 +14,13 @@ import {
   type Connection,
   type NodeChange,
   type EdgeChange,
+  type NodeProps,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
 import { useOutputPanelStore } from "@/store/outputPanelStore";
-import { NODE_TYPES, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
+import { NODE_TYPES, type DataPort, type DataPortType, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
 
 const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
@@ -40,12 +43,22 @@ interface ContextMenu {
   nodeId: string;
 }
 
+interface MagNodeData extends Record<string, unknown> {
+  node: NodeBase;
+  running: boolean;
+  needsConfirmation: boolean;
+}
+
 function nodeToRf(n: NodeBase): RFNode {
   return {
     id: n.id,
     position: n.position,
-    type: undefined,
-    data: { label: `${n.title}\n[${n.type}]` },
+    type: "magNode",
+    data: {
+      node: n,
+      running: false,
+      needsConfirmation: false,
+    } satisfies MagNodeData,
   };
 }
 
@@ -56,7 +69,168 @@ function edgeToRf(e: EdgeT): RFEdge {
     target: e.target,
     sourceHandle: e.sourceHandle ?? undefined,
     targetHandle: e.targetHandle ?? undefined,
+    label: e.label ?? (e.channel ? `${e.channel.from} -> ${e.channel.to}` : undefined),
+    style: e.label ? { strokeWidth: 1.8 } : undefined,
+    labelStyle: e.label ? { fill: "#cbd5e1", fontSize: 11 } : undefined,
+    labelBgStyle: e.label ? { fill: "#111827", fillOpacity: 0.85 } : undefined,
   };
+}
+
+function normalizePorts(value: unknown, fallbackPrefix: "input" | "output"): DataPort[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw, index): DataPort[] => {
+    if (typeof raw === "string") {
+      return [{ id: `${fallbackPrefix}_${index}`, name: raw, type: "unknown" }];
+    }
+    if (!raw || typeof raw !== "object") return [];
+    const candidate = raw as Partial<DataPort>;
+    const name = typeof candidate.name === "string" ? candidate.name : typeof candidate.id === "string" ? candidate.id : `${fallbackPrefix} ${index + 1}`;
+    return [{
+      id: typeof candidate.id === "string" ? candidate.id : name.toLowerCase().replace(/\s+/g, "_"),
+      name,
+      type: isDataPortType(candidate.type) ? candidate.type : "unknown",
+    }];
+  });
+}
+
+const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPort[] }> = {
+  prompt: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "response", name: "Response", type: "unknown" }],
+  },
+  planning: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "plan", name: "Plan", type: "unknown" }],
+  },
+  memory: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "memory", name: "Memory", type: "unknown" }],
+  },
+  filescope: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "file_scope", name: "File Scope", type: "unknown" }],
+  },
+  project_scan: {
+    inputs: [{ id: "project", name: "Project", type: "unknown" }],
+    outputs: [{ id: "scan", name: "Scan", type: "unknown" }],
+  },
+  code_analysis: {
+    inputs: [{ id: "project", name: "Project", type: "unknown" }],
+    outputs: [{ id: "analysis", name: "Analysis", type: "unknown" }],
+  },
+  code: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  api: {
+    inputs: [{ id: "request", name: "Request", type: "unknown" }],
+    outputs: [{ id: "response", name: "Response", type: "unknown" }],
+  },
+  asset: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "asset", name: "Asset", type: "asset" }],
+  },
+  agent: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  task: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  semantic: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+};
+
+function nodePorts(node: NodeBase): { inputs: DataPort[]; outputs: DataPort[] } {
+  const inputs = normalizePorts(node.data?.inputs, "input");
+  const outputs = normalizePorts(node.data?.outputs, "output");
+  if (inputs.length || outputs.length) {
+    return { inputs, outputs };
+  }
+  return defaultPortsByType[node.type] ?? defaultPortsByType.task;
+}
+
+function isDataPortType(value: unknown): value is DataPortType {
+  return typeof value === "string" && value in portColor;
+}
+
+const portColor: Record<DataPortType, string> = {
+  spline: "#22d3ee",
+  point: "#22c55e",
+  polygon: "#f59e0b",
+  bounds: "#a78bfa",
+  graph: "#60a5fa",
+  debug: "#f472b6",
+  asset: "#e879f9",
+  unknown: "#94a3b8",
+};
+
+function findOutputPort(nodes: NodeBase[], nodeId?: string | null, handleId?: string | null): DataPort | undefined {
+  if (!nodeId || !handleId) return undefined;
+  const node = nodes.find((n) => n.id === nodeId);
+  if (!node) return undefined;
+  return nodePorts(node).outputs.find((port) => port.id === handleId);
+}
+
+function MagGraphNode({ data, selected }: NodeProps<RFNode<MagNodeData>>) {
+  const node = data.node;
+  const { inputs, outputs } = nodePorts(node);
+  const minRows = Math.max(inputs.length, outputs.length, 1);
+
+  return (
+    <div
+      className="mag-node"
+      style={{
+        borderTopColor: data.needsConfirmation ? "#f59e0b" : typeColor[node.type] || "#999",
+        opacity: data.running ? 1 : undefined,
+        boxShadow: selected ? "0 0 0 1px #6c8eef" : undefined,
+      }}
+    >
+      <div className="mag-node-title">
+        <span className="truncate">{node.title}</span>
+        <span className="mag-node-type">[{node.type}]{data.running ? " ●" : data.needsConfirmation ? " ?" : ""}</span>
+      </div>
+      <div
+        className="mag-node-ports"
+        style={{
+          minHeight: Math.max(34, minRows * 24),
+          gridTemplateRows: `repeat(${minRows}, 24px)`,
+        }}
+      >
+        <div className="mag-node-port-list">
+          {inputs.map((port, index) => (
+            <div key={port.id} className="mag-node-port-row mag-node-port-row-in" style={{ gridRow: index + 1 }}>
+              <Handle
+                id={port.id}
+                type="target"
+                position={FlowPosition.Left}
+                className="mag-node-handle"
+                style={{ background: portColor[port.type], borderColor: portColor[port.type] }}
+              />
+              <span className="mag-node-port-name" title={`${port.name} (${port.type})`}>{port.name}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mag-node-port-list">
+          {outputs.map((port, index) => (
+            <div key={port.id} className="mag-node-port-row mag-node-port-row-out" style={{ gridRow: index + 1 }}>
+              <span className="mag-node-port-name text-right" title={`${port.name} (${port.type})`}>{port.name}</span>
+              <Handle
+                id={port.id}
+                type="source"
+                position={FlowPosition.Right}
+                className="mag-node-handle"
+                style={{ background: portColor[port.type], borderColor: portColor[port.type] }}
+              />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function Canvas() {
@@ -126,17 +300,19 @@ export default function Canvas() {
 
   const onConnectAndSync = useCallback(
     (conn: Connection) => {
+      const sourcePort = findOutputPort(storeNodes, conn.source, conn.sourceHandle);
       const newEdge: EdgeT = {
         id: crypto.randomUUID(),
         source: conn.source,
         target: conn.target,
         sourceHandle: conn.sourceHandle ?? undefined,
         targetHandle: conn.targetHandle ?? undefined,
+        label: sourcePort?.name,
       };
       const state = useGraphStore.getState();
       state.setGraph({ nodes: state.nodes, links: [...state.links, newEdge] });
     },
-    [],
+    [storeNodes],
   );
 
   const [menu, setMenu] = useState<ContextMenu | null>(null);
@@ -145,6 +321,7 @@ export default function Canvas() {
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
   const { screenToFlowPosition } = useReactFlow();
+  const nodeTypes = useMemo(() => ({ magNode: MagGraphNode }), []);
   const contextMenuNode = menu
     ? storeNodes.find((node) => node.id === menu.nodeId)
     : undefined;
@@ -170,11 +347,11 @@ export default function Canvas() {
           ...n,
           data: {
             ...n.data,
-            label: `${orig?.title ?? n.id}\n[${orig?.type ?? "?"}]${runningId === n.id ? " ●" : status === "needs_confirmation" ? " ?" : ""}`,
+            node: orig ?? (n.data as MagNodeData).node,
+            running: runningId === n.id,
+            needsConfirmation: status === "needs_confirmation",
           },
           style: {
-            borderLeft: `3px solid ${status === "needs_confirmation" ? "#f59e0b" : typeColor[orig?.type ?? "semantic"] || "#999"}`,
-            whiteSpace: "pre-line" as const,
             opacity: runningId && runningId !== n.id ? 0.6 : 1,
           },
         };
@@ -247,6 +424,7 @@ export default function Canvas() {
       <ReactFlow
         nodes={decoratedNodes}
         edges={rfEdges}
+        nodeTypes={nodeTypes}
         onNodesChange={onNodesChangeAndSync}
         onEdgesChange={onEdgesChangeAndSync}
         onConnect={onConnectAndSync}

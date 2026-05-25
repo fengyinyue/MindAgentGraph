@@ -11,18 +11,101 @@ html, body, #root {
 }
 
 .react-flow__node {
-  background: #12151c;
-  border: 1px solid #2a2f3a;
   color: #e6e8ef;
-  border-radius: 8px;
-  padding: 8px 12px;
   font-size: 12px;
-  min-width: 160px;
 }
 
-.react-flow__node.selected {
+.react-flow__node-default {
+  background: #12151c;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  min-width: 160px;
+  padding: 8px 12px;
+}
+
+.react-flow__node-default.selected {
   border-color: #6c8eef;
   box-shadow: 0 0 0 1px #6c8eef;
+}
+
+.mag-node {
+  --mag-node-port-padding-x: 10px;
+  --mag-node-handle-size: 11px;
+  min-width: 220px;
+  max-width: 320px;
+  background: #12151c;
+  border: 1px solid #2a2f3a;
+  border-top: 3px solid #a0a0a0;
+  border-radius: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  overflow: visible;
+}
+
+.mag-node-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid #232936;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mag-node-type {
+  flex: 0 0 auto;
+  color: #8b94a7;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.mag-node-ports {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 10px;
+  padding: 7px 10px 8px;
+}
+
+.mag-node-port-list {
+  display: grid;
+  grid-auto-rows: 24px;
+}
+
+.mag-node-port-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 5px;
+  color: #cbd5e1;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.mag-node-port-row-out {
+  justify-content: flex-end;
+}
+
+.mag-node-port-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mag-node-handle {
+  width: var(--mag-node-handle-size);
+  height: var(--mag-node-handle-size);
+  border: 2px solid currentColor;
+}
+
+.mag-node-port-row-in .mag-node-handle {
+  left: calc(-1 * var(--mag-node-port-padding-x));
+}
+
+.mag-node-port-row-out .mag-node-handle {
+  right: calc(-1 * var(--mag-node-port-padding-x));
 }
 
 .react-flow__edge-path {

@@ -42,7 +42,20 @@
     },
     "memoryRef": { "type": "string" },
     "systemPrompt": { "type": "string" },
-    "data": { "type": "object" },
+    "data": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataPort" }
+        },
+        "outputs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dataPort" }
+        }
+      },
+      "additionalProperties": true
+    },
     "summary": { "type": "string" },
     "purpose": { "type": "string" },
     "output": { "type": "string" },
@@ -86,6 +99,20 @@
     "metadata": {
       "type": "object",
       "default": {}
+    }
+  },
+  "$defs": {
+    "dataPort": {
+      "type": "object",
+      "required": ["id", "name", "type"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": {
+          "type": "string",
+          "enum": ["spline", "point", "polygon", "bounds", "graph", "debug", "asset", "unknown"]
+        }
+      }
     }
   }
 }

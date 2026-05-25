@@ -1,4 +1,4 @@
-import type { ContextMode, Graph } from "@shared/types";
+import type { ContextMode, DataPort, Graph } from "@shared/types";
 import type { DagProgress, TokenUsage } from "@/store/monitorStore";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -352,10 +352,14 @@ export interface ExpandPlanResult {
     x: number;
     y: number;
     purpose?: string;
+    inputs?: DataPort[];
+    outputs?: DataPort[];
   }>;
   links: Array<{
     source: string;
     target: string;
+    sourceHandle?: string;
+    targetHandle?: string;
     label?: string;
   }>;
 }

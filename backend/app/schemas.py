@@ -72,6 +72,7 @@ class Edge(BaseModel):
     sourceHandle: Optional[str] = None
     target: str
     targetHandle: Optional[str] = None
+    label: Optional[str] = None
     channel: Optional[EdgeChannel] = None
 
 

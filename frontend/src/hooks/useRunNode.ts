@@ -702,16 +702,23 @@ export function useRunNode() {
           toolPolicy: { tools: [], deny: [] },
           memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
           purpose: raw.purpose ?? "",
-          data: { purpose: raw.purpose ?? "" },
+          data: {
+            purpose: raw.purpose ?? "",
+            inputs: raw.inputs ?? [],
+            outputs: raw.outputs ?? [],
+          },
           runHistory: [],
           resourceRefs: [],
           metadata: {},
         }));
 
-        const newEdges: Array<{ id: string; source: string; target: string }> = result.links.map((raw) => ({
+        const newEdges: Edge[] = result.links.map((raw) => ({
           id: crypto.randomUUID(),
           source: idMap.get(raw.source) ?? raw.source,
           target: idMap.get(raw.target) ?? raw.target,
+          sourceHandle: raw.sourceHandle,
+          targetHandle: raw.targetHandle,
+          label: raw.label,
         }));
 
         // Find root nodes (no incoming edges from other new nodes) and connect planning → root
@@ -828,16 +835,23 @@ export function useRunNode() {
           toolPolicy: { tools: [], deny: [] },
           memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
           purpose: raw.purpose ?? "",
-          data: { purpose: raw.purpose ?? "" },
+          data: {
+            purpose: raw.purpose ?? "",
+            inputs: raw.inputs ?? [],
+            outputs: raw.outputs ?? [],
+          },
           runHistory: [],
           resourceRefs: [],
           metadata: {},
         }));
 
-        const newEdges: Array<{ id: string; source: string; target: string }> = result.links.map((raw) => ({
+        const newEdges: Edge[] = result.links.map((raw) => ({
           id: crypto.randomUUID(),
           source: idMap.get(raw.source) ?? raw.source,
           target: idMap.get(raw.target) ?? raw.target,
+          sourceHandle: raw.sourceHandle,
+          targetHandle: raw.targetHandle,
+          label: raw.label,
         }));
 
         const newTargets = new Set(newEdges.map((e) => e.target));

@@ -19,6 +19,22 @@ export const NODE_TYPES: NodeType[] = [
 
 export type ContextMode = "inherit" | "explicit" | "isolated";
 
+export type DataPortType =
+  | "spline"
+  | "point"
+  | "polygon"
+  | "bounds"
+  | "graph"
+  | "debug"
+  | "asset"
+  | "unknown";
+
+export interface DataPort {
+  id: string;
+  name: string;
+  type: DataPortType;
+}
+
 export interface Position {
   x: number;
   y: number;
@@ -75,6 +91,7 @@ export interface Edge {
   sourceHandle?: string;
   target: string;
   targetHandle?: string;
+  label?: string;
   channel?: {
     from: string;
     to: string;
