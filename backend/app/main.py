@@ -41,7 +41,6 @@ from app.services.code_runner import cancel_claude_run, run_node_with_claude
 from app.services.code_analysis_runner import run_code_analysis_with_claude
 from app.services.memory import read_memory, write_memory
 from app.services.dag_executor import run_dag_stream
-from app.services.mcp_store import register_run, get_run, remove_run, RunContext
 
 app = FastAPI(title="MindAgentGraph Backend", version="0.1.0")
 
@@ -262,30 +261,10 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
     """
 
     async def gen():
-        effective_run_id = req.runId or ""
         try:
             memory_text = None
             if req.node.contextMode == "inherit":
                 memory_text = read_memory(req.projectPath, req.node.memoryRef)
-
-            # Register run context for MCP server.
-            if effective_run_id:
-                register_run(RunContext(
-                    run_id=effective_run_id,
-                    node_id=req.node.id or "",
-                    node_title=req.node.title,
-                    node_type=req.node.type,
-                    node_purpose=req.node.purpose or "",
-                    project_dir=req.projectDir,
-                    file_scope_allow=req.fileScopeAllow,
-                    file_scope_deny=req.fileScopeDeny,
-                    context_mode=req.node.contextMode,
-                    memory_ref=req.node.memoryRef,
-                    memory_text=memory_text,
-                    system_prompt=req.node.systemPrompt,
-                    upstream_outputs=req.parentOutputs,
-                    model=req.model,
-                ))
 
             output_parts: list[str] = []
             async for chunk in run_node_with_claude(
@@ -302,15 +281,10 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 system_prompt=req.node.systemPrompt,
                 model=req.model,
                 run_id=req.runId,
-                node_id=req.node.id,
-                backend_url=f"http://127.0.0.1:{os.environ.get('MAG_PORT', '8765')}",
             ):
                 # Check for special metadata markers (may have leading whitespace).
                 stripped = chunk.strip()
-                if stripped.startswith("__event__:"):
-                    event_json = stripped[len("__event__:"):].strip()
-                    yield f"event: timeline\ndata: {event_json}\n\n"
-                elif stripped.startswith("__files__:"):
+                if stripped.startswith("__files__:"):
                     files_json = stripped[len("__files__:"):].strip()
                     yield f"event: files\ndata: {files_json}\n\n"
                 elif stripped.startswith("__diff__:"):
@@ -319,13 +293,6 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 else:
                     output_parts.append(chunk)
                     yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
-
-            # Drain MCP-reported events from the MCP server.
-            if effective_run_id:
-                ctx = get_run(effective_run_id)
-                if ctx:
-                    for ev in ctx.drain_events():
-                        yield f"event: timeline\ndata: {json.dumps(ev)}\n\n"
 
             if req.node.contextMode != "isolated":
                 write_memory(
@@ -339,9 +306,6 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
             raise
         except Exception as e:
             yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
-        finally:
-            if effective_run_id:
-                remove_run(effective_run_id)
 
     return StreamingResponse(
         gen(),
@@ -374,121 +338,6 @@ async def run_dag(
             "X-Accel-Buffering": "no",
         },
     )
-
-
-# ── MCP internal endpoints (called by MCP server, not exposed to frontend) ──
-
-
-@app.post("/mcp/register")
-async def mcp_register(req: CodeRunRequest) -> dict[str, str]:
-    ctx = RunContext(
-        run_id=req.runId or "",
-        node_id=req.node.id or "",
-        node_title=req.node.title,
-        node_type=req.node.type,
-        node_purpose=req.node.purpose or "",
-        project_dir=req.projectDir,
-        file_scope_allow=req.fileScopeAllow,
-        file_scope_deny=req.fileScopeDeny,
-        context_mode=req.node.contextMode,
-        memory_ref=req.node.memoryRef,
-        memory_text=read_memory(req.projectPath, req.node.memoryRef),
-        system_prompt=req.node.systemPrompt,
-        upstream_outputs=req.parentOutputs,
-        model=req.model,
-    )
-    register_run(ctx)
-    return {"ok": "true", "runId": ctx.run_id}
-
-
-@app.get("/mcp/context/{run_id}")
-async def mcp_get_current_node(run_id: str) -> dict:
-    ctx = get_run(run_id)
-    if not ctx:
-        return {"error": f"run {run_id} not found"}
-    d = ctx.to_dict()
-    return {
-        "nodeId": d["nodeId"],
-        "title": d["nodeTitle"],
-        "type": d["nodeType"],
-        "purpose": d["nodePurpose"],
-        "contextMode": d["contextMode"],
-        "systemPrompt": d["systemPrompt"],
-        "fileScope": {
-            "allow": d["fileScopeAllow"],
-            "deny": d["fileScopeDeny"],
-        },
-    }
-
-
-@app.get("/mcp/upstream/{run_id}")
-async def mcp_get_upstream_context(run_id: str, maxChars: int = 8000) -> dict:
-    ctx = get_run(run_id)
-    if not ctx:
-        return {"error": f"run {run_id} not found"}
-    items: list[dict] = []
-    total = 0
-    for node_ref, output in ctx.upstream_outputs.items():
-        snippet = output[:maxChars - total] if total < maxChars else ""
-        if snippet:
-            items.append({"nodeRef": node_ref, "output": snippet})
-            total += len(snippet)
-    return {"items": items}
-
-
-@app.get("/mcp/file-scope/{run_id}")
-async def mcp_get_file_scope(run_id: str) -> dict:
-    ctx = get_run(run_id)
-    if not ctx:
-        return {"error": f"run {run_id} not found"}
-    return {
-        "projectDir": ctx.project_dir,
-        "allow": ctx.file_scope_allow,
-        "deny": ctx.file_scope_deny,
-    }
-
-
-@app.get("/mcp/memory/{run_id}")
-async def mcp_get_memory(run_id: str) -> dict:
-    ctx = get_run(run_id)
-    if not ctx:
-        return {"error": f"run {run_id} not found"}
-    return {
-        "memoryRef": ctx.memory_ref or "",
-        "content": ctx.memory_text or "",
-    }
-
-
-@app.post("/mcp/report")
-async def mcp_report_event(req: dict) -> dict:
-    run_id = req.get("runId", "")
-    ctx = get_run(run_id)
-    if not ctx:
-        return {"ok": False, "error": f"run {run_id} not found"}
-    event = {
-        "id": req.get("id", ""),
-        "runId": run_id,
-        "nodeId": ctx.node_id,
-        "type": req.get("type", "step_reported"),
-        "createdAt": req.get("createdAt", ""),
-        "title": req.get("title", ""),
-        "message": req.get("message", ""),
-        "path": req.get("path", ""),
-        "command": req.get("command", ""),
-        "toolName": req.get("toolName", ""),
-        "status": req.get("status", ""),
-        "payload": req.get("payload"),
-    }
-    ctx.add_event(event)
-    return {"ok": True}
-
-
-@app.get("/mcp/events/{run_id}")
-async def mcp_get_events(run_id: str) -> dict:
-    ctx = get_run(run_id)
-    if not ctx:
-        return {"events": []}
-    return {"events": ctx.drain_events()}
 
 
 def _pick_free_port() -> int:

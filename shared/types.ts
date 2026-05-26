@@ -68,38 +68,6 @@ export interface RunRecord {
   diffWarnings?: string[];
 }
 
-export type CodeRunEventType =
-  | "run_started"
-  | "prompt_prepared"
-  | "mcp_tool_called"
-  | "mcp_tool_result"
-  | "context_requested"
-  | "step_reported"
-  | "decision_reported"
-  | "confirmation_requested"
-  | "confirmation_answered"
-  | "stdout"
-  | "stderr"
-  | "diff_captured"
-  | "result_saved"
-  | "run_finished"
-  | "run_error";
-
-export interface CodeRunEvent {
-  id: string;
-  runId: string;
-  nodeId: string;
-  type: CodeRunEventType;
-  createdAt: string;
-  title: string;
-  message?: string;
-  path?: string;
-  command?: string;
-  toolName?: string;
-  status?: "pending" | "running" | "done" | "error";
-  payload?: unknown;
-}
-
 export interface NodeBase {
   id: string;
   type: NodeType;

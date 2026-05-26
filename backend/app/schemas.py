@@ -40,40 +40,6 @@ class RunRecord(BaseModel):
     diffWarnings: list[str] = Field(default_factory=list)
 
 
-CodeRunEventType = Literal[
-    "run_started",
-    "prompt_prepared",
-    "mcp_tool_called",
-    "mcp_tool_result",
-    "context_requested",
-    "step_reported",
-    "decision_reported",
-    "confirmation_requested",
-    "confirmation_answered",
-    "stdout",
-    "stderr",
-    "diff_captured",
-    "result_saved",
-    "run_finished",
-    "run_error",
-]
-
-
-class CodeRunEvent(BaseModel):
-    id: str
-    runId: str
-    nodeId: str
-    type: CodeRunEventType
-    createdAt: str
-    title: str
-    message: Optional[str] = None
-    path: Optional[str] = None
-    command: Optional[str] = None
-    toolName: Optional[str] = None
-    status: Optional[Literal["pending", "running", "done", "error"]] = None
-    payload: Optional[Any] = None
-
-
 class Node(BaseModel):
     id: str
     type: NodeType

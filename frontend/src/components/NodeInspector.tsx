@@ -6,7 +6,7 @@ import {
   type ConfirmationAnswers,
   type ConfirmationRequest,
 } from "@/utils/confirmation";
-import { NODE_TYPES, type CodeRunEvent, type NodeType } from "@shared/types";
+import { NODE_TYPES, type NodeType } from "@shared/types";
 
 function nodeTypeLabel(type: NodeType): string {
   if (type === "planning" || type === "workflow_graph") return "Workflow Graph";
@@ -45,7 +45,6 @@ export default function NodeInspector() {
   const codeDiff = node.data?.codeDiff as { diff?: string; truncated?: boolean; warnings?: string[] } | undefined;
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
-  const timeline = getTimeline(node.data?.timeline);
   const isCodeNode = node.type === "code";
   const isGraphNode = node.type === "planning" || node.type === "workflow_graph" || node.type === "structure_graph";
   const isProjectScanNode = node.type === "project_scan";
@@ -198,35 +197,6 @@ export default function NodeInspector() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
-        {/* Timeline */}
-        {timeline.length > 0 ? (
-          <div>
-            <div className="text-xs text-zinc-500 uppercase mb-1">Timeline</div>
-            <div className="space-y-0.5">
-              {timeline.map((event, i) => {
-                const { icon, color } = eventStyle(event.type);
-                return (
-                  <div key={event.id} className="flex gap-2 text-[11px] items-start">
-                    <span className="text-zinc-600 shrink-0 w-14 text-right pt-px">
-                      {new Date(event.createdAt).toLocaleTimeString()}
-                    </span>
-                    <span className="text-zinc-700 shrink-0">{i < timeline.length - 1 ? "│" : " "}</span>
-                    <span className="shrink-0">{icon}</span>
-                    <span className={color}>
-                      {event.title}
-                      {event.message && event.message !== event.title ? (
-                        <span className="text-zinc-500"> — {event.message}</span>
-                      ) : null}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : isCodeNode && isRunning ? (
-          <div className="text-xs text-zinc-600 italic">Waiting for timeline events…</div>
-        ) : null}
-
         {/* Code output */}
         {codeOutput ? (
           <div>
@@ -447,27 +417,6 @@ function getConfirmationAnswers(value: unknown): ConfirmationAnswers {
     if (typeof answer === "string") answers[key] = answer;
   }
   return answers;
-}
-
-function eventStyle(type: string): { icon: string; color: string } {
-  const map: Record<string, { icon: string; color: string }> = {
-    run_started: { icon: "▶", color: "text-blue-400" },
-    prompt_prepared: { icon: "◇", color: "text-zinc-400" },
-    context_requested: { icon: "↓", color: "text-cyan-400" },
-    step_reported: { icon: "✓", color: "text-zinc-300" },
-    decision_reported: { icon: "⚙", color: "text-amber-400" },
-    confirmation_requested: { icon: "?", color: "text-orange-400" },
-    diff_captured: { icon: "±", color: "text-purple-400" },
-    result_saved: { icon: "✔", color: "text-emerald-400" },
-    run_finished: { icon: "■", color: "text-emerald-400" },
-    run_error: { icon: "✗", color: "text-red-400" },
-  };
-  return map[type] ?? { icon: "•", color: "text-zinc-500" };
-}
-
-function getTimeline(value: unknown): CodeRunEvent[] {
-  if (!Array.isArray(value)) return [];
-  return value as CodeRunEvent[];
 }
 
 function contextHint(mode: "inherit" | "explicit" | "isolated"): string {
