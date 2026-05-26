@@ -7,7 +7,7 @@ import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
 import { useProviderStore } from "@/store/providerStore";
 import { parseConfirmationRequest } from "@/utils/confirmation";
-import type { Edge, NodeBase } from "@shared/types";
+import type { CodeRunEvent, Edge, NodeBase } from "@shared/types";
 
 interface RunState {
   runningId: string | null;
@@ -599,7 +599,7 @@ export function useRunNode() {
         });
       }
 
-      state.patchNodeData(nodeId, { codeOutput: "", codeError: undefined, generatedFiles: undefined, codeDiff: undefined });
+      state.patchNodeData(nodeId, { codeOutput: "", codeError: undefined, generatedFiles: undefined, codeDiff: undefined, timeline: [] });
       const runRecordId = crypto.randomUUID();
       appendRunRecord(node, {
         id: runRecordId,
@@ -626,6 +626,7 @@ export function useRunNode() {
       let ok = true;
       let changedFiles: string[] = [];
       let codeDiff: CodeDiffInfo | undefined;
+      let timeline: CodeRunEvent[] = [];
 
       await runNodeCode(
         {
@@ -680,6 +681,10 @@ export function useRunNode() {
                 ? `Diff captured (${diff.diff.length} chars${diff.truncated ? ", truncated" : ""})`
                 : `No diff captured${diff.warnings.length ? `: ${diff.warnings.join("; ")}` : ""}`,
             });
+          },
+          onTimeline: (event) => {
+            timeline = [...timeline, event];
+            useGraphStore.getState().patchNodeData(nodeId, { timeline });
           },
           onDone: () => {
             finishRunRecord(nodeId, runRecordId, {

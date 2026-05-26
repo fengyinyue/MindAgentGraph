@@ -1,4 +1,4 @@
-import type { ContextMode, DataPort, Graph } from "@shared/types";
+import type { CodeRunEvent, ContextMode, DataPort, Graph } from "@shared/types";
 import type { DagProgress, TokenUsage } from "@/store/monitorStore";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -184,6 +184,7 @@ export interface CodeRunCallbacks {
   onText: (chunk: string) => void;
   onFiles: (files: string[]) => void;
   onDiff?: (diff: CodeDiffInfo) => void;
+  onTimeline?: (event: CodeRunEvent) => void;
   onDone: () => void;
   onError: (message: string) => void;
   onLog?: RunNodeCallbacks["onLog"];
@@ -236,6 +237,9 @@ export async function runNodeCode(
             truncated: false,
             warnings: ["Failed to parse diff event."],
           }));
+        } else if (event.type === "timeline") {
+          const tl = parseJson<CodeRunEvent | null>(event.data, null);
+          if (tl) cb.onTimeline?.(tl);
         } else if (event.type === "done") {
           cb.onDone(); return;
         } else if (event.type === "error") {

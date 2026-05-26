@@ -9,18 +9,37 @@ and appends a special marker event so the frontend can show a file list.
 from __future__ import annotations
 import asyncio
 import difflib
+import json as _json
 import os
 import shutil
 import signal
 import subprocess
 import sys
 import uuid
+from datetime import datetime, timezone
 from typing import AsyncIterator
 
 CODE_DIFF_MAX_BYTES = 200_000
 SNAPSHOT_MAX_BYTES = 1_000_000
 
 CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要提问、不要解释、不要等确认。
+
+## MCP 工具（MAG 上下文）
+
+你已经连接了 MAG MCP Server，可以使用以下工具：
+- **mag_get_current_node** — 获取当前 Code 节点的 title、purpose、systemPrompt、fileScope
+- **mag_get_upstream_context** — 获取上游节点的输出摘要
+- **mag_get_file_scope** — 获取允许和禁止操作的文件路径范围
+- **mag_get_memory** — 获取节点绑定的 memory 文件
+- **mag_report_step** — 报告当前执行的步骤（如正在读某文件、修改某模块）
+- **mag_report_decision** — 报告关键决策与理由
+- **mag_report_file_interest** — 标记任务相关文件
+- **mag_save_node_result** — 任务完成时保存总结
+
+**重要：请先调用 mag_get_current_node 和 mag_get_file_scope 获取任务上下文，再开始执行。**
+
+执行过程中遇到关键步骤或决策时，请调用 mag_report_step / mag_report_decision 上报。
+任务完成时调用 mag_save_node_result 保存总结。
 
 ## 节点系统 Prompt
 {system_prompt}
@@ -261,6 +280,42 @@ def _assemble_prompt(
     )
 
 
+def _make_event(
+    run_id: str,
+    node_id: str | None,
+    event_type: str,
+    title: str,
+    *,
+    message: str | None = None,
+    path: str | None = None,
+    command: str | None = None,
+    tool_name: str | None = None,
+    status: str | None = None,
+    payload: object = None,
+) -> str:
+    event = {
+        "id": uuid.uuid4().hex[:12],
+        "runId": run_id,
+        "nodeId": node_id or "",
+        "type": event_type,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "title": title,
+    }
+    if message:
+        event["message"] = message
+    if path:
+        event["path"] = path
+    if command:
+        event["command"] = command
+    if tool_name:
+        event["toolName"] = tool_name
+    if status:
+        event["status"] = status
+    if payload is not None:
+        event["payload"] = payload
+    return f"__event__:{_json.dumps(event)}"
+
+
 def _mtime_after_marker(project_dir: str, rel_path: str, before_marker_file: str | None) -> bool:
     if not before_marker_file or not os.path.exists(before_marker_file):
         return False
@@ -441,12 +496,21 @@ async def run_node_with_claude(
     system_prompt: str | None = None,
     model: str | None = None,
     run_id: str | None = None,
+    node_id: str | None = None,
+    backend_url: str = "http://127.0.0.1:8765",
 ) -> AsyncIterator[str]:
     """Yield stdout chunks from ``claude --print``, then final metadata markers."""
     effective_run_id = run_id or f"local-{uuid.uuid4().hex[:8]}"
+    effective_node_id = node_id or ""
     _log_claude(effective_run_id, "START", f"node={node_title!r} cwd={project_dir}")
+
+    yield _make_event(effective_run_id, effective_node_id, "run_started", "Run started",
+                      message=f"Starting code execution for '{node_title}'")
+
     if not os.path.isdir(project_dir):
         _log_claude(effective_run_id, "ERROR", f"missing cwd={project_dir}")
+        yield _make_event(effective_run_id, effective_node_id, "run_error", "Run error",
+                          message=f"工程目录不存在: {project_dir}", status="error")
         yield f"[error] 工程目录不存在: {project_dir}\n"
         return
 
@@ -464,6 +528,9 @@ async def run_node_with_claude(
         system_prompt=system_prompt,
     )
 
+    yield _make_event(effective_run_id, effective_node_id, "prompt_prepared", "Prompt prepared",
+                      message=f"Prompt assembled ({len(prompt)} chars), model={model or 'default'}")
+
     before_status = await _git_status_map(project_dir) if await _is_git_repo(project_dir) else {}
     before_snapshots = await _snapshot_dirty_files(project_dir, before_status) if before_status else {}
 
@@ -478,6 +545,8 @@ async def run_node_with_claude(
     claude_bin = shutil.which("claude")
     if not claude_bin:
         _log_claude(effective_run_id, "ERROR", "claude command not found")
+        yield _make_event(effective_run_id, effective_node_id, "run_error", "Claude Code CLI not found",
+                          message="未找到 `claude` 命令行工具，请安装 Claude Code CLI", status="error")
         # ── fallback: no Claude Code CLI ──
         yield (
             "[fallback] 未找到 `claude` 命令行工具。\n"
@@ -493,6 +562,39 @@ async def run_node_with_claude(
         yield "__diff__:{\"available\":false,\"isGitRepo\":false,\"changedFiles\":[],\"diff\":\"\",\"truncated\":false,\"warnings\":[\"Claude Code CLI was not found.\"]}"
         return
 
+    # Set up MCP configuration for Claude Code.
+    mcp_json_path = os.path.join(project_dir, ".mcp.json")
+    mcp_json_backup = None
+    mcp_server_script = os.path.join(os.path.dirname(__file__), "..", "mcp_server.py")
+    mcp_server_script = os.path.abspath(mcp_server_script)
+
+    mcp_config = {
+        "mcpServers": {
+            "mag": {
+                "command": sys.executable,
+                "args": [mcp_server_script],
+                "env": {
+                    "MAG_BACKEND_URL": backend_url,
+                    "MAG_RUN_ID": effective_run_id,
+                },
+            },
+        },
+    }
+
+    # Backup existing .mcp.json if present.
+    if os.path.exists(mcp_json_path):
+        try:
+            with open(mcp_json_path, "r", encoding="utf-8") as f:
+                mcp_json_backup = f.read()
+        except OSError:
+            pass
+
+    try:
+        with open(mcp_json_path, "w", encoding="utf-8") as f:
+            _json.dump(mcp_config, f, indent=2)
+    except OSError:
+        _log_claude(effective_run_id, "WARN", "Failed to write .mcp.json")
+
     proc = None
     try:
         args = [claude_bin, "--print", "--dangerously-skip-permissions"]
@@ -504,7 +606,13 @@ async def run_node_with_claude(
             "stdout": asyncio.subprocess.PIPE,
             "stderr": asyncio.subprocess.PIPE,
             "cwd": project_dir,
-            "env": {**os.environ, "NO_COLOR": "1", "CLAUDE_CODE_SIMPLE": "1"},
+            "env": {
+                **os.environ,
+                "NO_COLOR": "1",
+                "CLAUDE_CODE_SIMPLE": "1",
+                "MAG_RUN_ID": effective_run_id,
+                "MAG_BACKEND_URL": backend_url,
+            },
         }
         if os.name == "nt":
             spawn_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
@@ -543,13 +651,23 @@ async def run_node_with_claude(
         diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
         _log_claude(effective_run_id, "DONE", f"files={len(changed)}")
 
+        yield _make_event(effective_run_id, effective_node_id, "diff_captured", "Diff captured",
+                          message=f"{len(changed)} file(s) changed" if changed else "No files changed",
+                          payload={"fileCount": len(changed)})
+        yield _make_event(effective_run_id, effective_node_id, "run_finished", "Run finished",
+                          message=f"Code execution completed with {len(changed)} changed file(s)", status="done")
+
     except asyncio.CancelledError:
         if proc is not None:
             await _kill_process_tree(proc, effective_run_id)
+        yield _make_event(effective_run_id, effective_node_id, "run_error", "Run cancelled",
+                          message="Code execution was cancelled", status="error")
         raise
 
     except FileNotFoundError:
         _log_claude(effective_run_id, "ERROR", "claude command not found")
+        yield _make_event(effective_run_id, effective_node_id, "run_error", "Claude Code CLI not found",
+                          message="`claude` 命令未找到。请确认 Claude Code 已安装。", status="error")
         yield "\n[error] `claude` 命令未找到。请确认 Claude Code 已安装。\n"
         changed = []
         diff_info = {
@@ -562,6 +680,8 @@ async def run_node_with_claude(
         }
     except Exception as e:
         _log_claude(effective_run_id, "ERROR", str(e))
+        yield _make_event(effective_run_id, effective_node_id, "run_error", "Run error",
+                          message=str(e), status="error")
         yield f"\n[error] 执行异常: {e}\n"
         changed = await _detect_changed_files(project_dir, marker, before_status)
         diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
@@ -574,8 +694,16 @@ async def run_node_with_claude(
                 os.remove(marker)
             except OSError:
                 pass
+        # Restore or remove .mcp.json.
+        try:
+            if mcp_json_backup is not None:
+                with open(mcp_json_path, "w", encoding="utf-8") as f:
+                    f.write(mcp_json_backup)
+            elif os.path.exists(mcp_json_path):
+                os.remove(mcp_json_path)
+        except OSError:
+            pass
 
     # Final marker (yield as a separate chunk so main.py can detect it cleanly).
-    import json as _json
     yield f"__files__:{_json.dumps(changed)}"
     yield f"__diff__:{_json.dumps(diff_info)}"
