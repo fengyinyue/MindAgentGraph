@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { useGraphStore } from "@/store/graphStore";
 import { usePanelStore } from "@/store/panelStore";
-import { openProjectDialog, saveProjectDialog } from "@/api/project";
+import { openProjectDialog, saveProjectAt, saveProjectDialog } from "@/api/project";
 import { useRunNode } from "@/hooks/useRunNode";
-import type { NodeBase } from "@shared/types";
+import type { NodeBase, ProjectMeta } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
 const buttonBase = "inline-flex h-7 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45";
@@ -16,6 +16,9 @@ export default function Toolbar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const setGraph = useGraphStore((s) => s.setGraph);
   const setProjectPath = useGraphStore((s) => s.setProjectPath);
+  const projectMeta = useGraphStore((s) => s.projectMeta);
+  const setProjectMeta = useGraphStore((s) => s.setProjectMeta);
+  const clearGraph = useGraphStore((s) => s.clear);
   const projectPath = useGraphStore((s) => s.projectPath);
   const projectDir = useGraphStore((s) => s.projectDir);
   const setProjectDir = useGraphStore((s) => s.setProjectDir);
@@ -27,22 +30,59 @@ export default function Toolbar() {
   const leftOpen = usePanelStore((s) => s.leftOpen);
   const bottomOpen = usePanelStore((s) => s.bottomOpen);
 
+  const buildProjectMeta = (path: string): ProjectMeta => {
+    const now = new Date().toISOString();
+    const name = path.split(/[/\\]/).filter(Boolean).pop()?.replace(/\.mag$/i, "") ?? "untitled";
+    return {
+      name,
+      version: "0.1.0",
+      rootGraph: "graphs/main.json",
+      createdAt: now,
+      updatedAt: now,
+    };
+  };
+
+  const onNew = () => {
+    const hasWork = nodes.length > 0 || links.length > 0 || projectPath !== null;
+    if (hasWork && !confirm("Create a new untitled graph? Unsaved changes will be discarded.")) {
+      return;
+    }
+    clearGraph();
+    setProjectPath(null);
+  };
+
   const onOpen = async () => {
     try {
       const payload = await openProjectDialog();
       if (!payload) return;
       setGraph(payload.graph);
       setProjectPath(payload.path ?? null);
+      setProjectMeta(payload.meta ?? null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const onSaveAs = async () => {
+    try {
+      const suggestedName = projectPath?.split(/[/\\]/).filter(Boolean).pop() ?? "untitled.mag";
+      const path = await saveProjectDialog({ nodes, links }, suggestedName);
+      if (path) {
+        setProjectPath(path);
+        setProjectMeta(buildProjectMeta(path));
+      }
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     }
   };
 
   const onSave = async () => {
+    if (!projectPath) {
+      await onSaveAs();
+      return;
+    }
     try {
-      const suggestedName = projectPath?.split(/[/\\]/).filter(Boolean).pop() ?? "untitled.mag";
-      const path = await saveProjectDialog({ nodes, links }, suggestedName);
-      if (path) setProjectPath(path);
+      await saveProjectAt(projectPath, projectMeta ?? buildProjectMeta(projectPath), { nodes, links });
     } catch (e) {
       alert(e instanceof Error ? e.message : String(e));
     }
@@ -71,8 +111,10 @@ export default function Toolbar() {
       <div className="flex gap-2 items-center px-3 py-1.5 border-b border-zinc-800 bg-canvas text-xs">
         <span className="font-semibold text-accent">MindAgentGraph</span>
         <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <button className={buttonNeutral} onClick={onNew} disabled={runningId !== null}>New</button>
         <button className={buttonNeutral} onClick={onOpen}>Open</button>
-        <button className={buttonNeutral} onClick={onSave}>Save As</button>
+        <button className={buttonNeutral} onClick={onSave}>Save</button>
+        <button className={buttonNeutral} onClick={onSaveAs}>Save As</button>
         <span className="mx-1 h-4 w-px bg-zinc-800" />
         <button
           className={buttonSuccess}

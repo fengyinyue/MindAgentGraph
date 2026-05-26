@@ -4,6 +4,7 @@ import type { Provider } from "@/api/backend";
 const PROVIDER_OPTIONS: { value: Provider; label: string }[] = [
   { value: "anthropic", label: "Claude" },
   { value: "deepseek", label: "DeepSeek" },
+  { value: "openai", label: "OpenAI / ChatGPT" },
   { value: "local-claude", label: "Local Claude" },
   { value: "local-codex", label: "Local Codex" },
 ];

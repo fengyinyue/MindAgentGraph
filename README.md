@@ -36,6 +36,17 @@ MindAgentGraph replaces the "endless chat thread" with **structured node-based p
 - Edges represent **upstream dependency, context inheritance, or inter-agent communication**.
 - The graph is both a **living project plan** and a **visual execution dashboard**.
 
+## Graph Types
+
+MindAgentGraph separates high-level workflow planning from detailed structural design:
+
+- **Workflow Graph** (`workflow_graph`) is the high-level execution plan. It decomposes a goal into coarse work packages such as research, architecture, implementation, validation, and delivery. Workflow expansion uses normal planning logic and intentionally avoids port-level dataflow.
+- **Structure Graph** (`structure_graph`) is a detailed dataflow or dependency graph. It is used for pipelines, module structures, asset flows, generation rules, and other cases where explicit inputs, outputs, and typed connections matter.
+- **Lightweight subgraphs** keep Structure Graph internals inside the Structure Graph node. Double-click or enter a Structure Graph to inspect its internal nodes; the parent Workflow Graph stays clean and focused on orchestration.
+- Legacy `planning` nodes are loaded as `workflow_graph` for compatibility. New graphs use `workflow_graph` and `structure_graph`.
+
+A typical collaboration pattern is: use a Workflow Graph to decide what must happen, add a Structure Graph where a step needs a concrete pipeline or dependency model, then let downstream code/task nodes implement or validate that structure.
+
 ## Target Users
 
 - Indie game developers
@@ -51,15 +62,16 @@ The first phase focuses on **AI-assisted software and game project planning and 
 ## Features
 
 - **Visual DAG Canvas** — infinite canvas with @xyflow/react. Drag, connect, and configure nodes. MiniMap, background grid, and zoom controls included.
-- **12 Node Types** — `prompt`, `planning`, `memory`, `filescope`, `project_scan`, `code_analysis`, `code`, `api`, `asset`, `agent`, `task`, `semantic`
+- **Node Types** - `workflow_graph`, `structure_graph`, `prompt`, `memory`, `filescope`, `project_scan`, `code_analysis`, `code`, `api`, `asset`, `agent`, `task`, `semantic` (`planning` is legacy-compatible)
 - **AI Graph Generation** — input a goal sentence; AI generates a full DAG of connected nodes automatically
-- **Plan Expansion** — planning nodes can generate structured text via **Explain**, then expand into child nodes via **Generate Nodes**
+- **Graph Expansion** - Workflow Graph nodes expand into high-level work packages; Structure Graph nodes expand into port-based dataflow subgraphs
+- **Subgraph Navigation** - Structure Graph nodes can contain internal child nodes, keeping detailed pipelines separate from the top-level workflow
 - **Code Analysis & Generation** — read-only project scanning, Claude Code-powered analysis, and diff-tracked code generation with FileScope constraints
 - **Module Graph** — code analysis results expand into a visual module dependency graph
 - **Per-Node Context Control** — three modes: `inherit` (upstream + memory), `explicit` (node fields only), `isolated` (no upstream, no memory)
 - **Confirmation Protocol** — nodes emit structured `mag-confirmation` blocks when blocked, pausing DAG execution for user input
 - **DAG Execution** — sequential topological execution via SSE streaming with real-time progress, logs, and token usage
-- **Multi-Provider Support** — Anthropic Claude, DeepSeek, local Claude CLI, and local Codex CLI
+- **Multi-Provider Support** — Anthropic Claude, OpenAI, DeepSeek, local Claude CLI, and local Codex CLI
 - **Project Persistence** — `.mag` project folders with JSON graphs, Markdown memory, and asset storage — fully Git-friendly
 - **Resizable Panels** — collapsible left panel (project explorer), bottom panel (monitor), and right panel (node inspector)
 - **Markdown Output Viewer** — full-screen panel with raw text and rendered Markdown preview modes
@@ -137,6 +149,7 @@ Or set environment variables:
 | Provider | Environment Variable | Default Model |
 |----------|---------------------|---------------|
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4.1` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` |
 
 ### Tauri Desktop Mode
@@ -181,7 +194,7 @@ MindAgentGraph/
 | Desktop Shell | Tauri 2.x (Rust) |
 | Frontend | React 18, TypeScript, @xyflow/react, Zustand, Tailwind CSS |
 | Backend | FastAPI (Python 3.11+), PyInstaller sidecar |
-| AI Providers | Anthropic Claude SDK, DeepSeek (OpenAI-compatible), local CLI |
+| AI Providers | Anthropic Claude SDK, OpenAI SDK, DeepSeek (OpenAI-compatible), local CLI |
 | Storage | `.mag` project folders (JSON + Markdown), Git-friendly |
 | Build | Vite, hatchling, Cargo, uv |
 

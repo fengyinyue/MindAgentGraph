@@ -1,6 +1,8 @@
 export type NodeType =
   | "prompt"
   | "planning"
+  | "workflow_graph"
+  | "structure_graph"
   | "memory"
   | "filescope"
   | "project_scan"
@@ -13,7 +15,7 @@ export type NodeType =
   | "semantic";
 
 export const NODE_TYPES: NodeType[] = [
-  "prompt", "planning", "memory", "filescope",
+  "prompt", "workflow_graph", "structure_graph", "memory", "filescope",
   "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
 ];
 
@@ -76,6 +78,7 @@ export interface NodeBase {
   toolPolicy: ToolPolicy;
   memoryRef?: string;
   systemPrompt?: string;
+  parentId?: string;
   data: Record<string, unknown>;
   summary?: string;
   purpose?: string;

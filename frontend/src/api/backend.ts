@@ -28,7 +28,7 @@ export async function checkHealth(): Promise<boolean> {
   }
 }
 
-export type Provider = "anthropic" | "deepseek" | "local-claude" | "local-codex";
+export type Provider = "anthropic" | "deepseek" | "openai" | "local-claude" | "local-codex";
 
 export async function planGraph(
   goal: string,
@@ -376,6 +376,7 @@ export interface ExpandNodeSummary {
 export async function expandPlan(
   planText: string,
   opts: {
+    graphKind?: "workflow" | "structure";
     provider?: Provider;
     model?: string;
     apiKey?: string;
@@ -391,6 +392,7 @@ export async function expandPlan(
     headers,
     body: JSON.stringify({
       plan_text: planText,
+      graph_kind: opts.graphKind ?? "workflow",
       existing_nodes: opts.existingNodes ?? [],
       upstream_outputs: opts.upstreamOutputs ?? {},
       provider: opts.provider,

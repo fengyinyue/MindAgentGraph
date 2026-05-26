@@ -8,6 +8,14 @@ import {
 } from "@/utils/confirmation";
 import { NODE_TYPES, type NodeType } from "@shared/types";
 
+function nodeTypeLabel(type: NodeType): string {
+  if (type === "planning" || type === "workflow_graph") return "Workflow Graph";
+  if (type === "structure_graph") return "Structure Graph";
+  if (type === "project_scan") return "Project Scan";
+  if (type === "code_analysis") return "Code Analysis";
+  return type;
+}
+
 export default function NodeInspector() {
   const selectedId = useGraphStore((s) => s.selectedNodeId);
   const node = useGraphStore((s) =>
@@ -16,6 +24,7 @@ export default function NodeInspector() {
   const { run, runCode, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
+  const enterSubgraph = useGraphStore((s) => s.enterSubgraph);
   const openOutputPanel = useOutputPanelStore((s) => s.open);
 
   if (!node) {
@@ -37,10 +46,11 @@ export default function NodeInspector() {
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
-  const isPlanningNode = node.type === "planning";
+  const isGraphNode = node.type === "planning" || node.type === "workflow_graph" || node.type === "structure_graph";
   const isProjectScanNode = node.type === "project_scan";
   const isCodeAnalysisNode = node.type === "code_analysis";
-  const canGenerateNodes = isPlanningNode && output.trim().length > 0;
+  const isStructureGraphNode = node.type === "structure_graph";
+  const canGenerateNodes = isGraphNode && output.trim().length > 0;
   const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
@@ -79,7 +89,7 @@ export default function NodeInspector() {
               onChange={(e) => updateNode(node.id, { type: e.target.value as NodeType })}
             >
               {NODE_TYPES.map((nt) => (
-                <option key={nt} value={nt}>{nt}</option>
+                <option key={nt} value={nt}>{nodeTypeLabel(nt)}</option>
               ))}
             </select>
           </div>
@@ -160,6 +170,15 @@ export default function NodeInspector() {
                   disabled={runningId !== null}
                 >
                   ⬡ Module Graph
+                </button>
+              ) : null}
+              {isStructureGraphNode ? (
+                <button
+                  className="px-3 py-1.5 bg-teal-700 rounded text-xs disabled:opacity-50"
+                  onClick={() => enterSubgraph(node.id)}
+                  disabled={runningId !== null}
+                >
+                  Enter
                 </button>
               ) : null}
               {isCodeNode ? (
@@ -316,7 +335,7 @@ export default function NodeInspector() {
                     ? "选择 Project Dir 后点 ⌕ Scan Project 扫描已有工程"
                     : isCodeAnalysisNode
                       ? "连接 Project Scan 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
-                  : isPlanningNode
+                  : isGraphNode
                     ? "填写 Purpose 后点 ▶ Explain 生成规划，再用 ✦ Generate Nodes 展开子节点"
                     : "点 ▶ Explain 文本展开"}
               </div>

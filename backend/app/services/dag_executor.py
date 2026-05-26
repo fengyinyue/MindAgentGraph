@@ -127,7 +127,7 @@ async def run_dag_stream(
 
     for node_id in order:
         node = nodes_by_id[node_id]
-        if node.type == "planning":
+        if node.type in {"planning", "workflow_graph", "structure_graph"}:
             yield sse("log", {
                 "level": "warn",
                 "source": "dag",

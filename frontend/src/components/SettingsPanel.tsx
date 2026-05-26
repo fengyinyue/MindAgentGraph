@@ -22,6 +22,12 @@ const PROVIDERS: ProviderInfo[] = [
     hint: "在 platform.deepseek.com 创建。OpenAI 兼容端点，仅 deepseek-chat 支持工具调用。",
     placeholder: "sk-...",
   },
+  {
+    id: "openai",
+    label: "OpenAI / ChatGPT",
+    hint: "在 platform.openai.com 创建。仅本机 localStorage 存储，不上传服务器。",
+    placeholder: "sk-...",
+  },
 ];
 
 const LOCAL_PROVIDERS: ProviderInfo[] = [

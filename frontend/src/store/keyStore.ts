@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { Provider } from "@/api/backend";
 
 // localStorage 仅前端独占；不进 .mag 工程文件，不发到 server 持久化。
-// 调用 /plan 时通过 X-Provider-Key header 发给后端单次使用。
+// 调用 plan / expand / run 接口时通过 X-Provider-Key header 发给后端单次使用。
 const STORAGE_KEY = "mag.providerKeys.v1";
 
 type Keys = Partial<Record<Provider, string>>;

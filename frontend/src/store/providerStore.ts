@@ -7,6 +7,7 @@ const MODEL_STORAGE_KEY = "mag.providerModels.v1";
 export const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: "claude-sonnet-4-6",
   deepseek: "deepseek-chat",
+  openai: "gpt-4.1",
   "local-claude": "sonnet",
   "local-codex": "",
 };
@@ -15,7 +16,7 @@ function loadInitial(): Provider {
   if (typeof window === "undefined") return "anthropic";
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === "anthropic" || raw === "deepseek" || raw === "local-claude" || raw === "local-codex") return raw;
+    if (raw === "anthropic" || raw === "deepseek" || raw === "openai" || raw === "local-claude" || raw === "local-codex") return raw;
   } catch {
     /* ignore */
   }

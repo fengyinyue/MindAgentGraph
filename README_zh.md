@@ -36,6 +36,17 @@ MindAgentGraph 的核心目标是把 AI 工作从"连续聊天"改造成**结构
 - 连线表示 **上下游依赖、上下文继承或 Agent 通信关系**。
 - 图结构既是**持续演进的项目计划**，也是**可视化的执行控制面板**。
 
+## 图类型设计
+
+MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
+
+- **Workflow Graph**（`workflow_graph`）是高层执行计划。它负责把目标拆成粗粒度工作包，例如调研、架构、实现、验证和交付。Workflow 展开使用普通规划逻辑，并刻意避免端口级数据流。
+- **Structure Graph**（`structure_graph`）是细节数据流或依赖图。它适合资源管线、模块结构、资产流、生成规则、节点蓝图等需要显式输入、输出和类型化连线的场景。
+- **轻量 subgraph** 会把 Structure Graph 的内部节点收纳在 Structure Graph 节点内部。双击或进入 Structure Graph 可以查看内部细节，顶层 Workflow Graph 保持干净，只负责组织和调度。
+- 旧版 `planning` 节点会在读取时兼容为 `workflow_graph`。新建、保存和 AI 生成都会使用 `workflow_graph` / `structure_graph`。
+
+典型协作方式是：先用 Workflow Graph 决定项目要做什么；遇到需要具体管线、依赖或数据结构的步骤时，放入 Structure Graph；后续 code/task 节点再根据 Structure Graph 的结构输出进行实现、验证或交付。
+
 ## 目标用户
 
 - 独立游戏开发者
@@ -51,15 +62,16 @@ MindAgentGraph 的核心目标是把 AI 工作从"连续聊天"改造成**结构
 ## 功能特性
 
 - **可视化 DAG 画布** — 基于 @xyflow/react 的无限画布。拖拽、连接、配置节点。内置小地图、背景网格和缩放控制。
-- **12 种节点类型** — `prompt`、`planning`、`memory`、`filescope`、`project_scan`、`code_analysis`、`code`、`api`、`asset`、`agent`、`task`、`semantic`
+- **节点类型** — `workflow_graph`、`structure_graph`、`prompt`、`memory`、`filescope`、`project_scan`、`code_analysis`、`code`、`api`、`asset`、`agent`、`task`、`semantic`（`planning` 仅作为旧项目兼容）
 - **AI 图生成** — 输入目标语句，AI 自动生成完整的 DAG 连接图
-- **计划展开** — planning 节点可通过 **Explain** 生成结构化文本，再通过 **Generate Nodes** 展开为子节点
+- **图展开** — Workflow Graph 展开为高层工作包；Structure Graph 展开为带端口的数据流 subgraph
+- **Subgraph 导航** — Structure Graph 可以包含内部子节点，让细节管线和顶层工作流分开管理
 - **代码分析与生成** — 只读项目扫描、Claude Code 驱动的代码分析，以及带 diff 追踪和 FileScope 约束的代码生成
 - **模块图** — 代码分析结果可展开为可视化模块依赖图
 - **逐节点上下文控制** — 三种模式：`inherit`（继承上游 + 内存）、`explicit`（仅节点字段）、`isolated`（无上游、无内存）
 - **确认协议** — 节点在遇到阻塞时发出结构化 `mag-confirmation` 块，暂停 DAG 执行等待用户输入
 - **DAG 执行** — 基于拓扑排序的顺序执行，通过 SSE 流式传输实时进度、日志和 Token 用量
-- **多供应商支持** — Anthropic Claude、DeepSeek、本地 Claude CLI、本地 Codex CLI
+- **多供应商支持** — Anthropic Claude、OpenAI、DeepSeek、本地 Claude CLI、本地 Codex CLI
 - **项目持久化** — `.mag` 项目文件夹，包含 JSON 图、Markdown 内存和资源存储，完全兼容 Git
 - **可调整面板** — 可折叠的左侧面板（项目浏览器）、底部面板（监视器）、右侧面板（节点检查器）
 - **Markdown 输出查看器** — 全屏面板，支持原始文本和渲染 Markdown 预览模式
@@ -137,6 +149,7 @@ Windows 用户也可双击 `start-dev.bat`。
 | 供应商 | 环境变量 | 默认模型 |
 |--------|---------|---------|
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
+| OpenAI | `OPENAI_API_KEY` | `gpt-4.1` |
 | DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` |
 
 ### Tauri 桌面模式
@@ -181,7 +194,7 @@ MindAgentGraph/
 | 桌面壳 | Tauri 2.x (Rust) |
 | 前端 | React 18, TypeScript, @xyflow/react, Zustand, Tailwind CSS |
 | 后端 | FastAPI (Python 3.11+), PyInstaller sidecar |
-| AI 供应商 | Anthropic Claude SDK, DeepSeek (兼容 OpenAI), 本地 CLI |
+| AI 供应商 | Anthropic Claude SDK, OpenAI SDK, DeepSeek (兼容 OpenAI), 本地 CLI |
 | 存储 | `.mag` 项目文件夹 (JSON + Markdown)，Git 友好 |
 | 构建 | Vite, hatchling, Cargo, uv |
 

@@ -25,6 +25,8 @@ import { NODE_TYPES, type DataPort, type DataPortType, type NodeBase, type NodeT
 const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
   planning: "#9b6cef",
+  workflow_graph: "#9b6cef",
+  structure_graph: "#14b8a6",
   memory: "#ef9b6c",
   filescope: "#6cefb6",
   project_scan: "#38bdf8",
@@ -105,6 +107,14 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "plan", name: "Plan", type: "unknown" }],
   },
+  workflow_graph: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "plan", name: "Plan", type: "unknown" }],
+  },
+  structure_graph: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "structure", name: "Structure", type: "graph" }],
+  },
   memory: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "memory", name: "Memory", type: "unknown" }],
@@ -158,6 +168,14 @@ function nodePorts(node: NodeBase): { inputs: DataPort[]; outputs: DataPort[] } 
 
 function isDataPortType(value: unknown): value is DataPortType {
   return typeof value === "string" && value in portColor;
+}
+
+function nodeTypeLabel(type: NodeType): string {
+  if (type === "planning" || type === "workflow_graph") return "Workflow Graph";
+  if (type === "structure_graph") return "Structure Graph";
+  if (type === "project_scan") return "Project Scan";
+  if (type === "code_analysis") return "Code Analysis";
+  return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
 const portColor: Record<DataPortType, string> = {
@@ -239,26 +257,39 @@ function MagGraphNode({ data, selected }: NodeProps<RFNode<MagNodeData>>) {
 export default function Canvas() {
   const storeNodes = useGraphStore((s) => s.nodes);
   const storeEdges = useGraphStore((s) => s.links);
+  const activeParentId = useGraphStore((s) => s.activeParentId);
   const selectNode = useGraphStore((s) => s.selectNode);
   const storeRemoveNode = useGraphStore((s) => s.removeNode);
+  const enterSubgraph = useGraphStore((s) => s.enterSubgraph);
+  const exitSubgraph = useGraphStore((s) => s.exitSubgraph);
+  const visibleNodes = useMemo(
+    () => storeNodes.filter((node) => (node.parentId ?? null) === activeParentId),
+    [storeNodes, activeParentId],
+  );
+  const visibleNodeIds = useMemo(() => new Set(visibleNodes.map((node) => node.id)), [visibleNodes]);
+  const visibleEdges = useMemo(
+    () => storeEdges.filter((edge) => visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)),
+    [storeEdges, visibleNodeIds],
+  );
+  const activeParentNode = activeParentId ? storeNodes.find((node) => node.id === activeParentId) : undefined;
 
   // xyflow managed state
   const [rfNodes, setRfNodes, onNodesChange] = useNodesState<RFNode>(
-    storeNodes.map(nodeToRf),
+    visibleNodes.map(nodeToRf),
   );
   const [rfEdges, setRfEdges, onEdgesChange] = useEdgesState<RFEdge>(
-    storeEdges.map(edgeToRf),
+    visibleEdges.map(edgeToRf),
   );
 
   // Sync Zustand → xyflow when store changes externally (e.g. setGraph).
   // We track last store revision to avoid feeding back xyflow → store → xyflow.
   useEffect(() => {
-    setRfNodes(storeNodes.map(nodeToRf));
-  }, [storeNodes, setRfNodes]);
+    setRfNodes(visibleNodes.map(nodeToRf));
+  }, [visibleNodes, setRfNodes]);
 
   useEffect(() => {
-    setRfEdges(storeEdges.map(edgeToRf));
-  }, [storeEdges, setRfEdges]);
+    setRfEdges(visibleEdges.map(edgeToRf));
+  }, [visibleEdges, setRfEdges]);
 
   // Sync xyflow → Zustand (positions only, on drag end).
   const onNodesChangeAndSync = useCallback(
@@ -338,7 +369,8 @@ export default function Canvas() {
   const contextMenuCanExplain = contextMenuNode !== undefined;
   const contextMenuIsProjectScan = contextMenuNode?.type === "project_scan";
   const contextMenuIsCodeAnalysis = contextMenuNode?.type === "code_analysis";
-  const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" && contextMenuOutput;
+  const contextMenuCanGenerateNodes = (contextMenuNode?.type === "workflow_graph" || contextMenuNode?.type === "structure_graph" || contextMenuNode?.type === "planning") && contextMenuOutput;
+  const contextMenuCanEnter = contextMenuNode?.type === "structure_graph";
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "code_analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
 
@@ -403,12 +435,13 @@ export default function Canvas() {
       const newNode: NodeBase = {
         id,
         type,
-        title: type === "project_scan" ? "Project Scan" : type === "code_analysis" ? "Code Analysis" : type.charAt(0).toUpperCase() + type.slice(1),
+        title: nodeTypeLabel(type),
         position,
         contextMode: type === "project_scan" ? "isolated" : "inherit",
         fileScope: { allow: [], deny: [] },
         toolPolicy: { tools: [], deny: [] },
         memoryRef: type === "memory" ? `${id}.md` : undefined,
+        parentId: activeParentId ?? undefined,
         data: {},
         runHistory: [],
         resourceRefs: [],
@@ -416,7 +449,7 @@ export default function Canvas() {
       };
       useGraphStore.getState().addNode(newNode);
     },
-    [],
+    [activeParentId],
   );
 
   // Keyboard shortcut "N": add a prompt node at viewport center.
@@ -450,6 +483,10 @@ export default function Canvas() {
         onEdgeMouseEnter={(_, edge) => setHoveredEdgeId(edge.id)}
         onEdgeMouseLeave={() => setHoveredEdgeId(null)}
         onNodeClick={onNodeClick}
+        onNodeDoubleClick={(_, node) => {
+          const graphNode = storeNodes.find((item) => item.id === node.id);
+          if (graphNode?.type === "structure_graph") enterSubgraph(graphNode.id);
+        }}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={(e) => {
           e.preventDefault();
@@ -460,6 +497,21 @@ export default function Canvas() {
         fitView
         proOptions={{ hideAttribution: true }}
       >
+        {activeParentNode ? (
+          <div className="absolute left-3 top-3 z-10 flex items-center gap-2 rounded border border-zinc-700 bg-panel/95 px-2 py-1 text-xs shadow-xl">
+            <button
+              className="rounded border border-zinc-700 px-2 py-0.5 text-zinc-300 hover:border-accent hover:text-accent"
+              onClick={(e) => {
+                e.stopPropagation();
+                exitSubgraph();
+              }}
+            >
+              Back
+            </button>
+            <span className="text-zinc-500">Inside</span>
+            <span className="max-w-64 truncate text-zinc-200">{activeParentNode.title}</span>
+          </div>
+        ) : null}
         <Background color="#1f2330" gap={20} />
         <Controls className="!bg-panel !border-none" />
         <MiniMap
@@ -500,6 +552,17 @@ export default function Canvas() {
               disabled={runningId !== null}
             >
               ✦ Generate Nodes
+            </button>
+          ) : null}
+          {contextMenuCanEnter ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                enterSubgraph(menu.nodeId);
+                closeMenu();
+              }}
+            >
+              Enter Subgraph
             </button>
           ) : null}
           {contextMenuCanGenerateModuleGraph ? (
@@ -590,11 +653,11 @@ export default function Canvas() {
               className="block w-full text-left px-3 py-1 hover:bg-canvas"
               onClick={() => {
                 const pos = screenToFlowPosition({ x: paneMenu.x, y: paneMenu.y });
-                addNode(nt, pos);
+                addNode(nt === "planning" ? "workflow_graph" : nt, pos);
                 setPaneMenu(null);
               }}
             >
-              + {nt}
+              + {nodeTypeLabel(nt)}
             </button>
           ))}
         </div>

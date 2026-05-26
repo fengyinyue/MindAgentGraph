@@ -92,6 +92,12 @@ function summarizeNodeForExpand(node: NodeBase) {
   };
 }
 
+function graphKindForNode(node: NodeBase): "workflow" | "structure" | null {
+  if (node.type === "workflow_graph" || node.type === "planning") return "workflow";
+  if (node.type === "structure_graph") return "structure";
+  return null;
+}
+
 type ExpandedNode = ExpandPlanResult["nodes"][number];
 type ExpandedLink = ExpandPlanResult["links"][number];
 
@@ -104,9 +110,9 @@ function hasExplicitDataPorts(node: ExpandedNode): boolean {
 function isDataflowExpansion(nodes: ExpandedNode[], links: ExpandedLink[]): boolean {
   return nodes.some((node) =>
     hasExplicitDataPorts(node) ||
-    node.title.includes("PCG:") ||
     node.title.startsWith("Input:") ||
-    node.title.startsWith("Output:"),
+    node.title.startsWith("Output:") ||
+    node.title.startsWith("Transform:"),
   ) || links.some((link) => Boolean(link.sourceHandle || link.targetHandle));
 }
 
@@ -114,6 +120,7 @@ function layoutExpandedNodes(
   nodes: ExpandedNode[],
   links: ExpandedLink[],
   origin: { x: number; y: number },
+  direction: "horizontal" | "auto" = "auto",
 ): Map<string, { x: number; y: number }> {
   const ids = new Set(nodes.map((node) => node.id));
   const incoming = new Map(nodes.map((node) => [node.id, 0]));
@@ -143,9 +150,9 @@ function layoutExpandedNodes(
     }
   }
 
-  const dataflow = isDataflowExpansion(nodes, links);
-  const rankGap = dataflow ? 340 : 280;
-  const rowGap = dataflow ? 170 : 180;
+  const horizontal = direction === "horizontal" || isDataflowExpansion(nodes, links);
+  const rankGap = horizontal ? 340 : 280;
+  const rowGap = horizontal ? 170 : 180;
   const byRank = new Map<number, ExpandedNode[]>();
 
   for (const node of nodes) {
@@ -158,7 +165,7 @@ function layoutExpandedNodes(
     const ordered = [...rankNodes].sort((a, b) => a.y - b.y || a.x - b.x || a.title.localeCompare(b.title));
     const centerOffset = ((ordered.length - 1) * rowGap) / 2;
     ordered.forEach((node, index) => {
-      if (dataflow) {
+      if (horizontal) {
         positions.set(node.id, {
           x: origin.x + nodeRank * rankGap,
           y: origin.y + index * rowGap - centerOffset,
@@ -718,7 +725,8 @@ export function useRunNode() {
     async (planningNodeId: string): Promise<boolean> => {
       const state = useGraphStore.getState();
       const planningNode = state.nodes.find((n) => n.id === planningNodeId);
-      if (!planningNode || planningNode.type !== "planning") return false;
+      const graphKind = planningNode ? graphKindForNode(planningNode) : null;
+      if (!planningNode || !graphKind) return false;
       if (useRunState.getState().runningId) return false;
 
       const planText = outputText(planningNode).trim();
@@ -759,6 +767,7 @@ export function useRunNode() {
           .map(summarizeNodeForExpand);
         const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, planningNodeId);
         const result = await expandPlan(planText, {
+          graphKind,
           provider,
           model,
           apiKey,
@@ -773,27 +782,33 @@ export function useRunNode() {
         }
 
         const positions = layoutExpandedNodes(result.nodes, result.links, {
-          x: planningNode.position.x,
-          y: planningNode.position.y + 350,
-        });
+          x: graphKind === "workflow" ? planningNode.position.x + 360 : planningNode.position.x,
+          y: graphKind === "workflow" ? planningNode.position.y : planningNode.position.y + 220,
+        }, "horizontal");
+        const isWorkflowExpansion = graphKind === "workflow";
 
         const newNodes: NodeBase[] = result.nodes.map((raw) => ({
           id: idMap.get(raw.id)!,
           type: raw.type as NodeBase["type"],
           title: raw.title,
           position: positions.get(raw.id) ?? {
-            x: planningNode.position.x + raw.x,
-            y: planningNode.position.y + 350 + raw.y,
+            x: graphKind === "workflow"
+              ? planningNode.position.x + 360 + raw.x
+              : planningNode.position.x + raw.x,
+            y: graphKind === "workflow"
+              ? planningNode.position.y + raw.y
+              : planningNode.position.y + 350 + raw.y,
           },
           contextMode: raw.type === "project_scan" ? "isolated" as const : "inherit" as const,
           fileScope: { allow: [], deny: [] },
           toolPolicy: { tools: [], deny: [] },
           memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
+          parentId: graphKind === "structure" ? planningNode.id : planningNode.parentId,
           purpose: raw.purpose ?? "",
           data: {
             purpose: raw.purpose ?? "",
-            inputs: raw.inputs ?? [],
-            outputs: raw.outputs ?? [],
+            inputs: isWorkflowExpansion ? [] : raw.inputs ?? [],
+            outputs: isWorkflowExpansion ? [] : raw.outputs ?? [],
           },
           runHistory: [],
           resourceRefs: [],
@@ -804,20 +819,22 @@ export function useRunNode() {
           id: crypto.randomUUID(),
           source: idMap.get(raw.source) ?? raw.source,
           target: idMap.get(raw.target) ?? raw.target,
-          sourceHandle: raw.sourceHandle,
-          targetHandle: raw.targetHandle,
+          sourceHandle: isWorkflowExpansion ? undefined : raw.sourceHandle,
+          targetHandle: isWorkflowExpansion ? undefined : raw.targetHandle,
           label: raw.label,
         }));
 
         // Find root nodes (no incoming edges from other new nodes) and connect planning → root
-        const newTargets = new Set(newEdges.map((e) => e.target));
-        const roots = newNodes.filter((n) => !newTargets.has(n.id));
-        for (const root of roots) {
-          newEdges.push({
-            id: crypto.randomUUID(),
-            source: planningNodeId,
-            target: root.id,
-          });
+        if (graphKind === "workflow") {
+          const newTargets = new Set(newEdges.map((e) => e.target));
+          const roots = newNodes.filter((n) => !newTargets.has(n.id));
+          for (const root of roots) {
+            newEdges.push({
+              id: crypto.randomUUID(),
+              source: planningNodeId,
+              target: root.id,
+            });
+          }
         }
 
         const currentState = useGraphStore.getState();

@@ -8,8 +8,8 @@ from app.services.planner import expand_plan
 from app.services.providers.base import ProviderError
 
 
-class FakePcgProvider:
-    name = "fake-pcg"
+class FakeStructureProvider:
+    name = "fake-structure"
 
     def __init__(self, payload: dict[str, Any]) -> None:
         self.payload = payload
@@ -34,7 +34,7 @@ class FakePcgProvider:
         return self.payload
 
 
-def valid_pcg_payload() -> dict[str, Any]:
+def valid_structure_payload() -> dict[str, Any]:
     return {
         "nodes": [
             {
@@ -50,7 +50,7 @@ def valid_pcg_payload() -> dict[str, Any]:
             {
                 "id": "spline_to_bounds",
                 "type": "code",
-                "title": "PCG: Spline To Bounds",
+                "title": "Transform: Spline To Bounds",
                 "x": 320,
                 "y": 0,
                 "purpose": "Convert the bounds spline into polygon bounds.",
@@ -60,7 +60,7 @@ def valid_pcg_payload() -> dict[str, Any]:
             {
                 "id": "generate_grid_seeds",
                 "type": "code",
-                "title": "PCG: Generate Grid Seeds",
+                "title": "Transform: Generate Grid Seeds",
                 "x": 640,
                 "y": 0,
                 "purpose": "Generate candidate road points inside the bounds.",
@@ -73,7 +73,7 @@ def valid_pcg_payload() -> dict[str, Any]:
                 "title": "Debug: Preview",
                 "x": 960,
                 "y": 0,
-                "purpose": "Preview the generated PCG points.",
+                "purpose": "Preview the generated points.",
                 "inputs": [{"id": "grid_seeds", "name": "Grid Seeds", "type": "point"}],
                 "outputs": [{"id": "debug_preview", "name": "Debug Preview", "type": "debug"}],
             },
@@ -104,25 +104,27 @@ def valid_pcg_payload() -> dict[str, Any]:
     }
 
 
-def test_expand_plan_generates_pcg_graph_with_ai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
-    fake = FakePcgProvider(valid_pcg_payload())
-    monkeypatch.setitem(planner._PROVIDERS, "fake-pcg", fake)
+def test_expand_plan_generates_structure_graph_with_ai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeStructureProvider(valid_structure_payload())
+    monkeypatch.setitem(planner._PROVIDERS, "fake-structure", fake)
 
     result = asyncio.run(
         expand_plan(
             """
-            Use PCG to generate city road points inside a bounds spline.
-            The graph should decide the needed PCG nodes and connect data ports.
+            Generate city road points inside a bounds spline.
+            The graph should decide the needed structure nodes and connect data ports.
             """,
-            provider="fake-pcg",
+            graph_kind="structure",
+            provider="fake-structure",
             model="test-model",
             api_key="test-key",
         )
     )
 
     assert len(fake.calls) == 1
-    assert fake.calls[0]["system_prompt"] == planner.PCG_EXPAND_SYSTEM
-    assert "Controlled PCG node library" in fake.calls[0]["system_prompt"]
+    assert fake.calls[0]["system_prompt"] == planner.STRUCTURE_GRAPH_EXPAND_SYSTEM
+    assert "Structure graph rules" in fake.calls[0]["system_prompt"]
+    assert "Controlled PCG node library" not in fake.calls[0]["system_prompt"]
     assert fake.calls[0]["model"] == "test-model"
     assert fake.calls[0]["api_key"] == "test-key"
     assert [node["id"] for node in result["nodes"]] == [
@@ -153,53 +155,128 @@ def test_expand_plan_generates_pcg_graph_with_ai_provider(monkeypatch: pytest.Mo
         assert link["label"]
 
 
-def test_expand_plan_pcg_unknown_provider_raises() -> None:
+def test_expand_plan_workflow_uses_plain_expand_system(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeStructureProvider({"nodes": [], "links": []})
+    monkeypatch.setitem(planner._PROVIDERS, "fake-workflow", fake)
+
+    asyncio.run(
+        expand_plan(
+            "Generate a road network from a bounds spline.",
+            provider="fake-workflow",
+        )
+    )
+
+    assert fake.calls[0]["system_prompt"] == planner.EXPAND_SYSTEM
+
+
+def test_expand_plan_workflow_strips_port_graph_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeStructureProvider({
+        "nodes": [
+            {
+                "id": "design_structure",
+                "type": "planning",
+                "title": "Design Structure",
+                "x": 0,
+                "y": 0,
+                "purpose": "Create a high-level structure step.",
+                "inputs": [{"id": "asset_in", "name": "Asset In", "type": "asset"}],
+                "outputs": [{"id": "graph_out", "name": "Graph Out", "type": "graph"}],
+            },
+            {
+                "id": "implement",
+                "type": "code",
+                "title": "Implement",
+                "x": 320,
+                "y": 0,
+                "purpose": "Implement from the structure.",
+                "inputs": [{"id": "graph_out", "name": "Graph Out", "type": "graph"}],
+                "outputs": [{"id": "code_out", "name": "Code Out", "type": "asset"}],
+            },
+        ],
+        "links": [
+            {
+                "source": "design_structure",
+                "sourceHandle": "graph_out",
+                "target": "implement",
+                "targetHandle": "graph_out",
+                "label": "Structure",
+            },
+        ],
+    })
+    monkeypatch.setitem(planner._PROVIDERS, "fake-workflow", fake)
+
+    result = asyncio.run(
+        expand_plan(
+            "Design a character asset import workflow.",
+            graph_kind="workflow",
+            provider="fake-workflow",
+        )
+    )
+
+    assert result["nodes"][0]["type"] == "workflow_graph"
+    assert all(node["inputs"] == [] and node["outputs"] == [] for node in result["nodes"])
+    assert "sourceHandle" not in result["links"][0]
+    assert "targetHandle" not in result["links"][0]
+    assert result["links"][0]["label"] == "Structure"
+
+
+def test_offline_demo_uses_workflow_graph() -> None:
+    graph = planner._offline_demo("Build a demo")
+
+    assert graph.nodes[0].type == "workflow_graph"
+
+
+def test_expand_plan_structure_unknown_provider_raises() -> None:
     with pytest.raises(ProviderError, match="unknown provider"):
         asyncio.run(
             expand_plan(
-                "Use PCG to generate a road network from a bounds spline.",
+                "Generate a road network from a bounds spline.",
+                graph_kind="structure",
                 provider="missing-provider",
             )
         )
 
 
-def test_expand_plan_pcg_rejects_missing_link_handles(monkeypatch: pytest.MonkeyPatch) -> None:
-    payload = valid_pcg_payload()
+def test_expand_plan_structure_rejects_missing_link_handles(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = valid_structure_payload()
     del payload["links"][0]["sourceHandle"]
-    monkeypatch.setitem(planner._PROVIDERS, "fake-pcg", FakePcgProvider(payload))
+    monkeypatch.setitem(planner._PROVIDERS, "fake-structure", FakeStructureProvider(payload))
 
     with pytest.raises(ProviderError, match="sourceHandle"):
         asyncio.run(
             expand_plan(
-                "Use PCG to generate a road network from a bounds spline.",
-                provider="fake-pcg",
+                "Generate a road network from a bounds spline.",
+                graph_kind="structure",
+                provider="fake-structure",
             )
         )
 
 
-def test_expand_plan_pcg_rejects_link_handle_that_does_not_match_port(monkeypatch: pytest.MonkeyPatch) -> None:
-    payload = valid_pcg_payload()
+def test_expand_plan_structure_rejects_link_handle_that_does_not_match_port(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = valid_structure_payload()
     payload["links"][0]["targetHandle"] = "missing_port"
-    monkeypatch.setitem(planner._PROVIDERS, "fake-pcg", FakePcgProvider(payload))
+    monkeypatch.setitem(planner._PROVIDERS, "fake-structure", FakeStructureProvider(payload))
 
     with pytest.raises(ProviderError, match="targetHandle"):
         asyncio.run(
             expand_plan(
-                "Use PCG to generate a road network from a bounds spline.",
-                provider="fake-pcg",
+                "Generate a road network from a bounds spline.",
+                graph_kind="structure",
+                provider="fake-structure",
             )
         )
 
 
-def test_expand_plan_pcg_rejects_semantic_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
-    payload = valid_pcg_payload()
+def test_expand_plan_structure_rejects_semantic_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = valid_structure_payload()
     payload["nodes"][1]["type"] = "semantic"
-    monkeypatch.setitem(planner._PROVIDERS, "fake-pcg", FakePcgProvider(payload))
+    monkeypatch.setitem(planner._PROVIDERS, "fake-structure", FakeStructureProvider(payload))
 
     with pytest.raises(ProviderError, match="semantic"):
         asyncio.run(
             expand_plan(
-                "Use PCG to generate a road network from a bounds spline.",
-                provider="fake-pcg",
+                "Generate a road network from a bounds spline.",
+                graph_kind="structure",
+                provider="fake-structure",
             )
         )

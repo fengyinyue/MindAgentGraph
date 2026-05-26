@@ -2,11 +2,11 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 NodeType = Literal[
-    "prompt", "planning", "memory", "filescope",
+    "prompt", "planning", "workflow_graph", "structure_graph", "memory", "filescope",
     "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
-ProviderName = Literal["anthropic", "deepseek", "local-claude", "local-codex"]
+ProviderName = Literal["anthropic", "deepseek", "openai", "local-claude", "local-codex"]
 
 
 class Position(BaseModel):
@@ -50,6 +50,7 @@ class Node(BaseModel):
     toolPolicy: ToolPolicy = Field(default_factory=ToolPolicy)
     memoryRef: Optional[str] = None
     systemPrompt: Optional[str] = None
+    parentId: Optional[str] = None
     data: dict[str, Any] = Field(default_factory=dict)
     summary: Optional[str] = None
     purpose: Optional[str] = None
@@ -155,6 +156,7 @@ class ExpandNodeSummary(BaseModel):
 
 class ExpandPlanRequest(BaseModel):
     plan_text: str
+    graph_kind: Literal["workflow", "structure"] = "workflow"
     existing_nodes: list[ExpandNodeSummary] = Field(default_factory=list)
     upstream_outputs: dict[str, str] = Field(default_factory=dict)
     provider: Optional[ProviderName] = None
