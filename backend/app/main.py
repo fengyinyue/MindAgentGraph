@@ -33,8 +33,9 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ExpandModulesRequest, ProjectScanRequest, ProjectScanResult
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ExpandModulesRequest, ProjectScanRequest, ProjectScanResult, GraphEditRequest, GraphEditResult
 from app.services.planner import expand_plan, expand_modules, plan_graph
+from app.services.graph_chat import edit_graph_with_chat
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_claude_run, run_node_with_claude
@@ -48,6 +49,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:1420", "http://127.0.0.1:1420",
+        "http://localhost:1421", "http://127.0.0.1:1421",
         "http://localhost:5173", "http://127.0.0.1:5173",
         "tauri://localhost", "http://tauri.localhost",
     ],
@@ -105,6 +107,21 @@ async def code_analysis_expand_modules(
         req.analysis_text,
         existing_nodes=[node.model_dump() for node in req.existing_nodes],
         upstream_outputs=req.upstream_outputs,
+        provider=req.provider,
+        model=req.model,
+        api_key=x_provider_key,
+    )
+
+
+@app.post("/chat/graph-edit", response_model=GraphEditResult)
+async def chat_graph_edit(
+    req: GraphEditRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+) -> GraphEditResult:
+    return await edit_graph_with_chat(
+        message=req.message,
+        graph=req.graph,
+        active_parent_id=req.activeParentId,
         provider=req.provider,
         model=req.model,
         api_key=x_provider_key,

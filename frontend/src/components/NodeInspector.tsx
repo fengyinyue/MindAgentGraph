@@ -16,7 +16,9 @@ function nodeTypeLabel(type: NodeType): string {
   return type;
 }
 
-export default function NodeInspector() {
+export type InspectorView = "props" | "output" | "scope";
+
+export default function NodeInspector({ view = "props" }: { view?: InspectorView } = {}) {
   const selectedId = useGraphStore((s) => s.selectedNodeId);
   const node = useGraphStore((s) =>
     s.nodes.find((n) => n.id === selectedId),
@@ -69,22 +71,22 @@ export default function NodeInspector() {
     });
   };
 
-  return (
-    <div className="flex flex-col h-full text-sm">
-      <div className="p-4 space-y-3 border-b border-zinc-800">
-        <div>
-          <div className="text-xs text-zinc-500 uppercase">Title</div>
-          <input
-            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-sm outline-none focus:border-accent"
-            value={node.title}
-            onChange={(e) => updateNode(node.id, { title: e.target.value })}
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <div className="text-xs text-zinc-500 uppercase">Type</div>
+  if (view === "props") {
+    return (
+      <div className="flex flex-col h-full text-sm overflow-y-auto">
+        <div className="p-3 grid grid-cols-12 gap-x-3 gap-y-2">
+          <div className="col-span-4 min-w-0">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Title</div>
+            <input
+              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent"
+              value={node.title}
+              onChange={(e) => updateNode(node.id, { title: e.target.value })}
+            />
+          </div>
+          <div className="col-span-2 min-w-0">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Type</div>
             <select
-              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-sm outline-none focus:border-accent"
+              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-xs outline-none focus:border-accent"
               value={node.type}
               onChange={(e) => updateNode(node.id, { type: e.target.value as NodeType })}
             >
@@ -93,110 +95,119 @@ export default function NodeInspector() {
               ))}
             </select>
           </div>
-          <div>
-            <div className="text-xs text-zinc-500 uppercase">Context</div>
+          <div className="col-span-2 min-w-0">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Context</div>
             <select
-              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-sm outline-none focus:border-accent"
+              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-xs outline-none focus:border-accent"
               value={node.contextMode}
               onChange={(e) => updateNode(node.id, { contextMode: e.target.value as "inherit" | "explicit" | "isolated" })}
+              title={contextHint(node.contextMode)}
             >
               <option value="inherit">inherit</option>
               <option value="explicit">explicit</option>
               <option value="isolated">isolated</option>
             </select>
-            <div className="mt-1 text-[11px] text-zinc-600 leading-snug">
+          </div>
+          <div className="col-span-4 min-w-0">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Memory Ref</div>
+            <input
+              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent font-mono"
+              value={memoryRef}
+              placeholder="architecture.md"
+              onChange={(e) => updateNode(node.id, { memoryRef: e.target.value || undefined })}
+            />
+          </div>
+
+          <div className="col-span-6 min-w-0">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Purpose / Node Prompt</div>
+            <textarea
+              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-14"
+              rows={3}
+              value={purpose}
+              placeholder="这个节点自己的任务说明"
+              onChange={(e) => {
+                updateNode(node.id, { purpose: e.target.value });
+                useGraphStore.getState().patchNodeData(node.id, { purpose: e.target.value });
+              }}
+            />
+          </div>
+          <div className="col-span-6 min-w-0">
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">System Prompt</div>
+            <textarea
+              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-14"
+              rows={3}
+              value={systemPrompt}
+              placeholder="留空则使用全局默认节点助手 prompt"
+              onChange={(e) => updateNode(node.id, { systemPrompt: e.target.value })}
+            />
+          </div>
+
+          <div className="col-span-12 flex flex-wrap gap-2 pt-1 border-t border-zinc-800/60">
+            {isRunning ? (
+              <button className="px-3 py-1 bg-red-700 rounded text-xs" onClick={cancel}>
+                ■ Cancel
+              </button>
+            ) : (
+              <>
+                <button
+                  className="px-3 py-1 bg-accent rounded text-xs disabled:opacity-50"
+                  onClick={() => run(node.id)}
+                  disabled={runningId !== null || ((isProjectScanNode || isCodeAnalysisNode) && !projectDir)}
+                  title={(isProjectScanNode || isCodeAnalysisNode) && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
+                >
+                  {isProjectScanNode ? "⌕ Scan Project" : isCodeAnalysisNode ? "◇ Analyze Code" : "▶ Explain"}
+                </button>
+                {canGenerateNodes ? (
+                  <button
+                    className="px-3 py-1 bg-purple-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => expandPlanNodes(node.id)}
+                    disabled={runningId !== null}
+                  >
+                    ✦ Generate Nodes
+                  </button>
+                ) : null}
+                {canGenerateModuleGraph ? (
+                  <button
+                    className="px-3 py-1 bg-cyan-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => expandModuleGraph(node.id)}
+                    disabled={runningId !== null}
+                  >
+                    ⬡ Module Graph
+                  </button>
+                ) : null}
+                {isStructureGraphNode ? (
+                  <button
+                    className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => enterSubgraph(node.id)}
+                    disabled={runningId !== null}
+                  >
+                    Enter
+                  </button>
+                ) : null}
+                {isCodeNode ? (
+                  <button
+                    className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => runCode(node.id)}
+                    disabled={runningId !== null || !projectDir}
+                    title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "Claude Code 生成代码"}
+                  >
+                    ⚡ Code
+                  </button>
+                ) : null}
+              </>
+            )}
+            <span className="ml-auto text-[10px] text-zinc-600 self-center">
               {contextHint(node.contextMode)}
-            </div>
+            </span>
           </div>
         </div>
-        <div>
-          <div className="text-xs text-zinc-500 uppercase">Purpose / Node Prompt</div>
-          <textarea
-            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16"
-            value={purpose}
-            placeholder="这个节点自己的任务说明"
-            onChange={(e) => {
-              updateNode(node.id, { purpose: e.target.value });
-              useGraphStore.getState().patchNodeData(node.id, { purpose: e.target.value });
-            }}
-          />
-        </div>
-        <div>
-          <div className="text-xs text-zinc-500 uppercase">System Prompt</div>
-          <textarea
-            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16"
-            value={systemPrompt}
-            placeholder="留空则使用全局默认节点助手 prompt"
-            onChange={(e) => updateNode(node.id, { systemPrompt: e.target.value })}
-          />
-        </div>
-        <div>
-          <div className="text-xs text-zinc-500 uppercase">Memory Ref</div>
-          <input
-            className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent font-mono"
-            value={memoryRef}
-            placeholder="architecture.md"
-            onChange={(e) => updateNode(node.id, { memoryRef: e.target.value || undefined })}
-          />
-        </div>
-        <div className="flex gap-2 pt-1">
-          {isRunning ? (
-            <button className="px-3 py-1.5 bg-red-700 rounded text-xs" onClick={cancel}>
-              ■ Cancel
-            </button>
-          ) : (
-            <>
-              <button
-                className="px-3 py-1.5 bg-accent rounded text-xs disabled:opacity-50"
-                onClick={() => run(node.id)}
-                disabled={runningId !== null || ((isProjectScanNode || isCodeAnalysisNode) && !projectDir)}
-                title={(isProjectScanNode || isCodeAnalysisNode) && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
-              >
-                {isProjectScanNode ? "⌕ Scan Project" : isCodeAnalysisNode ? "◇ Analyze Code" : "▶ Explain"}
-              </button>
-              {canGenerateNodes ? (
-                <button
-                  className="px-3 py-1.5 bg-purple-700 rounded text-xs disabled:opacity-50"
-                  onClick={() => expandPlanNodes(node.id)}
-                  disabled={runningId !== null}
-                >
-                  ✦ Generate Nodes
-                </button>
-              ) : null}
-              {canGenerateModuleGraph ? (
-                <button
-                  className="px-3 py-1.5 bg-cyan-700 rounded text-xs disabled:opacity-50"
-                  onClick={() => expandModuleGraph(node.id)}
-                  disabled={runningId !== null}
-                >
-                  ⬡ Module Graph
-                </button>
-              ) : null}
-              {isStructureGraphNode ? (
-                <button
-                  className="px-3 py-1.5 bg-teal-700 rounded text-xs disabled:opacity-50"
-                  onClick={() => enterSubgraph(node.id)}
-                  disabled={runningId !== null}
-                >
-                  Enter
-                </button>
-              ) : null}
-              {isCodeNode ? (
-                <button
-                  className="px-3 py-1.5 bg-emerald-700 rounded text-xs disabled:opacity-50"
-                  onClick={() => runCode(node.id)}
-                  disabled={runningId !== null || !projectDir}
-                  title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "Claude Code 生成代码"}
-                >
-                  ⚡ Code
-                </button>
-              ) : null}
-            </>
-          )}
-        </div>
       </div>
+    );
+  }
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+  if (view === "output") {
+    return (
+      <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 h-full text-sm">
         {/* Code output */}
         {codeOutput ? (
           <div>
@@ -342,42 +353,46 @@ export default function NodeInspector() {
             )
           )}
         </div>
+      </div>
+    );
+  }
 
-        <details className="text-xs" open>
-          <summary className="text-zinc-500 cursor-pointer select-none">
-            File Scope / Data
-          </summary>
-          <div className="mt-2 space-y-2">
-            <div>
-              <div className="text-zinc-500 mb-1">Allow (glob, comma-separated)</div>
-              <input
-                className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 text-xs outline-none focus:border-accent font-mono"
-                placeholder="src/**, lib/**"
-                value={(node.fileScope?.allow ?? []).join(", ")}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const allow = val ? val.split(",").map((s) => s.trim()).filter(Boolean) : [];
-                  updateNode(node.id, { fileScope: { ...node.fileScope, allow } });
-                }}
-              />
-            </div>
-            <div>
-              <div className="text-zinc-500 mb-1">Deny (glob)</div>
-              <input
-                className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 text-xs outline-none focus:border-accent font-mono"
-                placeholder="vendor/**, *.secret"
-                value={(node.fileScope?.deny ?? []).join(", ")}
-                onChange={(e) => {
-                  const val = e.target.value;
-                  const deny = val ? val.split(",").map((s) => s.trim()).filter(Boolean) : [];
-                  updateNode(node.id, { fileScope: { ...node.fileScope, deny } });
-                }}
-              />
-            </div>
-            <pre className="bg-canvas p-2 rounded overflow-auto text-[11px]">
-{JSON.stringify({ data: node.data }, null, 2)}
-            </pre>
+  if (view === "scope") {
+    return (
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 h-full text-sm">
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Allow (glob, comma-separated)</div>
+            <input
+              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent font-mono"
+              placeholder="src/**, lib/**"
+              value={(node.fileScope?.allow ?? []).join(", ")}
+              onChange={(e) => {
+                const val = e.target.value;
+                const allow = val ? val.split(",").map((s) => s.trim()).filter(Boolean) : [];
+                updateNode(node.id, { fileScope: { ...node.fileScope, allow } });
+              }}
+            />
           </div>
+          <div>
+            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Deny (glob)</div>
+            <input
+              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent font-mono"
+              placeholder="vendor/**, *.secret"
+              value={(node.fileScope?.deny ?? []).join(", ")}
+              onChange={(e) => {
+                const val = e.target.value;
+                const deny = val ? val.split(",").map((s) => s.trim()).filter(Boolean) : [];
+                updateNode(node.id, { fileScope: { ...node.fileScope, deny } });
+              }}
+            />
+          </div>
+        </div>
+        <details className="text-xs">
+          <summary className="text-zinc-500 cursor-pointer select-none">Raw Data</summary>
+          <pre className="mt-2 bg-canvas p-2 rounded overflow-auto text-[11px]">
+{JSON.stringify({ data: node.data }, null, 2)}
+          </pre>
         </details>
 
         {node.runHistory && node.runHistory.length > 0 ? (
@@ -398,8 +413,10 @@ export default function NodeInspector() {
           </details>
         ) : null}
       </div>
-    </div>
-  );
+    );
+  }
+
+  return null;
 }
 
 function getConfirmationRequest(value: unknown): ConfirmationRequest | null {

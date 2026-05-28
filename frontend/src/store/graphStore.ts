@@ -17,9 +17,11 @@ interface GraphState {
   setGraph: (graph: Graph) => void;
   setProjectMeta: (meta: ProjectMeta | null) => void;
   addNode: (node: NodeBase) => void;
+  addLink: (link: Edge) => void;
   updateNode: (id: string, patch: Partial<NodeBase>) => void;
   patchNodeData: (id: string, dataPatch: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
+  removeLink: (id: string) => void;
   selectNode: (id: string | null) => void;
   enterSubgraph: (id: string) => void;
   exitSubgraph: () => void;
@@ -56,6 +58,7 @@ export const useGraphStore = create<GraphState>((set) => ({
   }),
   setProjectMeta: (meta) => set({ projectMeta: meta }),
   addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
+  addLink: (link) => set((s) => ({ links: [...s.links, link] })),
   updateNode: (id, patch) =>
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
@@ -76,6 +79,7 @@ export const useGraphStore = create<GraphState>((set) => ({
       selectedNodeId: s.selectedNodeId === id ? null : s.selectedNodeId,
       activeParentId: s.activeParentId === id ? null : s.activeParentId,
     })),
+  removeLink: (id) => set((s) => ({ links: s.links.filter((e) => e.id !== id) })),
   selectNode: (id) => set({ selectedNodeId: id }),
   enterSubgraph: (id) => set({ activeParentId: id, selectedNodeId: null }),
   exitSubgraph: () => set({ activeParentId: null, selectedNodeId: null }),

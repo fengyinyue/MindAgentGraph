@@ -1,41 +1,9 @@
 import { useMonitorStore } from "@/store/monitorStore";
 import type { ReactNode } from "react";
 
-type Tab = "logs" | "errors" | "tokens" | "progress";
+export type MonitorTab = "logs" | "errors" | "tokens" | "progress";
 
-interface Props {
-  activeTab: Tab;
-  onTabChange: (tab: Tab) => void;
-}
-
-const tabs: { key: Tab; label: string }[] = [
-  { key: "logs", label: "AI 日志" },
-  { key: "errors", label: "错误" },
-  { key: "tokens", label: "Token" },
-  { key: "progress", label: "进度" },
-];
-
-export function BottomMonitorTabs({ activeTab, onTabChange }: Props) {
-  return (
-    <>
-      {tabs.map((t) => (
-        <button
-          key={t.key}
-          className={`px-2 py-0.5 rounded ${
-            activeTab === t.key
-              ? "bg-accent/20 text-accent"
-              : "text-zinc-500 hover:text-zinc-300"
-          }`}
-          onClick={() => onTabChange(t.key)}
-        >
-          {t.label}
-        </button>
-      ))}
-    </>
-  );
-}
-
-export default function BottomMonitor({ activeTab }: { activeTab: Tab }) {
+export default function BottomMonitor({ activeTab }: { activeTab: MonitorTab }) {
   const logs = useMonitorStore((s) => s.logs);
   const tokenUsages = useMonitorStore((s) => s.tokenUsages);
   const dagProgress = useMonitorStore((s) => s.dagProgress);

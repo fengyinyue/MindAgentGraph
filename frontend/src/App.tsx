@@ -3,7 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import Canvas from "./components/Canvas";
 import PlanInput from "./components/PlanInput";
-import NodeInspector from "./components/NodeInspector";
+import ChatBox from "./components/ChatBox";
 import Toolbar from "./components/Toolbar";
 import LeftPanel from "./components/LeftPanel";
 import BottomPanel from "./components/BottomPanel";
@@ -34,6 +34,7 @@ export default function App() {
   const [backendReady, setBackendReady] = useState(false);
   const leftOpen = usePanelStore((s) => s.leftOpen);
   const bottomOpen = usePanelStore((s) => s.bottomOpen);
+  const rightOpen = usePanelStore((s) => s.rightOpen);
 
   useEffect(() => {
     let cancelled = false;
@@ -105,16 +106,16 @@ export default function App() {
         <Separator className="w-1.5 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
 
         <Panel
-          defaultSize="360px"
-          minSize="300px"
-          maxSize="720px"
+          key={`right-${rightOpen ? "open" : "closed"}`}
+          defaultSize={rightOpen ? "360px" : "32px"}
+          minSize={rightOpen ? "280px" : "32px"}
+          maxSize={rightOpen ? "720px" : "32px"}
+          disabled={!rightOpen}
           groupResizeBehavior="preserve-pixel-size"
         >
-          <div className="bg-panel border-l border-zinc-800 overflow-hidden h-full">
-            <ErrorBoundary>
-              <NodeInspector />
-            </ErrorBoundary>
-          </div>
+          <ErrorBoundary>
+            <ChatBox />
+          </ErrorBoundary>
         </Panel>
       </Group>
       <OutputViewer />

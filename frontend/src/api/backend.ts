@@ -435,6 +435,69 @@ export async function expandModules(
   return res.json();
 }
 
+export interface GraphEditResult {
+  reply: string;
+  createNodes: Array<{
+    clientId?: string;
+    type?: string;
+    title?: string;
+    purpose?: string;
+    summary?: string;
+    x?: number;
+    y?: number;
+    data?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }>;
+  updateNodes: Array<{
+    id: string;
+    type?: string;
+    title?: string;
+    purpose?: string;
+    summary?: string;
+    data?: Record<string, unknown>;
+    metadata?: Record<string, unknown>;
+  }>;
+  deleteNodeIds: string[];
+  createLinks: Array<{
+    source: string;
+    target: string;
+    label?: string;
+    sourceHandle?: string;
+    targetHandle?: string;
+  }>;
+  deleteLinkIds: string[];
+}
+
+export async function editGraphWithChat(
+  message: string,
+  opts: {
+    graph: Graph;
+    activeParentId?: string | null;
+    provider?: Provider;
+    model?: string;
+    apiKey?: string;
+  },
+): Promise<GraphEditResult> {
+  const url = await getBackendUrl();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.apiKey) headers["X-Provider-Key"] = opts.apiKey;
+  const res = await fetch(`${url}/chat/graph-edit`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      message,
+      graph: opts.graph,
+      activeParentId: opts.activeParentId ?? null,
+      provider: opts.provider,
+      model: opts.model,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`/chat/graph-edit failed: ${res.status} ${await res.text()}`);
+  }
+  return res.json();
+}
+
 export async function cancelCodeRun(runId: string): Promise<boolean> {
   const url = await getBackendUrl();
   const res = await fetch(`${url}/run/node/code/cancel`, {

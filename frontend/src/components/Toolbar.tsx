@@ -27,8 +27,10 @@ export default function Toolbar() {
   const { runDag, runningId } = useRunNode();
   const toggleLeftPanel = usePanelStore((s) => s.toggleLeft);
   const toggleBottomPanel = usePanelStore((s) => s.toggleBottom);
+  const toggleRightPanel = usePanelStore((s) => s.toggleRight);
   const leftOpen = usePanelStore((s) => s.leftOpen);
   const bottomOpen = usePanelStore((s) => s.bottomOpen);
+  const rightOpen = usePanelStore((s) => s.rightOpen);
 
   const buildProjectMeta = (path: string): ProjectMeta => {
     const now = new Date().toISOString();
@@ -173,6 +175,13 @@ export default function Toolbar() {
           title={bottomOpen ? "折叠底部面板" : "展开底部面板"}
         >
           ⬡
+        </button>
+        <button
+          className={`${iconButton} ${rightOpen ? "border-accent/60 text-accent" : "text-zinc-500"}`}
+          onClick={toggleRightPanel}
+          title={rightOpen ? "折叠 AI 助手" : "展开 AI 助手"}
+        >
+          💬
         </button>
         <button
           className={`${iconButton} ml-1 text-base`}

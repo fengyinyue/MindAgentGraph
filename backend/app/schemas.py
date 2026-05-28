@@ -171,6 +171,23 @@ class ExpandModulesRequest(BaseModel):
     model: Optional[str] = None
 
 
+class GraphEditRequest(BaseModel):
+    message: str
+    graph: Graph
+    activeParentId: Optional[str] = None
+    provider: Optional[ProviderName] = None
+    model: Optional[str] = None
+
+
+class GraphEditResult(BaseModel):
+    reply: str
+    createNodes: list[dict[str, Any]] = Field(default_factory=list)
+    updateNodes: list[dict[str, Any]] = Field(default_factory=list)
+    deleteNodeIds: list[str] = Field(default_factory=list)
+    createLinks: list[dict[str, Any]] = Field(default_factory=list)
+    deleteLinkIds: list[str] = Field(default_factory=list)
+
+
 class ProjectScanRequest(BaseModel):
     node: RunNodeInput
     projectDir: str

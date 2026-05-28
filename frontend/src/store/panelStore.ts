@@ -21,7 +21,7 @@ export const usePanelStore = create<PanelState>((set) => ({
   leftWidth: 280,
   rightOpen: true,
   rightWidth: 320,
-  bottomOpen: false,
+  bottomOpen: true,
   bottomHeight: 200,
 
   toggleLeft: () => set((s) => ({ leftOpen: !s.leftOpen })),
