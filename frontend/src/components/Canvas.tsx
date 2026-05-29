@@ -25,12 +25,10 @@ import { NODE_TYPES, type DataPort, type DataPortType, type NodeBase, type NodeT
 const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
   planning: "#9b6cef",
-  workflow_graph: "#9b6cef",
-  structure_graph: "#14b8a6",
+  subgraph: "#14b8a6",
   memory: "#ef9b6c",
   filescope: "#6cefb6",
-  project_scan: "#38bdf8",
-  code_analysis: "#22d3ee",
+  analysis: "#22d3ee",
   code: "#ef6c8e",
   api: "#efef6c",
   asset: "#ef6cef",
@@ -107,11 +105,7 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "plan", name: "Plan", type: "unknown" }],
   },
-  workflow_graph: {
-    inputs: [{ id: "context", name: "Context", type: "unknown" }],
-    outputs: [{ id: "plan", name: "Plan", type: "unknown" }],
-  },
-  structure_graph: {
+  subgraph: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "structure", name: "Structure", type: "graph" }],
   },
@@ -123,11 +117,7 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "file_scope", name: "File Scope", type: "unknown" }],
   },
-  project_scan: {
-    inputs: [{ id: "project", name: "Project", type: "unknown" }],
-    outputs: [{ id: "scan", name: "Scan", type: "unknown" }],
-  },
-  code_analysis: {
+  analysis: {
     inputs: [{ id: "project", name: "Project", type: "unknown" }],
     outputs: [{ id: "analysis", name: "Analysis", type: "unknown" }],
   },
@@ -171,10 +161,9 @@ function isDataPortType(value: unknown): value is DataPortType {
 }
 
 function nodeTypeLabel(type: NodeType): string {
-  if (type === "planning" || type === "workflow_graph") return "Workflow Graph";
-  if (type === "structure_graph") return "Structure Graph";
-  if (type === "project_scan") return "Project Scan";
-  if (type === "code_analysis") return "Code Analysis";
+  if (type === "planning") return "Planning";
+  if (type === "subgraph") return "Subgraph";
+  if (type === "analysis") return "Analysis";
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -367,11 +356,10 @@ export default function Canvas() {
     ? (contextMenuNode.data?.codeOutput as string | undefined) ?? ""
     : "";
   const contextMenuCanExplain = contextMenuNode !== undefined;
-  const contextMenuIsProjectScan = contextMenuNode?.type === "project_scan";
-  const contextMenuIsCodeAnalysis = contextMenuNode?.type === "code_analysis";
-  const contextMenuCanGenerateNodes = (contextMenuNode?.type === "workflow_graph" || contextMenuNode?.type === "structure_graph" || contextMenuNode?.type === "planning") && contextMenuOutput;
-  const contextMenuCanEnter = contextMenuNode?.type === "structure_graph";
-  const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "code_analysis" && contextMenuOutput;
+  const contextMenuIsCodeAnalysis = contextMenuNode?.type === "analysis";
+  const contextMenuCanGenerateNodes = (contextMenuNode?.type === "planning" || contextMenuNode?.type === "subgraph") && contextMenuOutput;
+  const contextMenuCanEnter = contextMenuNode?.type === "subgraph";
+  const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
 
   const decoratedNodes: RFNode[] = useMemo(
@@ -437,7 +425,7 @@ export default function Canvas() {
         type,
         title: nodeTypeLabel(type),
         position,
-        contextMode: type === "project_scan" ? "isolated" : "inherit",
+        contextMode: "inherit",
         fileScope: { allow: [], deny: [] },
         toolPolicy: { tools: [], deny: [] },
         memoryRef: type === "memory" ? `${id}.md` : undefined,
@@ -485,7 +473,7 @@ export default function Canvas() {
         onNodeClick={onNodeClick}
         onNodeDoubleClick={(_, node) => {
           const graphNode = storeNodes.find((item) => item.id === node.id);
-          if (graphNode?.type === "structure_graph") enterSubgraph(graphNode.id);
+          if (graphNode?.type === "subgraph") enterSubgraph(graphNode.id);
         }}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={(e) => {
@@ -536,10 +524,10 @@ export default function Canvas() {
                 run(menu.nodeId);
                 closeMenu();
               }}
-              disabled={runningId !== null || ((contextMenuIsProjectScan || contextMenuIsCodeAnalysis) && !projectDir)}
-              title={(contextMenuIsProjectScan || contextMenuIsCodeAnalysis) && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
+              disabled={runningId !== null || (contextMenuIsCodeAnalysis && !projectDir)}
+              title={contextMenuIsCodeAnalysis && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
             >
-              {contextMenuIsProjectScan ? "⌕ Scan Project" : contextMenuIsCodeAnalysis ? "◇ Analyze Code" : "▶ Explain (AI)"}
+              {contextMenuIsCodeAnalysis ? "◇ Analyze Code" : "▶ Explain (AI)"}
             </button>
           ) : null}
           {contextMenuCanGenerateNodes ? (
@@ -653,7 +641,7 @@ export default function Canvas() {
               className="block w-full text-left px-3 py-1 hover:bg-canvas"
               onClick={() => {
                 const pos = screenToFlowPosition({ x: paneMenu.x, y: paneMenu.y });
-                addNode(nt === "planning" ? "workflow_graph" : nt, pos);
+                addNode(nt, pos);
                 setPaneMenu(null);
               }}
             >

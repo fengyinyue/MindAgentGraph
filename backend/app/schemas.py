@@ -2,8 +2,8 @@ from typing import Any, Literal, Optional
 from pydantic import BaseModel, Field
 
 NodeType = Literal[
-    "prompt", "planning", "workflow_graph", "structure_graph", "memory", "filescope",
-    "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
+    "prompt", "planning", "subgraph", "memory", "filescope",
+    "analysis", "code", "api", "asset", "agent", "task", "semantic",
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
 ProviderName = Literal["anthropic", "deepseek", "openai", "local-claude", "local-codex"]
@@ -171,8 +171,14 @@ class ExpandModulesRequest(BaseModel):
     model: Optional[str] = None
 
 
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
 class GraphEditRequest(BaseModel):
     message: str
+    history: list[ChatMessage] = Field(default_factory=list)
     graph: Graph
     activeParentId: Optional[str] = None
     provider: Optional[ProviderName] = None

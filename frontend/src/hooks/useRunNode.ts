@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { create } from "zustand";
-import { cancelCodeRun, expandModules, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream, scanProject } from "@/api/backend";
+import { cancelCodeRun, expandModules, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream } from "@/api/backend";
 import type { CodeDiffInfo, ExpandPlanResult } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
@@ -93,8 +93,8 @@ function summarizeNodeForExpand(node: NodeBase) {
 }
 
 function graphKindForNode(node: NodeBase): "workflow" | "structure" | null {
-  if (node.type === "workflow_graph" || node.type === "planning") return "workflow";
-  if (node.type === "structure_graph") return "structure";
+  if (node.type === "planning") return "workflow";
+  if (node.type === "subgraph") return "structure";
   return null;
 }
 
@@ -221,85 +221,7 @@ export function useRunNode() {
       if (!node) return false;
       if (useRunState.getState().runningId) return false;
 
-      if (node.type === "project_scan") {
-        const projectDir = state.projectDir;
-        if (!projectDir) {
-          const message = "未设置工程目录，请先在工具栏选择 Project Dir。";
-          state.patchNodeData(nodeId, { error: message, status: "error" });
-          useMonitorStore.getState().addLog({
-            level: "warn",
-            source: "node",
-            status: "SKIPPED",
-            nodeId,
-            nodeTitle: node.title,
-            message,
-          });
-          return false;
-        }
-
-        const runRecordId = crypto.randomUUID();
-        appendRunRecord(node, {
-          id: runRecordId,
-          startedAt: new Date().toISOString(),
-          status: "running",
-          provider: "project-scan",
-        });
-        state.patchNodeData(nodeId, { output: "", error: undefined, status: "running" });
-        state.updateNode(nodeId, { output: "" });
-        useMonitorStore.getState().addLog({
-          level: "info",
-          source: "node",
-          status: "START",
-          nodeId,
-          nodeTitle: node.title,
-          message: `Project scan started (${projectDir})`,
-        });
-        setRunning(nodeId);
-
-        try {
-          const result = await scanProject({
-            node: toRunPayload(node),
-            projectDir,
-            projectPath: state.projectPath,
-            fileScopeAllow: node.fileScope.allow,
-            fileScopeDeny: node.fileScope.deny,
-          });
-          useGraphStore.getState().patchNodeData(nodeId, {
-            output: result.summary,
-            scanResult: result,
-            suggestedFileScope: result.suggestedFileScope,
-            status: "done",
-          });
-          useGraphStore.getState().updateNode(nodeId, { output: result.summary });
-          finishRunRecord(nodeId, runRecordId, { status: "done", finishedAt: new Date().toISOString() });
-          useMonitorStore.getState().addLog({
-            level: "info",
-            source: "node",
-            status: "DONE",
-            nodeId,
-            nodeTitle: node.title,
-            message: `Project scan done (${result.detectedStack.length ? result.detectedStack.join(", ") : "stack unknown"})`,
-          });
-          return true;
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          useGraphStore.getState().patchNodeData(nodeId, { error: message, status: "error" });
-          finishRunRecord(nodeId, runRecordId, { status: "error", finishedAt: new Date().toISOString(), error: message });
-          useMonitorStore.getState().addLog({
-            level: "error",
-            source: "node",
-            status: "ERROR",
-            nodeId,
-            nodeTitle: node.title,
-            message,
-          });
-          return false;
-        } finally {
-          setRunning(null);
-        }
-      }
-
-      if (node.type === "code_analysis") {
+      if (node.type === "analysis") {
         const projectDir = state.projectDir;
         if (!projectDir) {
           const message = "未设置工程目录，请先在工具栏选择 Project Dir。";
@@ -761,8 +683,7 @@ export function useRunNode() {
         const existingNodes = state.nodes
           .filter((n) =>
             upstreamIds.has(n.id) ||
-            n.type === "project_scan" ||
-            n.type === "code_analysis"
+            n.type === "analysis"
           )
           .map(summarizeNodeForExpand);
         const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, planningNodeId);
@@ -799,7 +720,7 @@ export function useRunNode() {
               ? planningNode.position.y + raw.y
               : planningNode.position.y + 350 + raw.y,
           },
-          contextMode: raw.type === "project_scan" ? "isolated" as const : "inherit" as const,
+          contextMode: "inherit" as const,
           fileScope: { allow: [], deny: [] },
           toolPolicy: { tools: [], deny: [] },
           memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
@@ -874,7 +795,7 @@ export function useRunNode() {
     async (codeAnalysisNodeId: string): Promise<boolean> => {
       const state = useGraphStore.getState();
       const codeNode = state.nodes.find((n) => n.id === codeAnalysisNodeId);
-      if (!codeNode || codeNode.type !== "code_analysis") return false;
+      if (!codeNode || codeNode.type !== "analysis") return false;
       if (useRunState.getState().runningId) return false;
 
       const analysisText = outputText(codeNode).trim();
@@ -885,7 +806,7 @@ export function useRunNode() {
           status: "SKIPPED",
           nodeId: codeAnalysisNodeId,
           nodeTitle: codeNode.title,
-          message: "Code Analysis 节点还没有 output，请先执行 Analyze Code 生成分析结果。",
+          message: "Analysis 节点还没有 output，请先执行 Analyze Code 生成分析结果。",
         });
         return false;
       }
@@ -909,8 +830,7 @@ export function useRunNode() {
         const existingNodes = state.nodes
           .filter((n) =>
             upstreamIds.has(n.id) ||
-            n.type === "project_scan" ||
-            n.type === "code_analysis"
+            n.type === "analysis"
           )
           .map(summarizeNodeForExpand);
         const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, codeAnalysisNodeId);

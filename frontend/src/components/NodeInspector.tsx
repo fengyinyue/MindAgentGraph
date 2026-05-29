@@ -9,10 +9,9 @@ import {
 import { NODE_TYPES, type NodeType } from "@shared/types";
 
 function nodeTypeLabel(type: NodeType): string {
-  if (type === "planning" || type === "workflow_graph") return "Workflow Graph";
-  if (type === "structure_graph") return "Structure Graph";
-  if (type === "project_scan") return "Project Scan";
-  if (type === "code_analysis") return "Code Analysis";
+  if (type === "planning") return "Planning";
+  if (type === "subgraph") return "Subgraph";
+  if (type === "analysis") return "Analysis";
   return type;
 }
 
@@ -48,10 +47,9 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
-  const isGraphNode = node.type === "planning" || node.type === "workflow_graph" || node.type === "structure_graph";
-  const isProjectScanNode = node.type === "project_scan";
-  const isCodeAnalysisNode = node.type === "code_analysis";
-  const isStructureGraphNode = node.type === "structure_graph";
+  const isGraphNode = node.type === "planning" || node.type === "subgraph";
+  const isCodeAnalysisNode = node.type === "analysis";
+  const isStructureGraphNode = node.type === "subgraph";
   const canGenerateNodes = isGraphNode && output.trim().length > 0;
   const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
@@ -152,10 +150,10 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 <button
                   className="px-3 py-1 bg-accent rounded text-xs disabled:opacity-50"
                   onClick={() => run(node.id)}
-                  disabled={runningId !== null || ((isProjectScanNode || isCodeAnalysisNode) && !projectDir)}
-                  title={(isProjectScanNode || isCodeAnalysisNode) && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
+                  disabled={runningId !== null || (isCodeAnalysisNode && !projectDir)}
+                  title={isCodeAnalysisNode && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
                 >
-                  {isProjectScanNode ? "⌕ Scan Project" : isCodeAnalysisNode ? "◇ Analyze Code" : "▶ Explain"}
+                  {isCodeAnalysisNode ? "◇ Analyze Code" : "▶ Explain"}
                 </button>
                 {canGenerateNodes ? (
                   <button
@@ -342,10 +340,8 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               <div className="text-zinc-600 text-xs italic">
                 {isCodeNode
                   ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码"
-                  : isProjectScanNode
-                    ? "选择 Project Dir 后点 ⌕ Scan Project 扫描已有工程"
-                    : isCodeAnalysisNode
-                      ? "连接 Project Scan 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
+                  : isCodeAnalysisNode
+                    ? "选择 Project Dir 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
                   : isGraphNode
                     ? "填写 Purpose 后点 ▶ Explain 生成规划，再用 ✦ Generate Nodes 展开子节点"
                     : "点 ▶ Explain 文本展开"}

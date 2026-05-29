@@ -1,12 +1,10 @@
 export type NodeType =
   | "prompt"
   | "planning"
-  | "workflow_graph"
-  | "structure_graph"
+  | "subgraph"
   | "memory"
   | "filescope"
-  | "project_scan"
-  | "code_analysis"
+  | "analysis"
   | "code"
   | "api"
   | "asset"
@@ -15,8 +13,8 @@ export type NodeType =
   | "semantic";
 
 export const NODE_TYPES: NodeType[] = [
-  "prompt", "workflow_graph", "structure_graph", "memory", "filescope",
-  "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
+  "prompt", "planning", "subgraph", "memory", "filescope",
+  "analysis", "code", "api", "asset", "agent", "task", "semantic",
 ];
 
 export type ContextMode = "inherit" | "explicit" | "isolated";

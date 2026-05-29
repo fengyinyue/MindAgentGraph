@@ -1,4 +1,4 @@
-"""Read-only repository scanner for Project Scan nodes."""
+"""Read-only repository scanner for repository context summaries."""
 
 from __future__ import annotations
 
@@ -321,7 +321,7 @@ def _build_summary(
 ) -> str:
     key_files = files[:30]
     lines = [
-        f"# Project Scan: {root.name}",
+        f"# Repository Context: {root.name}",
         "",
         "## Detected Stack",
         ", ".join(stack) if stack else "Unknown",

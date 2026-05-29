@@ -23,21 +23,21 @@ NODE_RUN_SYSTEM = """你是一个被绑定到某个"思维节点"上的助手。
 4. 长度控制在 600 字以内，重点是密度而非全面
 5. 不要尝试读取文件或探索项目目录，直接基于你的知识输出文本"""
 
-WORKFLOW_RUN_SYSTEM = """你是 MindAgentGraph 的 Workflow Graph 规划助手。
+WORKFLOW_RUN_SYSTEM = """你是 MindAgentGraph 的 Planning 规划助手。
 
-当前节点类型是 workflow_graph。你的职责是输出高层工作流规划，供后续 Generate Nodes 生成项目执行节点。
+当前节点类型是 planning。你的职责是输出高层工作流规划，供后续 Generate Nodes 生成项目执行节点。
 
 输出原则：
 1. 只描述阶段、职责、交付物、执行顺序和关键决策点；不要展开端口级数据流、模块内部依赖图或 Mermaid 图
-2. 如果目标包含结构设计、数据流、模块依赖、资源/资产管线、生成规则图、Blueprint/节点图、PCG 或可视化流程，只写明“需要一个 Structure Graph 节点负责该结构设计”，不要在本输出中细化内部节点
-3. 规划应覆盖：目标拆解、需要的 Structure Graph 入口、实现节点、验证节点、风险/确认点
+2. 如果目标包含结构设计、数据流、模块依赖、资源/资产管线、生成规则图、Blueprint/节点图、PCG 或可视化流程，只写明“需要一个 subgraph 节点负责该结构设计”，不要在本输出中细化内部节点
+3. 规划应覆盖：目标拆解、需要的 subgraph 入口、实现节点、验证节点、风险/确认点
 4. Markdown 格式，默认中文，控制在 600 字以内
 5. 不要尝试读取文件、探索目录或执行任何命令——直接基于你的知识输出规划文本
-6. 后续会根据这份规划生成 workflow 节点；Structure Graph 会单独展开内部数据流"""
+6. 后续会根据这份规划生成 planning 节点；subgraph 会单独展开内部数据流"""
 
-STRUCTURE_RUN_SYSTEM = """你是 MindAgentGraph 的 Structure Graph 结构设计助手。
+STRUCTURE_RUN_SYSTEM = """你是 MindAgentGraph 的 Subgraph 结构设计助手。
 
-当前节点类型是 structure_graph。你的职责是输出结构化数据流/依赖设计，供后续 Generate Nodes 生成端口化内部子图。
+当前节点类型是 subgraph。你的职责是输出结构化数据流/依赖设计，供后续 Generate Nodes 生成端口化内部子图。
 
 输出原则：
 1. 聚焦输入、处理节点、输出、数据类型、依赖关系和关键接口
@@ -73,9 +73,9 @@ Use options only for finite choices. Use no more than 3 questions.
 def _effective_system_prompt(system_prompt: str | None, node_type: str = "") -> str:
     if system_prompt and system_prompt.strip():
         base = system_prompt.strip()
-    elif node_type in {"planning", "workflow_graph"}:
+    elif node_type == "planning":
         base = WORKFLOW_RUN_SYSTEM
-    elif node_type == "structure_graph":
+    elif node_type == "subgraph":
         base = STRUCTURE_RUN_SYSTEM
     else:
         base = NODE_RUN_SYSTEM

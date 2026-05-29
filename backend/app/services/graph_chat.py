@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
-from app.schemas import Graph, GraphEditResult
+from app.schemas import ChatMessage, Graph, GraphEditResult
 from app.services.planner import DEFAULT_MODELS, DEFAULT_PROVIDER, _PROVIDERS
 from app.services.providers.base import ProviderError
 
@@ -30,6 +30,18 @@ GRAPH_EDIT_SYSTEM = """你是 MindAgentGraph 的图表编辑助手。
 6. 如果用户用中文，reply、title、purpose 尽量使用中文。
 7. createLinks 的 source/target 可以是已有 id 或本次 createNodes 中的 clientId。
 8. 不要修改项目源代码文件；这里只编辑图表。
+"""
+
+GRAPH_CHAT_STREAM_SYSTEM = """你是 MindAgentGraph 的图表编辑助手。
+
+你正在和用户协作编辑当前工程图。请用简短、自然的中文回复用户正在做什么。
+
+重要：
+1. 你可以参考历史对话和当前图上下文。
+2. 不要输出 JSON，不要输出 patch，不要编造已经完成的变更数量。
+3. 如果用户要求编辑图，请说明你将如何更新图表。
+4. 如果用户要求含糊，请说明需要补充的信息。
+5. 回复保持简洁，通常 1-4 句。
 """
 
 GRAPH_EDIT_TOOL = {
@@ -104,6 +116,7 @@ GRAPH_EDIT_TOOL = {
 async def edit_graph_with_chat(
     *,
     message: str,
+    history: list[ChatMessage] | None = None,
     graph: Graph,
     active_parent_id: str | None,
     provider: str | None,
@@ -116,7 +129,12 @@ async def edit_graph_with_chat(
     impl = _PROVIDERS[chosen]
     chosen_model = model or DEFAULT_MODELS.get(chosen)
 
-    user_goal = _build_user_goal(message=message, graph=graph, active_parent_id=active_parent_id)
+    user_goal = _build_user_goal(
+        message=message,
+        history=history or [],
+        graph=graph,
+        active_parent_id=active_parent_id,
+    )
     payload = await impl.emit_graph(
         system_prompt=GRAPH_EDIT_SYSTEM,
         user_goal=user_goal,
@@ -135,7 +153,44 @@ async def edit_graph_with_chat(
     return result
 
 
-def _build_user_goal(*, message: str, graph: Graph, active_parent_id: str | None) -> str:
+async def stream_graph_chat_reply(
+    *,
+    message: str,
+    history: list[ChatMessage] | None,
+    graph: Graph,
+    active_parent_id: str | None,
+    provider: str | None,
+    model: str | None,
+    api_key: str | None,
+) -> AsyncIterator[str]:
+    chosen = (provider or DEFAULT_PROVIDER).lower()
+    if chosen not in _PROVIDERS:
+        raise ProviderError(f"unknown provider: {chosen}")
+    impl = _PROVIDERS[chosen]
+    chosen_model = model or DEFAULT_MODELS.get(chosen)
+    user_message = _build_user_goal(
+        message=message,
+        history=history or [],
+        graph=graph,
+        active_parent_id=active_parent_id,
+    )
+    async for chunk in impl.stream_text(
+        system_prompt=GRAPH_CHAT_STREAM_SYSTEM,
+        user_message=user_message,
+        model=chosen_model,
+        api_key=api_key,
+        max_tokens=900,
+    ):
+        yield chunk
+
+
+def _build_user_goal(
+    *,
+    message: str,
+    history: list[ChatMessage],
+    graph: Graph,
+    active_parent_id: str | None,
+) -> str:
     visible_nodes = [node for node in graph.nodes if (node.parentId or None) == active_parent_id]
     if not visible_nodes:
         visible_nodes = graph.nodes
@@ -168,12 +223,27 @@ def _build_user_goal(*, message: str, graph: Graph, active_parent_id: str | None
         "links": links,
     }
     return "\n".join([
+        "## 最近对话",
+        _format_history(history),
+        "",
         "## 用户指令",
         message,
         "",
         "## 当前图上下文 JSON",
         json.dumps(context, ensure_ascii=False),
     ])
+
+
+def _format_history(history: list[ChatMessage]) -> str:
+    if not history:
+        return "无"
+    lines: list[str] = []
+    for msg in history[-12:]:
+        content = msg.content.strip()
+        if not content:
+            continue
+        lines.append(f"{msg.role}: {content[:1200]}")
+    return "\n".join(lines) if lines else "无"
 
 
 def _sanitize_payload(payload: dict[str, Any], graph: Graph) -> GraphEditResult:

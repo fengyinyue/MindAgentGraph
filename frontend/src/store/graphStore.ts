@@ -1,8 +1,11 @@
 import { create } from "zustand";
-import type { NodeBase, Edge, Graph, ProjectMeta } from "@shared/types";
+import type { NodeBase, Edge, Graph, ProjectMeta, NodeType } from "@shared/types";
 
-function normalizeNodeType(type: NodeBase["type"]): NodeBase["type"] {
-  return type === "planning" ? "workflow_graph" : type;
+function normalizeNodeType(type: string): NodeType {
+  if (type === "workflow_graph") return "planning";
+  if (type === "structure_graph") return "subgraph";
+  if (type === "code_analysis" || type === "project_scan") return "analysis";
+  return type as NodeType;
 }
 
 interface GraphState {

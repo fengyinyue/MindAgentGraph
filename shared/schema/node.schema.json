@@ -8,7 +8,7 @@
     "id": { "type": "string", "minLength": 1 },
     "type": {
       "type": "string",
-      "enum": ["prompt", "planning", "workflow_graph", "structure_graph", "memory", "filescope", "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic"]
+      "enum": ["prompt", "planning", "subgraph", "memory", "filescope", "analysis", "code", "api", "asset", "agent", "task", "semantic"]
     },
     "title": { "type": "string" },
     "position": {

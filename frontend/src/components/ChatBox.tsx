@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { editGraphWithChat, type GraphEditResult } from "@/api/backend";
+import { editGraphWithChatStream, type ChatHistoryMessage, type GraphEditResult } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
 import { usePanelStore } from "@/store/panelStore";
@@ -19,12 +19,11 @@ type GraphCommandResult = {
 
 const typeAliases: Array<{ type: NodeType; words: string[]; label: string }> = [
   { type: "prompt", words: ["prompt", "提示", "提示词"], label: "Prompt" },
-  { type: "workflow_graph", words: ["workflow", "workflow_graph", "规划", "流程", "工作流"], label: "Workflow Graph" },
-  { type: "structure_graph", words: ["structure", "structure_graph", "架构", "结构", "模块图"], label: "Structure Graph" },
+  { type: "planning", words: ["workflow", "planning", "规划", "流程", "工作流"], label: "Planning" },
+  { type: "subgraph", words: ["structure", "subgraph", "架构", "结构", "模块图"], label: "Subgraph" },
   { type: "memory", words: ["memory", "记忆", "知识"], label: "Memory" },
   { type: "filescope", words: ["filescope", "file scope", "文件范围"], label: "File Scope" },
-  { type: "project_scan", words: ["project_scan", "scan", "扫描", "项目扫描"], label: "Project Scan" },
-  { type: "code_analysis", words: ["code_analysis", "analysis", "代码分析"], label: "Code Analysis" },
+  { type: "analysis", words: ["analysis", "analyze", "代码分析"], label: "Analysis" },
   { type: "code", words: ["code", "代码"], label: "Code" },
   { type: "api", words: ["api", "接口"], label: "API" },
   { type: "asset", words: ["asset", "资源", "资产"], label: "Asset" },
@@ -96,7 +95,7 @@ function makeNode(type: NodeType, title: string, position: { x: number; y: numbe
     type,
     title,
     position,
-    contextMode: type === "project_scan" ? "isolated" : "inherit",
+    contextMode: "inherit",
     fileScope: { allow: [], deny: [] },
     toolPolicy: { tools: [], deny: [] },
     memoryRef: type === "memory" ? `${id}.md` : undefined,
@@ -247,24 +246,40 @@ function applyGraphEditPatch(result: GraphEditResult): number {
   return changes;
 }
 
-async function applyGraphChat(rawText: string): Promise<GraphCommandResult> {
+async function applyGraphChatStream(
+  rawText: string,
+  history: ChatHistoryMessage[],
+  onText: (chunk: string) => void,
+): Promise<GraphCommandResult> {
   const provider = useProviderStore.getState().provider;
   const model = useProviderStore.getState().getModel(provider);
   const apiKey = useKeyStore.getState().getKey(provider);
   const activeParentId = useGraphStore.getState().activeParentId;
+  let streamed = "";
+  let patchReply = "";
+  let changes = 0;
 
   try {
-    const result = await editGraphWithChat(rawText, {
+    await editGraphWithChatStream(rawText, {
+      history,
       graph: graphFromStore(),
       activeParentId,
       provider,
       model,
       apiKey,
+      onText: (chunk) => {
+        streamed += chunk;
+        onText(chunk);
+      },
+      onPatch: (patch) => {
+        patchReply = patch.reply;
+        changes = applyGraphEditPatch(patch);
+      },
     });
-    const changes = applyGraphEditPatch(result);
+    const suffix = changes > 0 ? `\n\n已应用 ${changes} 个图表变更。` : "";
     return {
       ok: changes > 0,
-      text: `${result.reply}${changes > 0 ? `\n\n已应用 ${changes} 个图表变更。` : ""}`,
+      text: streamed.trim() ? suffix : `${patchReply || "已处理。"}${suffix}`,
     };
   } catch (error) {
     const fallback = applyGraphCommand(rawText);
@@ -452,19 +467,31 @@ export default function ChatBox() {
     const text = draft.trim();
     if (!text || sending) return;
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    const assistantId = crypto.randomUUID();
+    const history: ChatHistoryMessage[] = messages.slice(-12).map((msg) => ({
+      role: msg.role,
+      content: msg.content,
+    }));
+    setMessages((prev) => [...prev, userMsg, { id: assistantId, role: "assistant", content: "" }]);
     setDraft("");
     setSending(true);
-    const result = await applyGraphChat(text);
+    const appendAssistant = (chunk: string) => {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantId ? { ...msg, content: `${msg.content}${chunk}` } : msg,
+        ),
+      );
+    };
+    const result = await applyGraphChatStream(text, history, appendAssistant);
     setSending(false);
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: crypto.randomUUID(),
-        role: "assistant",
-        content: result.text || (result.ok ? "已更新图表。" : "没有执行任何图表变更。"),
-      },
-    ]);
+    const finalText = result.text || (result.ok ? "已更新图表。" : "没有执行任何图表变更。");
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantId
+          ? { ...msg, content: msg.content ? `${msg.content}${finalText}` : finalText }
+          : msg,
+      ),
+    );
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

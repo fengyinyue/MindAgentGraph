@@ -40,12 +40,12 @@ MindAgentGraph replaces the "endless chat thread" with **structured node-based p
 
 MindAgentGraph separates high-level workflow planning from detailed structural design:
 
-- **Workflow Graph** (`workflow_graph`) is the high-level execution plan. It decomposes a goal into coarse work packages such as research, architecture, implementation, validation, and delivery. Workflow expansion uses normal planning logic and intentionally avoids port-level dataflow.
-- **Structure Graph** (`structure_graph`) is a detailed dataflow or dependency graph. It is used for pipelines, module structures, asset flows, generation rules, and other cases where explicit inputs, outputs, and typed connections matter.
-- **Lightweight subgraphs** keep Structure Graph internals inside the Structure Graph node. Double-click or enter a Structure Graph to inspect its internal nodes; the parent Workflow Graph stays clean and focused on orchestration.
-- Legacy `planning` nodes are loaded as `workflow_graph` for compatibility. New graphs use `workflow_graph` and `structure_graph`.
+- **Planning** (`planning`) is the high-level execution plan. It decomposes a goal into coarse work packages such as research, architecture, implementation, validation, and delivery. Planning expansion uses normal planning logic and intentionally avoids port-level dataflow.
+- **Subgraph** (`subgraph`) is a detailed dataflow or dependency graph. It is used for pipelines, module structures, asset flows, generation rules, and other cases where explicit inputs, outputs, and typed connections matter.
+- **Lightweight subgraphs** keep Subgraph internals inside the Subgraph node. Double-click or enter a Subgraph to inspect its internal nodes; the parent Planning graph stays clean and focused on orchestration.
+- Legacy `workflow_graph`, `structure_graph`, and `code_analysis` nodes are loaded as `planning`, `subgraph`, and `analysis` for compatibility.
 
-A typical collaboration pattern is: use a Workflow Graph to decide what must happen, add a Structure Graph where a step needs a concrete pipeline or dependency model, then let downstream code/task nodes implement or validate that structure.
+A typical collaboration pattern is: use Planning to decide what must happen, add a Subgraph where a step needs a concrete pipeline or dependency model, then let downstream code/task nodes implement or validate that structure.
 
 ## Target Users
 
@@ -62,11 +62,11 @@ The first phase focuses on **AI-assisted software and game project planning and 
 ## Features
 
 - **Visual DAG Canvas** — infinite canvas with @xyflow/react. Drag, connect, and configure nodes. MiniMap, background grid, and zoom controls included.
-- **Node Types** - `workflow_graph`, `structure_graph`, `prompt`, `memory`, `filescope`, `project_scan`, `code_analysis`, `code`, `api`, `asset`, `agent`, `task`, `semantic` (`planning` is legacy-compatible)
+- **Node Types** - `planning`, `subgraph`, `prompt`, `memory`, `filescope`, `analysis`, `code`, `api`, `asset`, `agent`, `task`, `semantic`
 - **AI Graph Generation** — input a goal sentence; AI generates a full DAG of connected nodes automatically
-- **Graph Expansion** - Workflow Graph nodes expand into high-level work packages; Structure Graph nodes expand into port-based dataflow subgraphs
-- **Subgraph Navigation** - Structure Graph nodes can contain internal child nodes, keeping detailed pipelines separate from the top-level workflow
-- **Code Analysis & Generation** — read-only project scanning, Claude Code-powered analysis, and diff-tracked code generation with FileScope constraints
+- **Graph Expansion** - Planning nodes expand into high-level work packages; Subgraph nodes expand into port-based dataflow subgraphs
+- **Subgraph Navigation** - Subgraph nodes can contain internal child nodes, keeping detailed pipelines separate from the top-level workflow
+- **Analysis & Code Generation** — Claude Code-powered analysis and diff-tracked code generation with FileScope constraints
 - **Module Graph** — code analysis results expand into a visual module dependency graph
 - **Per-Node Context Control** — three modes: `inherit` (upstream + memory), `explicit` (node fields only), `isolated` (no upstream, no memory)
 - **Confirmation Protocol** — nodes emit structured `mag-confirmation` blocks when blocked, pausing DAG execution for user input

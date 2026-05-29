@@ -468,9 +468,15 @@ export interface GraphEditResult {
   deleteLinkIds: string[];
 }
 
+export interface ChatHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export async function editGraphWithChat(
   message: string,
   opts: {
+    history?: ChatHistoryMessage[];
     graph: Graph;
     activeParentId?: string | null;
     provider?: Provider;
@@ -486,6 +492,7 @@ export async function editGraphWithChat(
     headers,
     body: JSON.stringify({
       message,
+      history: opts.history ?? [],
       graph: opts.graph,
       activeParentId: opts.activeParentId ?? null,
       provider: opts.provider,
@@ -496,6 +503,77 @@ export async function editGraphWithChat(
     throw new Error(`/chat/graph-edit failed: ${res.status} ${await res.text()}`);
   }
   return res.json();
+}
+
+export async function editGraphWithChatStream(
+  message: string,
+  opts: {
+    history?: ChatHistoryMessage[];
+    graph: Graph;
+    activeParentId?: string | null;
+    provider?: Provider;
+    model?: string;
+    apiKey?: string;
+    onText: (chunk: string) => void;
+    onPatch: (patch: GraphEditResult) => void;
+    signal?: AbortSignal;
+  },
+): Promise<void> {
+  const url = await getBackendUrl();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (opts.apiKey) headers["X-Provider-Key"] = opts.apiKey;
+  const res = await fetch(`${url}/chat/graph-edit/stream`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      message,
+      history: opts.history ?? [],
+      graph: opts.graph,
+      activeParentId: opts.activeParentId ?? null,
+      provider: opts.provider,
+      model: opts.model,
+    }),
+    signal: opts.signal,
+  });
+  if (!res.ok || !res.body) {
+    throw new Error(`/chat/graph-edit/stream failed: ${res.status} ${await res.text()}`);
+  }
+
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    let idx;
+    while ((idx = buffer.indexOf("\n\n")) !== -1) {
+      const raw = buffer.slice(0, idx);
+      buffer = buffer.slice(idx + 2);
+      const event = parseSseEvent(raw);
+      if (!event) continue;
+      if (event.type === "text") {
+        try {
+          opts.onText(JSON.parse(event.data));
+        } catch {
+          opts.onText(event.data);
+        }
+      } else if (event.type === "patch") {
+        opts.onPatch(parseJson<GraphEditResult>(event.data, {
+          reply: "",
+          createNodes: [],
+          updateNodes: [],
+          deleteNodeIds: [],
+          createLinks: [],
+          deleteLinkIds: [],
+        }));
+      } else if (event.type === "error") {
+        const data = parseJson<{ message?: string }>(event.data, {});
+        throw new Error(data.message ?? event.data);
+      } else if (event.type === "done") {
+        return;
+      }
+    }
+  }
 }
 
 export async function cancelCodeRun(runId: string): Promise<boolean> {

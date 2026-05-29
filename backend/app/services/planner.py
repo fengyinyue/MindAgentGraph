@@ -34,12 +34,11 @@ PLANNER_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 你的任务：把用户的一句话目标，拆解成一个由"思维节点"组成的 DAG (有向无环图)。
 
 节点类型说明：
-- workflow_graph: 高层工作流规划/总控节点（通常是根节点）
-- structure_graph: 结构化数据流/依赖图入口节点
+- planning: 高层工作流规划/总控节点（通常是根节点）
+- subgraph: 结构化数据流/依赖图入口节点
 - prompt: 与 AI 对话生成内容的节点
 - code: 代码实现节点
-- project_scan: 只读扫描已有工程结构，输出技术栈、关键文件、改动边界和风险
-- code_analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
+- analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
 - asset: 资源/素材节点
 - task: 待办任务节点
 - memory: 记忆/上下文节点
@@ -95,8 +94,8 @@ EMIT_GRAPH_TOOL = {
                         "type": {
                             "type": "string",
                             "enum": [
-                                "prompt", "workflow_graph", "structure_graph", "memory", "filescope",
-                                "project_scan", "code_analysis", "code", "api", "asset", "agent", "task",
+                                "prompt", "planning", "subgraph", "memory", "filescope",
+                                "analysis", "code", "api", "asset", "agent", "task",
                             ],
                         },
                         "title": {"type": "string"},
@@ -186,7 +185,16 @@ def _to_internal_graph(payload: dict[str, Any]) -> Graph:
 
 
 def _normalize_node_type(node_type: Any) -> str:
-    return "workflow_graph" if str(node_type) == "planning" else str(node_type)
+    value = str(node_type)
+    if value == "workflow_graph":
+        return "planning"
+    if value == "structure_graph":
+        return "subgraph"
+    if value == "code_analysis":
+        return "analysis"
+    if value == "project_scan":
+        return "analysis"
+    return value
 
 
 def _normalize_ports(raw_ports: Any, prefix: str) -> list[dict[str, str]]:
@@ -242,27 +250,20 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 你的任务：根据已有的高层规划文本，将其拆解成一组节点组成的 DAG (有向无环图)。
 
 节点类型选择规则：
-- 小/中型项目（单一系统，如"番茄钟"、"Markdown编辑器"）：直接生成实现节点（code、task、prompt），不要创建 workflow_graph 子节点
-- 大型项目（覆盖多个独立子系统，如"电商平台"、"游戏引擎"）：可以为每个子系统创建一个 workflow_graph 节点（后续可各自 Explain + Generate Nodes 展开），子系统之间直接生成实现节点
-- 如果规划文本包含"当前项目"、"已有项目"、"现有代码"、"修复"、"改造"、"接入"、"重构"等已有工程开发意图，优先生成一个 project_scan 节点
-- project_scan 节点必须位于后续 code_analysis/prompt/task/code 节点上游，用 links 表达依赖
-- 对需要理解真实代码结构的已有项目改动，在 project_scan 后生成 code_analysis 节点，再让 code 节点依赖 code_analysis
-- 当某个阶段的核心工作是设计结构、数据流、模块依赖、资源/资产管线、生成规则图、Blueprint/节点图、PCG 或可视化流程时，优先生成一个 structure_graph 节点作为结构设计入口，而不是直接把该结构拆成多个 code/task 节点
-- structure_graph 节点应位于后续 code/task/prompt 节点上游；后续实现节点的 purpose 中要明确它依赖 Structure Graph 的结构输出
-- 不要把 structure_graph 用作普通任务清单；只有当下游需要端口化结构、数据流或依赖关系时才使用它
-- 即使生成了 structure_graph，仍应在 workflow_graph 外层生成必要的执行节点，例如 project_scan/code_analysis/code/task/test/review；不要只返回一个 structure_graph 节点
-- workflow_graph 外层不要重复拆解 structure_graph 内部的数据流节点；内部输入/转换/输出节点应留给 Structure Graph 自己展开
-- 当 workflow_graph 中已有 structure_graph 时，不要把 Validate/Material/LOD/Collider/Prefab 等内部处理阶段逐个镜像成外层 code 节点；外层 code 节点应是粗粒度工作包，例如"实现管线运行框架"、"根据 Structure Graph 实现处理器集合"、"集成导出与报告"、"验证与交付"
-- workflow_graph 返回的节点不要填写 inputs/outputs 端口，links 也不要填写 sourceHandle/targetHandle；端口化数据流只属于 Structure Graph 内部
-- 如果输入中提供了"已有图上下文"，且其中已经存在可复用的 project_scan 或 code_analysis 节点，优先复用这些已有上下文，不要重复生成同类扫描/分析节点
+- 小/中型项目（单一系统，如"番茄钟"、"Markdown编辑器"）：直接生成实现节点（code、task、prompt），不要创建 planning 子节点
+- 大型项目（覆盖多个独立子系统，如"电商平台"、"游戏引擎"）：可以为每个子系统创建一个 planning 节点（后续可各自 Explain + Generate Nodes 展开），子系统之间直接生成实现节点
+- 当某个阶段的核心工作是设计结构、数据流、模块依赖、资源/资产管线、生成规则图、Blueprint/节点图、PCG 或可视化流程时，优先生成一个 subgraph 节点作为结构设计入口，而不是直接把该结构拆成多个 code/task 节点
+- subgraph 节点应位于后续 code/task/prompt 节点上游；后续实现节点的 purpose 中要明确它依赖 Subgraph 的结构输出
+- 不要把 subgraph 用作普通任务清单；只有当下游需要端口化结构、数据流或依赖关系时才使用它
+- planning 外层不要重复拆解 subgraph 内部的数据流节点；内部输入/转换/输出节点应留给 Subgraph 自己展开
+- 当 planning 中已有 subgraph 时，不要把 Validate/Material/LOD/Collider/Prefab 等内部处理阶段逐个镜像成外层 code 节点；外层 code 节点应是粗粒度工作包，例如"实现管线运行框架"、"根据 Subgraph 实现处理器集合"、"集成导出与报告"、"验证与交付"
+- planning 返回的节点不要填写 inputs/outputs 端口，links 也不要填写 sourceHandle/targetHandle；端口化数据流只属于 Subgraph 内部
 - 工具返回的 links 只能连接本次返回的 nodes；如果需要依赖已有节点，请在新节点 purpose 中明确写"依赖已有节点：<title>"
-- 全新项目、纯文案/创作任务、独立代码片段，不要生成 project_scan 节点
 
 节点类型说明：
-- workflow_graph: 仅用于大型项目中独立子系统的规划入口
-- structure_graph: 用于生成端口化的数据流/结构图入口
-- project_scan: 只读扫描已有工程结构，输出技术栈、关键文件、改动边界和风险
-- code_analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
+- planning: 仅用于大型项目中独立子系统的规划入口
+- subgraph: 用于生成端口化的数据流/结构图入口
+- analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
 - code: 代码实现节点
 - prompt: 与 AI 对话生成内容的节点
 - asset: 资源/素材节点
@@ -281,13 +282,13 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
 
 
-STRUCTURE_GRAPH_EXPAND_SYSTEM = """You are a structure graph architect for MindAgentGraph.
+STRUCTURE_GRAPH_EXPAND_SYSTEM = """You are a subgraph architect for MindAgentGraph.
 
 Your task is to convert the user's requirement into a structured dataflow or dependency graph.
 
 Use emit_graph and return only structured nodes and links.
 
-Structure graph rules:
+Subgraph rules:
 1. Model concrete data, assets, processing steps, checks, previews, and outputs as explicit nodes.
 2. All processing or transformation nodes must use type="code". Never use type="semantic".
 3. Use type="asset" for explicit inputs, outputs, files, generated artifacts, or reusable resources; use type="task" for review, debug, validation, preview, or manual checkpoints.
@@ -302,7 +303,7 @@ Structure graph rules:
 12. Keep the graph compact but complete: usually 5-12 nodes.
 13. Match the user's language for display text: if the user writes Chinese, node title, purpose, port name, and edge label should be Chinese. Keep id, sourceHandle, targetHandle, and type as lowercase English snake_case.
 14. Choose port types semantically. Use "graph" for structured graph/state, "asset" for files/resources, and "unknown" only when no better type applies.
-15. Titles should name the structural role directly, such as "Input: Source Data", "Transform: Normalize Points", "Output: Structure Graph", or equivalent localized labels.
+15. Titles should name the structural role directly, such as "Input: Source Data", "Transform: Normalize Points", "Output: Subgraph", or equivalent localized labels.
 """
 
 
@@ -393,9 +394,9 @@ def _validate_structure_payload(payload: dict[str, Any]) -> dict[str, object]:
     nodes = payload.get("nodes")
     links = payload.get("links")
     if not isinstance(nodes, list) or not isinstance(links, list):
-        raise ProviderError("Structure graph payload must contain nodes and links arrays")
+        raise ProviderError("Subgraph payload must contain nodes and links arrays")
     if not nodes:
-        raise ProviderError("Structure graph payload must contain at least one node")
+        raise ProviderError("Subgraph payload must contain at least one node")
 
     node_ids: set[str] = set()
     node_ports: dict[str, dict[str, set[str]]] = {}
@@ -403,36 +404,36 @@ def _validate_structure_payload(payload: dict[str, Any]) -> dict[str, object]:
 
     for raw in nodes:
         if not isinstance(raw, dict):
-            raise ProviderError("Structure graph node must be an object")
+            raise ProviderError("Subgraph node must be an object")
         node_id = str(raw.get("id") or "")
         if not node_id:
-            raise ProviderError("Structure graph node is missing id")
+            raise ProviderError("Subgraph node is missing id")
         if node_id in node_ids:
-            raise ProviderError(f"duplicate structure graph node id: {node_id}")
+            raise ProviderError(f"duplicate subgraph node id: {node_id}")
         node_ids.add(node_id)
 
         node_type = str(raw.get("type") or "")
         if node_type == "semantic":
-            raise ProviderError(f"Structure graph node {node_id} used forbidden type semantic")
+            raise ProviderError(f"Subgraph node {node_id} used forbidden type semantic")
         if node_type not in {"asset", "code", "task"}:
-            raise ProviderError(f"Structure graph node {node_id} must use asset, code, or task type")
+            raise ProviderError(f"Subgraph node {node_id} must use asset, code, or task type")
         if "inputs" not in raw or "outputs" not in raw:
-            raise ProviderError(f"Structure graph node {node_id} must include inputs and outputs arrays")
+            raise ProviderError(f"Subgraph node {node_id} must include inputs and outputs arrays")
         if not isinstance(raw.get("inputs"), list) or not isinstance(raw.get("outputs"), list):
-            raise ProviderError(f"Structure graph node {node_id} inputs and outputs must be arrays")
+            raise ProviderError(f"Subgraph node {node_id} inputs and outputs must be arrays")
         for raw_port in [*raw["inputs"], *raw["outputs"]]:
             if not isinstance(raw_port, dict):
-                raise ProviderError(f"Structure graph node {node_id} ports must be explicit objects")
+                raise ProviderError(f"Subgraph node {node_id} ports must be explicit objects")
             if not all(isinstance(raw_port.get(key), str) and raw_port.get(key) for key in ("id", "name", "type")):
-                raise ProviderError(f"Structure graph node {node_id} ports must include id, name, and type")
+                raise ProviderError(f"Subgraph node {node_id} ports must include id, name, and type")
             if raw_port["type"] not in {"spline", "point", "polygon", "bounds", "graph", "debug", "asset", "unknown"}:
-                raise ProviderError(f"Structure graph node {node_id} has invalid port type: {raw_port['type']}")
+                raise ProviderError(f"Subgraph node {node_id} has invalid port type: {raw_port['type']}")
 
         inputs = _normalize_ports(raw.get("inputs", []), "input")
         outputs = _normalize_ports(raw.get("outputs", []), "output")
         for port in [*inputs, *outputs]:
             if not port.get("id") or not port.get("name") or not port.get("type"):
-                raise ProviderError(f"Structure graph node {node_id} has an invalid port")
+                raise ProviderError(f"Subgraph node {node_id} has an invalid port")
 
         node_ports[node_id] = {
             "inputs": {port["id"] for port in inputs},
@@ -448,22 +449,22 @@ def _validate_structure_payload(payload: dict[str, Any]) -> dict[str, object]:
     normalized_links: list[dict[str, Any]] = []
     for raw in links:
         if not isinstance(raw, dict):
-            raise ProviderError("Structure graph link must be an object")
+            raise ProviderError("Subgraph link must be an object")
         source = str(raw.get("source") or "")
         target = str(raw.get("target") or "")
         source_handle = str(raw.get("sourceHandle") or "")
         target_handle = str(raw.get("targetHandle") or "")
         label = str(raw.get("label") or "")
         if source not in node_ids:
-            raise ProviderError(f"Structure graph link references missing source node: {source}")
+            raise ProviderError(f"Subgraph link references missing source node: {source}")
         if target not in node_ids:
-            raise ProviderError(f"Structure graph link references missing target node: {target}")
+            raise ProviderError(f"Subgraph link references missing target node: {target}")
         if not source_handle or not target_handle or not label:
-            raise ProviderError(f"Structure graph link {source}->{target} must include sourceHandle, targetHandle, and label")
+            raise ProviderError(f"Subgraph link {source}->{target} must include sourceHandle, targetHandle, and label")
         if source_handle not in node_ports[source]["outputs"]:
-            raise ProviderError(f"Structure graph link {source}->{target} sourceHandle does not match source outputs: {source_handle}")
+            raise ProviderError(f"Subgraph link {source}->{target} sourceHandle does not match source outputs: {source_handle}")
         if target_handle not in node_ports[target]["inputs"]:
-            raise ProviderError(f"Structure graph link {source}->{target} targetHandle does not match target inputs: {target_handle}")
+            raise ProviderError(f"Subgraph link {source}->{target} targetHandle does not match target inputs: {target_handle}")
         normalized_links.append({
             **raw,
             "source": source,
@@ -547,8 +548,7 @@ def _build_expand_user_goal(
     parts.extend([
         "",
         "## 生成要求",
-        "- 如果已有图上下文中存在 hasOutput=true 的 project_scan，不要重复生成 project_scan。",
-        "- 如果已有图上下文中存在 hasOutput=true 的 code_analysis，不要重复生成 code_analysis。",
+        "- 如果已有图上下文中存在 hasOutput=true 的 analysis，不要重复生成 analysis。",
         "- 如果新节点需要依赖已有上下文，请在新节点 purpose 中明确写出依赖哪个已有节点。",
         "- 只生成仍然缺失的执行节点、任务节点或代码节点。",
     ])
@@ -586,7 +586,7 @@ async def plan_graph(
 def _offline_demo(goal: str) -> Graph:
     """No API key → 返回硬编码示例，让 UI 流程可演示。"""
     nodes_raw = [
-        {"id": "root", "type": "workflow_graph", "title": goal[:30] or "Project", "x": 0, "y": 0},
+        {"id": "root", "type": "planning", "title": goal[:30] or "Project", "x": 0, "y": 0},
         {"id": "design", "type": "prompt", "title": "需求拆解", "x": -220, "y": 300},
         {"id": "data", "type": "memory", "title": "项目记忆", "x": 0, "y": 300},
         {"id": "impl", "type": "code", "title": "代码实现", "x": 220, "y": 300},

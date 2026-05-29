@@ -127,7 +127,7 @@ async def run_dag_stream(
 
     for node_id in order:
         node = nodes_by_id[node_id]
-        if node.type in {"planning", "workflow_graph", "structure_graph"}:
+        if node.type in {"planning", "subgraph"}:
             yield sse("log", {
                 "level": "warn",
                 "source": "dag",
@@ -144,37 +144,20 @@ async def run_dag_stream(
             })
             continue
 
-        if node.type == "project_scan":
+        if node.type == "analysis":
             yield sse("log", {
                 "level": "warn",
                 "source": "dag",
                 "status": "SKIPPED",
                 "nodeId": node.id,
                 "nodeTitle": node.title,
-                "message": "跳过 Project Scan 节点；请先单独选择工程目录并执行扫描。",
+                "message": "跳过 Analysis 节点；请先单独选择工程目录并执行只读分析。",
             })
             yield sse("progress", {
                 "nodeId": node.id,
                 "nodeTitle": node.title,
                 "status": "skipped",
-                "message": "Project Scan 需要 projectDir，MVP 中请单独执行。",
-            })
-            continue
-
-        if node.type == "code_analysis":
-            yield sse("log", {
-                "level": "warn",
-                "source": "dag",
-                "status": "SKIPPED",
-                "nodeId": node.id,
-                "nodeTitle": node.title,
-                "message": "跳过 Code Analysis 节点；请先单独选择工程目录并执行只读分析。",
-            })
-            yield sse("progress", {
-                "nodeId": node.id,
-                "nodeTitle": node.title,
-                "status": "skipped",
-                "message": "Code Analysis 需要 projectDir，MVP 中请单独执行。",
+                "message": "Analysis 需要 projectDir，MVP 中请单独执行。",
             })
             continue
 

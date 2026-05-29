@@ -104,7 +104,7 @@ def valid_structure_payload() -> dict[str, Any]:
     }
 
 
-def test_expand_plan_generates_structure_graph_with_ai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_expand_plan_generates_subgraph_with_ai_provider(monkeypatch: pytest.MonkeyPatch) -> None:
     fake = FakeStructureProvider(valid_structure_payload())
     monkeypatch.setitem(planner._PROVIDERS, "fake-structure", fake)
 
@@ -123,7 +123,7 @@ def test_expand_plan_generates_structure_graph_with_ai_provider(monkeypatch: pyt
 
     assert len(fake.calls) == 1
     assert fake.calls[0]["system_prompt"] == planner.STRUCTURE_GRAPH_EXPAND_SYSTEM
-    assert "Structure graph rules" in fake.calls[0]["system_prompt"]
+    assert "Subgraph rules" in fake.calls[0]["system_prompt"]
     assert "Controlled PCG node library" not in fake.calls[0]["system_prompt"]
     assert fake.calls[0]["model"] == "test-model"
     assert fake.calls[0]["api_key"] == "test-key"
@@ -213,17 +213,17 @@ def test_expand_plan_workflow_strips_port_graph_fields(monkeypatch: pytest.Monke
         )
     )
 
-    assert result["nodes"][0]["type"] == "workflow_graph"
+    assert result["nodes"][0]["type"] == "planning"
     assert all(node["inputs"] == [] and node["outputs"] == [] for node in result["nodes"])
     assert "sourceHandle" not in result["links"][0]
     assert "targetHandle" not in result["links"][0]
     assert result["links"][0]["label"] == "Structure"
 
 
-def test_offline_demo_uses_workflow_graph() -> None:
+def test_offline_demo_uses_planning() -> None:
     graph = planner._offline_demo("Build a demo")
 
-    assert graph.nodes[0].type == "workflow_graph"
+    assert graph.nodes[0].type == "planning"
 
 
 def test_expand_plan_structure_unknown_provider_raises() -> None:

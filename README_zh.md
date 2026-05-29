@@ -40,12 +40,12 @@ MindAgentGraph 的核心目标是把 AI 工作从"连续聊天"改造成**结构
 
 MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
 
-- **Workflow Graph**（`workflow_graph`）是高层执行计划。它负责把目标拆成粗粒度工作包，例如调研、架构、实现、验证和交付。Workflow 展开使用普通规划逻辑，并刻意避免端口级数据流。
-- **Structure Graph**（`structure_graph`）是细节数据流或依赖图。它适合资源管线、模块结构、资产流、生成规则、节点蓝图等需要显式输入、输出和类型化连线的场景。
-- **轻量 subgraph** 会把 Structure Graph 的内部节点收纳在 Structure Graph 节点内部。双击或进入 Structure Graph 可以查看内部细节，顶层 Workflow Graph 保持干净，只负责组织和调度。
-- 旧版 `planning` 节点会在读取时兼容为 `workflow_graph`。新建、保存和 AI 生成都会使用 `workflow_graph` / `structure_graph`。
+- **Planning**（`planning`）是高层执行计划。它负责把目标拆成粗粒度工作包，例如调研、架构、实现、验证和交付。Planning 展开使用普通规划逻辑，并刻意避免端口级数据流。
+- **Subgraph**（`subgraph`）是细节数据流或依赖图。它适合资源管线、模块结构、资产流、生成规则、节点蓝图等需要显式输入、输出和类型化连线的场景。
+- **轻量 subgraph** 会把 Subgraph 的内部节点收纳在 Subgraph 节点内部。双击或进入 Subgraph 可以查看内部细节，顶层 Planning 保持干净，只负责组织和调度。
+- 旧版 `workflow_graph`、`structure_graph`、`code_analysis` 节点会在读取时兼容为 `planning`、`subgraph`、`analysis`。
 
-典型协作方式是：先用 Workflow Graph 决定项目要做什么；遇到需要具体管线、依赖或数据结构的步骤时，放入 Structure Graph；后续 code/task 节点再根据 Structure Graph 的结构输出进行实现、验证或交付。
+典型协作方式是：先用 Planning 决定项目要做什么；遇到需要具体管线、依赖或数据结构的步骤时，放入 Subgraph；后续 code/task 节点再根据 Subgraph 的结构输出进行实现、验证或交付。
 
 ## 目标用户
 
@@ -62,10 +62,10 @@ MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
 ## 功能特性
 
 - **可视化 DAG 画布** — 基于 @xyflow/react 的无限画布。拖拽、连接、配置节点。内置小地图、背景网格和缩放控制。
-- **节点类型** — `workflow_graph`、`structure_graph`、`prompt`、`memory`、`filescope`、`project_scan`、`code_analysis`、`code`、`api`、`asset`、`agent`、`task`、`semantic`（`planning` 仅作为旧项目兼容）
+- **节点类型** — `planning`、`subgraph`、`prompt`、`memory`、`filescope`、`analysis`、`code`、`api`、`asset`、`agent`、`task`、`semantic`
 - **AI 图生成** — 输入目标语句，AI 自动生成完整的 DAG 连接图
-- **图展开** — Workflow Graph 展开为高层工作包；Structure Graph 展开为带端口的数据流 subgraph
-- **Subgraph 导航** — Structure Graph 可以包含内部子节点，让细节管线和顶层工作流分开管理
+- **图展开** — Planning 展开为高层工作包；Subgraph 展开为带端口的数据流 subgraph
+- **Subgraph 导航** — Subgraph 可以包含内部子节点，让细节管线和顶层工作流分开管理
 - **代码分析与生成** — 只读项目扫描、Claude Code 驱动的代码分析，以及带 diff 追踪和 FileScope 约束的代码生成
 - **模块图** — 代码分析结果可展开为可视化模块依赖图
 - **逐节点上下文控制** — 三种模式：`inherit`（继承上游 + 内存）、`explicit`（仅节点字段）、`isolated`（无上游、无内存）

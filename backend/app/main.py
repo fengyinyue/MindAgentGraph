@@ -35,7 +35,7 @@ logging.getLogger("mag").propagate = False
 
 from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ExpandModulesRequest, ProjectScanRequest, ProjectScanResult, GraphEditRequest, GraphEditResult
 from app.services.planner import expand_plan, expand_modules, plan_graph
-from app.services.graph_chat import edit_graph_with_chat
+from app.services.graph_chat import edit_graph_with_chat, stream_graph_chat_reply
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_claude_run, run_node_with_claude
@@ -120,6 +120,7 @@ async def chat_graph_edit(
 ) -> GraphEditResult:
     return await edit_graph_with_chat(
         message=req.message,
+        history=req.history,
         graph=req.graph,
         active_parent_id=req.activeParentId,
         provider=req.provider,
@@ -128,9 +129,53 @@ async def chat_graph_edit(
     )
 
 
+@app.post("/chat/graph-edit/stream")
+async def chat_graph_edit_stream(
+    req: GraphEditRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+) -> StreamingResponse:
+    async def gen():
+        try:
+            async for chunk in stream_graph_chat_reply(
+                message=req.message,
+                history=req.history,
+                graph=req.graph,
+                active_parent_id=req.activeParentId,
+                provider=req.provider,
+                model=req.model,
+                api_key=x_provider_key,
+            ):
+                yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+            patch = await edit_graph_with_chat(
+                message=req.message,
+                history=req.history,
+                graph=req.graph,
+                active_parent_id=req.activeParentId,
+                provider=req.provider,
+                model=req.model,
+                api_key=x_provider_key,
+            )
+            yield f"event: patch\ndata: {patch.model_dump_json(by_alias=True)}\n\n"
+            yield "event: done\ndata: {}\n\n"
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            yield f"event: error\ndata: {json.dumps({'message': str(e)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @app.post("/project/scan", response_model=ProjectScanResult)
-async def project_scan(req: ProjectScanRequest) -> ProjectScanResult:
-    """只读扫描已有工程，生成 Project Scan 节点上下文。"""
+async def scan_project_endpoint(req: ProjectScanRequest) -> ProjectScanResult:
+    """只读扫描已有工程，生成仓库上下文。"""
     try:
         return scan_project(
             project_dir=req.projectDir,

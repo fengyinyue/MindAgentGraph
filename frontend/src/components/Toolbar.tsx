@@ -142,7 +142,6 @@ export default function Toolbar() {
         <button
           className={buttonPrimary}
           onClick={() => {
-            if (!bottomOpen) toggleBottomPanel();
             void runDag().catch((e) => alert(e instanceof Error ? e.message : String(e)));
           }}
           disabled={runningId !== null || nodes.length === 0}

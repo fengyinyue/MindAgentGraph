@@ -28,9 +28,6 @@ export default function BottomPanel() {
   useEffect(() => {
     if (!selectedNodeId) return;
     setActiveTab((prev) => (INSPECTOR_VIEWS.has(prev) ? prev : "props"));
-    if (!usePanelStore.getState().bottomOpen) {
-      usePanelStore.getState().toggleBottom();
-    }
   }, [selectedNodeId]);
 
   if (!bottomOpen) {
