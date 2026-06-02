@@ -354,6 +354,7 @@ export interface ExpandPlanResult {
     purpose?: string;
     inputs?: DataPort[];
     outputs?: DataPort[];
+    parent_id?: string;
   }>;
   links: Array<{
     source: string;
@@ -377,6 +378,7 @@ export async function expandPlan(
   planText: string,
   opts: {
     graphKind?: "workflow" | "structure";
+    expandSubgraphs?: boolean;
     provider?: Provider;
     model?: string;
     apiKey?: string;
@@ -393,6 +395,7 @@ export async function expandPlan(
     body: JSON.stringify({
       plan_text: planText,
       graph_kind: opts.graphKind ?? "workflow",
+      expand_subgraphs: opts.expandSubgraphs ?? false,
       existing_nodes: opts.existingNodes ?? [],
       upstream_outputs: opts.upstreamOutputs ?? {},
       provider: opts.provider,

@@ -220,6 +220,282 @@ def test_expand_plan_workflow_strips_port_graph_fields(monkeypatch: pytest.Monke
     assert result["links"][0]["label"] == "Structure"
 
 
+def test_expand_plan_workflow_keeps_ports_on_subgraph_nodes(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = FakeStructureProvider({
+        "nodes": [
+            {
+                "id": "input_subgraph",
+                "type": "subgraph",
+                "title": "Input Subgraph",
+                "x": 0,
+                "y": 0,
+                "purpose": "Convert curves into PCG-friendly geometry.",
+                "inputs": [{"id": "bounds_spline", "name": "Bounds Spline", "type": "spline"}],
+                "outputs": [
+                    {"id": "bounds_polygon", "name": "Bounds Polygon", "type": "polygon"},
+                    {"id": "main_road", "name": "Main Road", "type": "spline"},
+                ],
+            },
+            {
+                "id": "implement",
+                "type": "code",
+                "title": "Implement",
+                "x": 320,
+                "y": 0,
+                "purpose": "Implement the runtime.",
+                "inputs": [{"id": "main_road", "name": "Main Road", "type": "spline"}],
+                "outputs": [{"id": "code_out", "name": "Code Out", "type": "asset"}],
+            },
+        ],
+        "links": [
+            {
+                "source": "input_subgraph",
+                "sourceHandle": "main_road",
+                "target": "implement",
+                "targetHandle": "main_road",
+                "label": "Main Road",
+            },
+        ],
+    })
+    monkeypatch.setitem(planner._PROVIDERS, "fake-workflow", fake)
+
+    result = asyncio.run(
+        expand_plan(
+            "Build a road-network workflow.",
+            graph_kind="workflow",
+            provider="fake-workflow",
+        )
+    )
+
+    by_id = {node["id"]: node for node in result["nodes"]}
+    assert {p["id"] for p in by_id["input_subgraph"]["inputs"]} == {"bounds_spline"}
+    assert {p["id"] for p in by_id["input_subgraph"]["outputs"]} == {"bounds_polygon", "main_road"}
+    assert by_id["implement"]["inputs"] == []
+    assert by_id["implement"]["outputs"] == []
+
+    link = result["links"][0]
+    assert link["sourceHandle"] == "main_road"
+    assert "targetHandle" not in link  # implement is not a subgraph
+    assert link["label"] == "Main Road"
+
+
+def test_expand_plan_workflow_drops_handles_pointing_at_unknown_subgraph_ports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeStructureProvider({
+        "nodes": [
+            {
+                "id": "input_subgraph",
+                "type": "subgraph",
+                "title": "Input Subgraph",
+                "x": 0,
+                "y": 0,
+                "inputs": [],
+                "outputs": [{"id": "main_road", "name": "Main Road", "type": "spline"}],
+            },
+            {
+                "id": "branch",
+                "type": "subgraph",
+                "title": "Branch Subgraph",
+                "x": 320,
+                "y": 0,
+                "inputs": [{"id": "main_road", "name": "Main Road", "type": "spline"}],
+                "outputs": [],
+            },
+        ],
+        "links": [
+            {
+                "source": "input_subgraph",
+                "sourceHandle": "ghost_port",
+                "target": "branch",
+                "targetHandle": "main_road",
+                "label": "Main Road",
+            },
+        ],
+    })
+    monkeypatch.setitem(planner._PROVIDERS, "fake-workflow", fake)
+
+    result = asyncio.run(
+        expand_plan(
+            "Build a road-network workflow.",
+            graph_kind="workflow",
+            provider="fake-workflow",
+        )
+    )
+
+    link = result["links"][0]
+    assert "sourceHandle" not in link  # invalid handle dropped
+    assert link["targetHandle"] == "main_road"
+
+
+def test_expand_plan_workflow_deep_expands_subgraph_children(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeStructureProvider({
+        "nodes": [
+            {
+                "id": "input_subgraph",
+                "type": "subgraph",
+                "title": "Input Subgraph",
+                "x": 0,
+                "y": 0,
+                "purpose": "Receive curves and emit dataflow.",
+                "inputs": [
+                    {"id": "bounds_spline", "name": "Bounds Spline", "type": "spline"},
+                ],
+                "outputs": [
+                    {"id": "main_road", "name": "Main Road", "type": "spline"},
+                ],
+                "children": {
+                    "nodes": [
+                        {
+                            "id": "input_subgraph_bounds_in",
+                            "type": "asset",
+                            "title": "Input: Bounds Spline",
+                            "x": 0,
+                            "y": 0,
+                            "purpose": "Provide the bounds spline.",
+                            "inputs": [],
+                            "outputs": [
+                                {"id": "bounds_spline", "name": "Bounds Spline", "type": "spline"},
+                            ],
+                        },
+                        {
+                            "id": "input_subgraph_to_polygon",
+                            "type": "code",
+                            "title": "Transform: Spline To Polygon",
+                            "x": 320,
+                            "y": 0,
+                            "purpose": "Convert spline to polygon.",
+                            "inputs": [
+                                {"id": "bounds_spline", "name": "Bounds Spline", "type": "spline"},
+                            ],
+                            "outputs": [
+                                {"id": "bounds_polygon", "name": "Bounds Polygon", "type": "polygon"},
+                            ],
+                        },
+                    ],
+                    "links": [
+                        {
+                            "source": "input_subgraph_bounds_in",
+                            "sourceHandle": "bounds_spline",
+                            "target": "input_subgraph_to_polygon",
+                            "targetHandle": "bounds_spline",
+                            "label": "Bounds Spline",
+                        },
+                    ],
+                },
+            },
+            {
+                "id": "implement",
+                "type": "code",
+                "title": "Implement",
+                "x": 320,
+                "y": 0,
+                "purpose": "Implement runtime.",
+                "inputs": [
+                    {"id": "main_road", "name": "Main Road", "type": "spline"},
+                ],
+                "outputs": [],
+            },
+        ],
+        "links": [
+            {
+                "source": "input_subgraph",
+                "sourceHandle": "main_road",
+                "target": "implement",
+                "targetHandle": "main_road",
+                "label": "Main Road",
+            },
+        ],
+    })
+    monkeypatch.setitem(planner._PROVIDERS, "fake-workflow", fake)
+
+    result = asyncio.run(
+        expand_plan(
+            "Build a road-network workflow.",
+            graph_kind="workflow",
+            expand_subgraphs=True,
+            provider="fake-workflow",
+        )
+    )
+
+    assert "深度展开模式" in fake.calls[0]["system_prompt"]
+
+    by_id = {node["id"]: node for node in result["nodes"]}
+    assert "input_subgraph_bounds_in" in by_id
+    assert "input_subgraph_to_polygon" in by_id
+    assert by_id["input_subgraph_bounds_in"]["parent_id"] == "input_subgraph"
+    assert by_id["input_subgraph_to_polygon"]["parent_id"] == "input_subgraph"
+
+    # children kept full ports
+    assert by_id["input_subgraph_to_polygon"]["inputs"][0]["id"] == "bounds_spline"
+    assert by_id["input_subgraph_to_polygon"]["outputs"][0]["id"] == "bounds_polygon"
+
+    # implement (workflow node, non-subgraph) still stripped
+    assert by_id["implement"]["inputs"] == []
+    assert by_id["implement"]["outputs"] == []
+
+    # children should NOT carry leftover children field
+    assert "children" not in by_id["input_subgraph"]
+
+    # internal structure link preserved with both handles
+    inner_links = [
+        link for link in result["links"]
+        if link["source"] == "input_subgraph_bounds_in"
+    ]
+    assert len(inner_links) == 1
+    assert inner_links[0]["sourceHandle"] == "bounds_spline"
+    assert inner_links[0]["targetHandle"] == "bounds_spline"
+    assert inner_links[0]["label"] == "Bounds Spline"
+
+
+def test_expand_plan_workflow_drops_children_when_flag_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake = FakeStructureProvider({
+        "nodes": [
+            {
+                "id": "input_subgraph",
+                "type": "subgraph",
+                "title": "Input Subgraph",
+                "x": 0,
+                "y": 0,
+                "inputs": [],
+                "outputs": [],
+                "children": {
+                    "nodes": [
+                        {
+                            "id": "ghost_child",
+                            "type": "code",
+                            "title": "Ghost",
+                            "x": 0,
+                            "y": 0,
+                            "inputs": [],
+                            "outputs": [],
+                        },
+                    ],
+                    "links": [],
+                },
+            },
+        ],
+        "links": [],
+    })
+    monkeypatch.setitem(planner._PROVIDERS, "fake-workflow", fake)
+
+    result = asyncio.run(
+        expand_plan(
+            "Build a workflow.",
+            graph_kind="workflow",
+            provider="fake-workflow",
+        )
+    )
+
+    # default is expand_subgraphs=False — children should be dropped
+    assert [node["id"] for node in result["nodes"]] == ["input_subgraph"]
+    assert "深度展开模式" not in fake.calls[0]["system_prompt"]
+
+
 def test_offline_demo_uses_planning() -> None:
     graph = planner._offline_demo("Build a demo")
 

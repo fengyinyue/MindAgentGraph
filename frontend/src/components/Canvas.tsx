@@ -6,6 +6,7 @@ import {
   Handle,
   MiniMap,
   Position as FlowPosition,
+  SelectionMode,
   useNodesState,
   useEdgesState,
   useReactFlow,
@@ -487,6 +488,11 @@ export default function Canvas() {
           setPaneMenu({ x: e.clientX, y: e.clientY });
         }}
         deleteKeyCode={["Backspace", "Delete"]}
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[1, 2]}
+        panActivationKeyCode="Space"
+        multiSelectionKeyCode={["Shift", "Meta", "Control"]}
         fitView
         proOptions={{ hideAttribution: true }}
       >

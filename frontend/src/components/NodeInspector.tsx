@@ -50,7 +50,9 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const isGraphNode = node.type === "planning" || node.type === "subgraph";
   const isCodeAnalysisNode = node.type === "analysis";
   const isStructureGraphNode = node.type === "subgraph";
+  const isPlanningNode = node.type === "planning";
   const canGenerateNodes = isGraphNode && output.trim().length > 0;
+  const expandSubgraphsFlag = Boolean(node.data?.expandSubgraphs);
   const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
@@ -163,6 +165,24 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                   >
                     ✦ Generate Nodes
                   </button>
+                ) : null}
+                {canGenerateNodes && isPlanningNode ? (
+                  <label
+                    className="flex items-center gap-1 text-[11px] text-zinc-300 select-none cursor-pointer"
+                    title="开启后，本次 Generate Nodes 会同时把每个 Subgraph 的内部数据流也生成出来（一次 LLM 调用）"
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-purple-500"
+                      checked={expandSubgraphsFlag}
+                      onChange={(e) =>
+                        useGraphStore
+                          .getState()
+                          .patchNodeData(node.id, { expandSubgraphs: e.target.checked })
+                      }
+                    />
+                    深度展开 Subgraph
+                  </label>
                 ) : null}
                 {canGenerateModuleGraph ? (
                   <button

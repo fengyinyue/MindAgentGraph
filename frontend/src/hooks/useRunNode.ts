@@ -687,8 +687,11 @@ export function useRunNode() {
           )
           .map(summarizeNodeForExpand);
         const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, planningNodeId);
+        const expandSubgraphs =
+          graphKind === "workflow" && Boolean(planningNode.data?.expandSubgraphs);
         const result = await expandPlan(planText, {
           graphKind,
+          expandSubgraphs,
           provider,
           model,
           apiKey,
@@ -708,47 +711,92 @@ export function useRunNode() {
         }, "horizontal");
         const isWorkflowExpansion = graphKind === "workflow";
 
-        const newNodes: NodeBase[] = result.nodes.map((raw) => ({
-          id: idMap.get(raw.id)!,
-          type: raw.type as NodeBase["type"],
-          title: raw.title,
-          position: positions.get(raw.id) ?? {
-            x: graphKind === "workflow"
-              ? planningNode.position.x + 360 + raw.x
-              : planningNode.position.x + raw.x,
-            y: graphKind === "workflow"
-              ? planningNode.position.y + raw.y
-              : planningNode.position.y + 350 + raw.y,
-          },
-          contextMode: "inherit" as const,
-          fileScope: { allow: [], deny: [] },
-          toolPolicy: { tools: [], deny: [] },
-          memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
-          parentId: graphKind === "structure" ? planningNode.id : planningNode.parentId,
-          purpose: raw.purpose ?? "",
-          data: {
+        const subgraphRawIds = new Set(
+          result.nodes.filter((n) => n.type === "subgraph").map((n) => n.id),
+        );
+        const childRawIds = new Set(
+          result.nodes
+            .filter((n) => typeof n.parent_id === "string" && n.parent_id.length > 0)
+            .map((n) => n.id),
+        );
+
+        const newNodes: NodeBase[] = result.nodes.map((raw) => {
+          const isChild = childRawIds.has(raw.id);
+          const keepPorts = !isWorkflowExpansion || raw.type === "subgraph" || isChild;
+          let nodeParentId: string | undefined;
+          if (isChild && raw.parent_id) {
+            nodeParentId = idMap.get(raw.parent_id) ?? raw.parent_id;
+          } else if (graphKind === "structure") {
+            nodeParentId = planningNode.id;
+          } else {
+            nodeParentId = planningNode.parentId;
+          }
+          // Children of a subgraph live in a separate frame; lay them out
+          // relative to (0,0) of that frame so the canvas pans nicely on Enter.
+          const fallbackPosition = isChild
+            ? { x: raw.x, y: raw.y }
+            : graphKind === "workflow"
+              ? {
+                  x: planningNode.position.x + 360 + raw.x,
+                  y: planningNode.position.y + raw.y,
+                }
+              : {
+                  x: planningNode.position.x + raw.x,
+                  y: planningNode.position.y + 350 + raw.y,
+                };
+          return {
+            id: idMap.get(raw.id)!,
+            type: raw.type as NodeBase["type"],
+            title: raw.title,
+            position: isChild
+              ? fallbackPosition
+              : positions.get(raw.id) ?? fallbackPosition,
+            contextMode: "inherit" as const,
+            fileScope: { allow: [], deny: [] },
+            toolPolicy: { tools: [], deny: [] },
+            memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
+            parentId: nodeParentId,
             purpose: raw.purpose ?? "",
-            inputs: isWorkflowExpansion ? [] : raw.inputs ?? [],
-            outputs: isWorkflowExpansion ? [] : raw.outputs ?? [],
-          },
-          runHistory: [],
-          resourceRefs: [],
-          metadata: {},
-        }));
+            data: {
+              purpose: raw.purpose ?? "",
+              inputs: keepPorts ? raw.inputs ?? [] : [],
+              outputs: keepPorts ? raw.outputs ?? [] : [],
+            },
+            runHistory: [],
+            resourceRefs: [],
+            metadata: {},
+          };
+        });
 
-        const newEdges: Edge[] = result.links.map((raw) => ({
-          id: crypto.randomUUID(),
-          source: idMap.get(raw.source) ?? raw.source,
-          target: idMap.get(raw.target) ?? raw.target,
-          sourceHandle: isWorkflowExpansion ? undefined : raw.sourceHandle,
-          targetHandle: isWorkflowExpansion ? undefined : raw.targetHandle,
-          label: raw.label,
-        }));
+        const newEdges: Edge[] = result.links.map((raw) => {
+          const sourceIsSubgraph = subgraphRawIds.has(raw.source);
+          const targetIsSubgraph = subgraphRawIds.has(raw.target);
+          const sourceIsChild = childRawIds.has(raw.source);
+          const targetIsChild = childRawIds.has(raw.target);
+          // Structure-internal edge: both endpoints are children of some subgraph.
+          const isStructureEdge = sourceIsChild && targetIsChild;
+          const keepSourceHandle =
+            !isWorkflowExpansion || sourceIsSubgraph || isStructureEdge;
+          const keepTargetHandle =
+            !isWorkflowExpansion || targetIsSubgraph || isStructureEdge;
+          return {
+            id: crypto.randomUUID(),
+            source: idMap.get(raw.source) ?? raw.source,
+            target: idMap.get(raw.target) ?? raw.target,
+            sourceHandle: keepSourceHandle ? raw.sourceHandle : undefined,
+            targetHandle: keepTargetHandle ? raw.targetHandle : undefined,
+            label: raw.label,
+          };
+        });
 
-        // Find root nodes (no incoming edges from other new nodes) and connect planning → root
+        // Find root nodes (no incoming edges from other new nodes) and connect planning → root.
+        // Skip subgraph children: they live inside a different frame.
         if (graphKind === "workflow") {
           const newTargets = new Set(newEdges.map((e) => e.target));
-          const roots = newNodes.filter((n) => !newTargets.has(n.id));
+          const topLevelNodes = newNodes.filter(
+            (n) => n.parentId === planningNode.parentId,
+          );
+          const roots = topLevelNodes.filter((n) => !newTargets.has(n.id));
           for (const root of roots) {
             newEdges.push({
               id: crypto.randomUUID(),

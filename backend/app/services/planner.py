@@ -86,43 +86,53 @@ EMIT_GRAPH_TOOL = {
         "properties": {
             "nodes": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["id", "type", "title", "x", "y"],
-                    "properties": {
-                        "id": {"type": "string"},
-                        "type": {
-                            "type": "string",
-                            "enum": [
-                                "prompt", "planning", "subgraph", "memory", "filescope",
-                                "analysis", "code", "api", "asset", "agent", "task",
-                            ],
-                        },
-                        "title": {"type": "string"},
-                        "x": {"type": "number"},
-                        "y": {"type": "number"},
-                        "purpose": {"type": "string", "description": "What this node does"},
-                        "inputs": {"type": "array", "items": {"$ref": "#/$defs/dataPort"}},
-                        "outputs": {"type": "array", "items": {"$ref": "#/$defs/dataPort"}},
-                    },
-                },
+                "items": {"$ref": "#/$defs/graphNode"},
             },
             "links": {
                 "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["source", "target"],
-                    "properties": {
-                        "source": {"type": "string"},
-                        "target": {"type": "string"},
-                        "sourceHandle": {"type": "string"},
-                        "targetHandle": {"type": "string"},
-                        "label": {"type": "string", "description": "Data passed from source to target."},
-                    },
-                },
+                "items": {"$ref": "#/$defs/graphLink"},
             },
         },
         "$defs": {
+            "graphNode": {
+                "type": "object",
+                "required": ["id", "type", "title", "x", "y"],
+                "properties": {
+                    "id": {"type": "string"},
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "prompt", "planning", "subgraph", "memory", "filescope",
+                            "analysis", "code", "api", "asset", "agent", "task",
+                        ],
+                    },
+                    "title": {"type": "string"},
+                    "x": {"type": "number"},
+                    "y": {"type": "number"},
+                    "purpose": {"type": "string", "description": "What this node does"},
+                    "inputs": {"type": "array", "items": {"$ref": "#/$defs/dataPort"}},
+                    "outputs": {"type": "array", "items": {"$ref": "#/$defs/dataPort"}},
+                    "children": {
+                        "type": "object",
+                        "description": "Only valid when type='subgraph'. The dataflow nodes/links living inside this subgraph. Inner ids must be globally unique.",
+                        "properties": {
+                            "nodes": {"type": "array", "items": {"$ref": "#/$defs/graphNode"}},
+                            "links": {"type": "array", "items": {"$ref": "#/$defs/graphLink"}},
+                        },
+                    },
+                },
+            },
+            "graphLink": {
+                "type": "object",
+                "required": ["source", "target"],
+                "properties": {
+                    "source": {"type": "string"},
+                    "target": {"type": "string"},
+                    "sourceHandle": {"type": "string"},
+                    "targetHandle": {"type": "string"},
+                    "label": {"type": "string", "description": "Data passed from source to target."},
+                },
+            },
             "dataPort": {
                 "type": "object",
                 "required": ["id", "name", "type"],
@@ -218,26 +228,106 @@ def _normalize_ports(raw_ports: Any, prefix: str) -> list[dict[str, str]]:
     return ports
 
 
-def _sanitize_workflow_payload(payload: dict[str, Any]) -> dict[str, object]:
-    """Keep workflow expansion as a high-level DAG, not a port graph."""
+def _sanitize_workflow_payload(
+    payload: dict[str, Any],
+    *,
+    expand_subgraphs: bool = False,
+) -> dict[str, object]:
+    """Keep workflow expansion as a high-level DAG. Only subgraph nodes carry ports.
+
+    When ``expand_subgraphs`` is True, subgraph nodes may carry a ``children``
+    field; those children are flattened into the top-level node list with
+    ``parent_id`` pointing back at the subgraph, and their links are appended
+    to the top-level links (with handles preserved per structure rules).
+    """
     nodes: list[dict[str, Any]] = []
+    subgraph_ports: dict[str, dict[str, set[str]]] = {}
+    child_nodes: list[dict[str, Any]] = []
+    child_node_ports: dict[str, dict[str, set[str]]] = {}
+    child_links_raw: list[dict[str, Any]] = []
+
     for raw in payload.get("nodes", []):
         if not isinstance(raw, dict):
             continue
         node = dict(raw)
         node["type"] = _normalize_node_type(node.get("type"))
-        node["inputs"] = []
-        node["outputs"] = []
+        node_id = str(node.get("id") or "")
+        if node["type"] == "subgraph":
+            inputs = _normalize_ports(node.get("inputs", []), "input")
+            outputs = _normalize_ports(node.get("outputs", []), "output")
+            node["inputs"] = inputs
+            node["outputs"] = outputs
+            if node_id:
+                subgraph_ports[node_id] = {
+                    "inputs": {p["id"] for p in inputs},
+                    "outputs": {p["id"] for p in outputs},
+                }
+
+            children = node.pop("children", None)
+            if expand_subgraphs and isinstance(children, dict) and node_id:
+                for child_raw in children.get("nodes", []) or []:
+                    if not isinstance(child_raw, dict):
+                        continue
+                    child = dict(child_raw)
+                    child["type"] = _normalize_node_type(child.get("type"))
+                    child["parent_id"] = node_id
+                    child_inputs = _normalize_ports(child.get("inputs", []), "input")
+                    child_outputs = _normalize_ports(child.get("outputs", []), "output")
+                    child["inputs"] = child_inputs
+                    child["outputs"] = child_outputs
+                    child_id = str(child.get("id") or "")
+                    if child_id:
+                        child_node_ports[child_id] = {
+                            "inputs": {p["id"] for p in child_inputs},
+                            "outputs": {p["id"] for p in child_outputs},
+                        }
+                    child_nodes.append(child)
+                for link_raw in children.get("links", []) or []:
+                    if isinstance(link_raw, dict):
+                        child_links_raw.append(link_raw)
+            else:
+                # Drop unsolicited children: contract requires explicit opt-in.
+                pass
+        else:
+            node["inputs"] = []
+            node["outputs"] = []
         nodes.append(node)
+
+    nodes.extend(child_nodes)
 
     links: list[dict[str, Any]] = []
     for raw in payload.get("links", []):
         if not isinstance(raw, dict):
             continue
-        link = {
-            "source": raw.get("source"),
-            "target": raw.get("target"),
-        }
+        source = raw.get("source")
+        target = raw.get("target")
+        link: dict[str, Any] = {"source": source, "target": target}
+
+        source_handle = raw.get("sourceHandle")
+        if source in subgraph_ports and source_handle in subgraph_ports[source]["outputs"]:
+            link["sourceHandle"] = source_handle
+
+        target_handle = raw.get("targetHandle")
+        if target in subgraph_ports and target_handle in subgraph_ports[target]["inputs"]:
+            link["targetHandle"] = target_handle
+
+        if raw.get("label") is not None:
+            link["label"] = raw.get("label")
+        links.append(link)
+
+    for raw in child_links_raw:
+        source = raw.get("source")
+        target = raw.get("target")
+        link = {"source": source, "target": target}
+
+        source_handle = raw.get("sourceHandle")
+        if source in child_node_ports and source_handle in child_node_ports[source]["outputs"]:
+            link["sourceHandle"] = source_handle
+
+        target_handle = raw.get("targetHandle")
+        if target in child_node_ports and target_handle in child_node_ports[target]["inputs"]:
+            link["targetHandle"] = target_handle
+
         if raw.get("label") is not None:
             link["label"] = raw.get("label")
         links.append(link)
@@ -257,7 +347,8 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 - 不要把 subgraph 用作普通任务清单；只有当下游需要端口化结构、数据流或依赖关系时才使用它
 - planning 外层不要重复拆解 subgraph 内部的数据流节点；内部输入/转换/输出节点应留给 Subgraph 自己展开
 - 当 planning 中已有 subgraph 时，不要把 Validate/Material/LOD/Collider/Prefab 等内部处理阶段逐个镜像成外层 code 节点；外层 code 节点应是粗粒度工作包，例如"实现管线运行框架"、"根据 Subgraph 实现处理器集合"、"集成导出与报告"、"验证与交付"
-- planning 返回的节点不要填写 inputs/outputs 端口，links 也不要填写 sourceHandle/targetHandle；端口化数据流只属于 Subgraph 内部
+- 仅 subgraph 节点需要声明 inputs / outputs 端口（每个端口为 {id, name, type}，type 取值 spline/point/polygon/bounds/graph/debug/asset/unknown），作为该子图对外的接口契约；其他类型节点不要填写端口
+- links 涉及 subgraph 的一端，请填写对应的 sourceHandle / targetHandle，且必须命中该 subgraph 已声明的端口 id；非 subgraph 一侧的 handle 请省略
 - 工具返回的 links 只能连接本次返回的 nodes；如果需要依赖已有节点，请在新节点 purpose 中明确写"依赖已有节点：<title>"
 
 节点类型说明：
@@ -280,6 +371,23 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 6. 节点的 purpose 字段要具体
 
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
+
+
+EXPAND_DEEP_SUBGRAPH_SECTION = """深度展开模式（已开启）：
+
+当本次返回包含 subgraph 节点时，必须在该节点的 children 字段里同时输出该 subgraph 的内部数据流：
+
+- children = { nodes: [...], links: [...] }，仅写在 type="subgraph" 节点上
+- children.nodes 内部使用结构图规则：
+  * 处理/变换节点用 type="code"；输入/资源/产物用 type="asset"；验证/调试/预览用 type="task"；不要用 semantic
+  * 每个内部节点必须有完整 inputs / outputs（每个端口 {id, name, type}，type 取值 spline/point/polygon/bounds/graph/debug/asset/unknown）
+  * 内部节点的 id 在整个返回里全局唯一，建议用 "<subgraphId>_<role>" 前缀避免冲突
+  * 一般 5-12 个节点，从左到右铺开，x 递增表示下游
+- children.links 必须每条都填 source / target / sourceHandle / targetHandle / label，且 handle 必须命中对应内部节点已声明的端口 id
+- children 内部不要再嵌套 subgraph；如果某层概念也需要数据流，直接平铺到当前 children 里
+- subgraph 节点本身仍按外层规则声明 inputs / outputs 作为外部接口；children 里的端口与外部接口的对接关系由用户后续手动连接，不要在 children.links 里跨边界连接
+
+外层（top-level）的 nodes / links 仍遵循原有 workflow 规则：除 subgraph 外不填端口，外层 link 的 handle 仅在端是 subgraph 时填写。"""
 
 
 STRUCTURE_GRAPH_EXPAND_SYSTEM = """You are a subgraph architect for MindAgentGraph.
@@ -312,6 +420,7 @@ async def expand_plan(
     existing_nodes: list[dict[str, Any]] | None = None,
     upstream_outputs: dict[str, str] | None = None,
     graph_kind: str = "workflow",
+    expand_subgraphs: bool = False,
     provider: str | None = None,
     model: str | None = None,
     api_key: str | None = None,
@@ -341,14 +450,17 @@ async def expand_plan(
             existing_nodes=existing_nodes or [],
             upstream_outputs=upstream_outputs or {},
         )
+        system_prompt = EXPAND_SYSTEM
+        if expand_subgraphs:
+            system_prompt = EXPAND_SYSTEM + "\n\n" + EXPAND_DEEP_SUBGRAPH_SECTION
         payload = await impl.emit_graph(
-            system_prompt=EXPAND_SYSTEM,
+            system_prompt=system_prompt,
             user_goal=user_goal,
             tool_schema=EMIT_GRAPH_TOOL,
             model=chosen_model,
             api_key=api_key,
         )
-        return _sanitize_workflow_payload(payload)
+        return _sanitize_workflow_payload(payload, expand_subgraphs=expand_subgraphs)
     except ProviderError as e:
         _log.warning("expand_plan provider=%s failed: %s", chosen, e)
         raise

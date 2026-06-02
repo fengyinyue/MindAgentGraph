@@ -91,6 +91,7 @@ async def plan_expand(
         existing_nodes=[node.model_dump() for node in req.existing_nodes],
         upstream_outputs=req.upstream_outputs,
         graph_kind=req.graph_kind,
+        expand_subgraphs=req.expand_subgraphs,
         provider=req.provider,
         model=req.model,
         api_key=x_provider_key,

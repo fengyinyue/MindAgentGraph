@@ -157,6 +157,7 @@ class ExpandNodeSummary(BaseModel):
 class ExpandPlanRequest(BaseModel):
     plan_text: str
     graph_kind: Literal["workflow", "structure"] = "workflow"
+    expand_subgraphs: bool = False
     existing_nodes: list[ExpandNodeSummary] = Field(default_factory=list)
     upstream_outputs: dict[str, str] = Field(default_factory=dict)
     provider: Optional[ProviderName] = None

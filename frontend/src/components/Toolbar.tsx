@@ -3,6 +3,7 @@ import { useGraphStore } from "@/store/graphStore";
 import { usePanelStore } from "@/store/panelStore";
 import { openProjectDialog, saveProjectAt, saveProjectDialog } from "@/api/project";
 import { useRunNode } from "@/hooks/useRunNode";
+import { autoLayoutGraph } from "@/utils/layout";
 import type { NodeBase, ProjectMeta } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
@@ -138,6 +139,21 @@ export default function Toolbar() {
           }}
         >
           + Node
+        </button>
+        <button
+          className={buttonNeutral}
+          onClick={() => {
+            const positions = autoLayoutGraph(nodes, links);
+            if (positions.size === 0) return;
+            const updated = nodes.map((n) =>
+              positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n,
+            );
+            useGraphStore.getState().setGraph({ nodes: updated, links });
+          }}
+          disabled={runningId !== null || nodes.length === 0}
+          title="按拓扑顺序自动排版（每个 Subgraph 内部独立排版）"
+        >
+          ⇲ Layout
         </button>
         <button
           className={buttonPrimary}
