@@ -30,6 +30,8 @@ GRAPH_EDIT_SYSTEM = """你是 MindAgentGraph 的图表编辑助手。
 6. 如果用户用中文，reply、title、purpose 尽量使用中文。
 7. createLinks 的 source/target 可以是已有 id 或本次 createNodes 中的 clientId。
 8. 不要修改项目源代码文件；这里只编辑图表。
+9. 新建多个节点时默认从左到右横向排布：同一批节点 y 尽量相同，x 逐个递增，节点间距建议 260-320。
+10. 如果需要表达流程顺序，也优先使用从左到右的连线方向，而不是从上到下。
 """
 
 GRAPH_CHAT_STREAM_SYSTEM = """你是 MindAgentGraph 的图表编辑助手。
@@ -62,8 +64,8 @@ GRAPH_EDIT_TOOL = {
                         "type": {
                             "type": "string",
                             "enum": [
-                                "prompt", "workflow_graph", "structure_graph", "memory", "filescope",
-                                "project_scan", "code_analysis", "code", "api", "asset", "agent", "task", "semantic",
+                                "prompt", "planning", "subgraph", "memory", "filescope",
+                                "analysis", "code", "api", "asset", "agent", "task", "semantic",
                             ],
                         },
                         "title": {"type": "string"},

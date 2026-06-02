@@ -31,33 +31,86 @@ html, body, #root {
 .mag-node {
   --mag-node-port-padding-x: 10px;
   --mag-node-handle-size: 11px;
+  --mag-accent: #9aa3b2;
+  position: relative;
   min-width: 220px;
   max-width: 320px;
-  background: #12151c;
-  border: 1px solid #2a2f3a;
-  border-top: 3px solid #a0a0a0;
-  border-radius: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  color: #e2e8f0;
+  background:
+    radial-gradient(120% 80% at 0% 0%, color-mix(in srgb, var(--mag-accent) 22%, transparent) 0%, transparent 55%),
+    linear-gradient(160deg, #1a1f2c 0%, #12151c 55%, #0d1016 100%);
+  border: 1px solid color-mix(in srgb, var(--mag-accent) 28%, #2a2f3a 72%);
+  border-radius: 10px;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
   overflow: visible;
+  transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.mag-node-selected {
+  border-color: color-mix(in srgb, var(--mag-accent) 75%, white 5%);
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--mag-accent) 70%, transparent),
+    0 0 24px color-mix(in srgb, var(--mag-accent) 35%, transparent),
+    0 12px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.mag-node-running {
+  animation: mag-node-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes mag-node-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--mag-accent) 60%, transparent),
+      0 0 18px color-mix(in srgb, var(--mag-accent) 25%, transparent),
+      0 10px 30px rgba(0, 0, 0, 0.35);
+  }
+  50% {
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--mag-accent) 80%, transparent),
+      0 0 28px color-mix(in srgb, var(--mag-accent) 50%, transparent),
+      0 10px 30px rgba(0, 0, 0, 0.35);
+  }
 }
 
 .mag-node-title {
+  position: relative;
   display: flex;
   align-items: baseline;
   gap: 8px;
   justify-content: space-between;
-  padding: 8px 10px 6px;
-  border-bottom: 1px solid #232936;
+  padding: 9px 10px 7px;
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--mag-accent) 18%, transparent) 0%,
+    color-mix(in srgb, var(--mag-accent) 4%, transparent) 100%);
+  border-bottom: 1px solid color-mix(in srgb, var(--mag-accent) 18%, #232936 82%);
   font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.2px;
 }
 
 .mag-node-type {
   flex: 0 0 auto;
-  color: #8b94a7;
+  color: color-mix(in srgb, var(--mag-accent) 70%, #cbd5e1 30%);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   font-size: 10px;
   font-weight: 500;
+  text-shadow: 0 0 6px color-mix(in srgb, var(--mag-accent) 30%, transparent);
+}
+
+.mag-node-purpose {
+  padding: 6px 10px 7px;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .mag-node-ports {

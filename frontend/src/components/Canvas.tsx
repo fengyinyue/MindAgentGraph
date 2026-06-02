@@ -189,20 +189,25 @@ function MagGraphNode({ data, selected }: NodeProps<RFNode<MagNodeData>>) {
   const node = data.node;
   const { inputs, outputs } = nodePorts(node);
   const minRows = Math.max(inputs.length, outputs.length, 1);
+  const accent = data.needsConfirmation ? "#f59e0b" : typeColor[node.type] || "#9aa3b2";
 
   return (
     <div
-      className="mag-node"
+      className={`mag-node${selected ? " mag-node-selected" : ""}${data.running ? " mag-node-running" : ""}`}
       style={{
-        borderTopColor: data.needsConfirmation ? "#f59e0b" : typeColor[node.type] || "#999",
+        ["--mag-accent" as string]: accent,
         opacity: data.running ? 1 : undefined,
-        boxShadow: selected ? "0 0 0 1px #6c8eef" : undefined,
       }}
     >
       <div className="mag-node-title">
         <span className="truncate">{node.title}</span>
         <span className="mag-node-type">[{node.type}]{data.running ? " ●" : data.needsConfirmation ? " ?" : ""}</span>
       </div>
+      {node.purpose && node.purpose.trim() ? (
+        <div className="mag-node-purpose" title={node.purpose}>
+          {node.purpose}
+        </div>
+      ) : null}
       <div
         className="mag-node-ports"
         style={{

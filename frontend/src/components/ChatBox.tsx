@@ -205,8 +205,8 @@ function applyGraphEditPatch(result: GraphEditResult): number {
   for (const [index, raw] of result.createNodes.entries()) {
     const type = isNodeType(raw.type) ? raw.type : "task";
     const title = typeof raw.title === "string" && raw.title.trim() ? raw.title.trim() : "New Node";
-    const x = typeof raw.x === "number" ? raw.x : baseX;
-    const y = typeof raw.y === "number" ? raw.y : baseY + index * 130;
+    const x = baseX + index * 280;
+    const y = baseY;
     const node = makeNode(type, title, { x, y }, parentId);
     const enriched: NodeBase = {
       ...node,
@@ -415,7 +415,7 @@ function applyGraphCommand(rawText: string): GraphCommandResult {
       const baseX = currentNodes.length ? Math.max(...currentNodes.map((node) => node.position.x)) + 280 : 80;
       const baseY = currentNodes.length ? Math.min(...currentNodes.map((node) => node.position.y)) : 80;
       for (const [index, title] of titles.entries()) {
-        const node = makeNode(detected.type, title, { x: baseX, y: baseY + index * 130 }, parentId);
+        const node = makeNode(detected.type, title, { x: baseX + index * 280, y: baseY }, parentId);
         useGraphStore.getState().addNode(node);
         responses.push(`已创建 ${detected.label} 节点：${title}`);
       }
@@ -433,7 +433,6 @@ function applyGraphCommand(rawText: string): GraphCommandResult {
 
 export default function ChatBox() {
   const rightOpen = usePanelStore((s) => s.rightOpen);
-  const toggleRight = usePanelStore((s) => s.toggleRight);
   const nodeCount = useGraphStore((s) => s.nodes.length);
   const linkCount = useGraphStore((s) => s.links.length);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -448,20 +447,7 @@ export default function ChatBox() {
     }
   }, [messages]);
 
-  if (!rightOpen) {
-    return (
-      <div className="bg-panel border-l border-zinc-800 flex flex-col items-center py-2 h-full" style={{ width: 32 }}>
-        <button
-          className="text-zinc-500 hover:text-accent text-sm leading-none"
-          onClick={toggleRight}
-          title="展开图表助手"
-        >
-          &#9664;
-        </button>
-        <div className="mt-2 text-[10px] text-zinc-600 [writing-mode:vertical-rl]">图表助手</div>
-      </div>
-    );
-  }
+  if (!rightOpen) return null;
 
   const send = async () => {
     const text = draft.trim();
@@ -508,24 +494,15 @@ export default function ChatBox() {
           <div className="font-semibold text-zinc-300">图表助手</div>
           <div className="text-[10px] text-zinc-600">{graphSummary}</div>
         </div>
-        <div className="flex items-center gap-2">
-          {messages.length > 0 && (
-            <button
-              className="text-zinc-500 hover:text-accent"
-              onClick={() => setMessages([])}
-              title="清空对话"
-            >
-              Clear
-            </button>
-          )}
+        {messages.length > 0 && (
           <button
             className="text-zinc-500 hover:text-accent"
-            onClick={toggleRight}
-            title="折叠图表助手"
+            onClick={() => setMessages([])}
+            title="清空对话"
           >
-            &#9654;
+            Clear
           </button>
-        </div>
+        )}
       </div>
 
       <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2 text-xs">

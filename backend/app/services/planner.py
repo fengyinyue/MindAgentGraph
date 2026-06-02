@@ -48,8 +48,8 @@ PLANNER_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 1. 5-12 个节点，覆盖目标的关键模块
 2. 每个节点应有清晰的单一职责
 3. 用 links 表达数据依赖（A 的输出是 B 的输入）
-4. 节点位置 (position) 要分散。layout 从上到下：同级节点 x 间距 ≥ 200（水平均匀散开），父子节点 y 间距 ≥ 300（向下延伸）
-5. 根节点放在 (0,0)，下游节点向下展开，同层兄弟节点水平排列
+4. 节点位置 (position) 要分散。layout 从左到右：上游节点在左，下游节点在右，父子节点 x 间距 ≥ 280
+5. 根节点放在 (0,0)，下游节点向右展开；并行分支用 y 上下错开
 
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
 
@@ -69,8 +69,8 @@ MODULE_GRAPH_SYSTEM = """你是 MindAgentGraph 的模块依赖分析助手。
 设计原则：
 1. 每个模块独立为一个节点
 2. 用 links 表达模块间的依赖关系 (A depends on B → link source=B, target=A)
-3. 节点位置 (position) 要分散。同级节点 x 间距 ≥ 200，父子节点 y 间距 ≥ 300
-4. 根模块放在 (0,0)，下游模块向下展开，同层兄弟节点水平排列
+3. 节点位置 (position) 要分散。依赖关系从左到右排列，父子节点 x 间距 ≥ 280
+4. 根模块放在 (0,0)，依赖链向右展开，并行模块用 y 上下错开
 5. 节点 title 尽量使用模块/文件的相对路径名或组件名
 6. 节点的 purpose 字段描述该模块的职责和代码分析的发现
 
@@ -275,8 +275,8 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 1. 3-10 个节点，覆盖规划中的关键模块
 2. 每个节点应有清晰的单一职责
 3. 用 links 表达数据依赖（A 的输出是 B 的输入）
-4. 节点位置 (position) 分散。同级节点 x 间距 ≥ 200，父子节点 y 间距 ≥ 250
-5. 根节点放在 (0,0)，下游节点向下展开，同层兄弟节点水平排列
+4. 节点位置 (position) 分散。流程从左到右排列，父子节点 x 间距 ≥ 280
+5. 根节点放在 (0,0)，下游节点向右展开，并行分支用 y 上下错开
 6. 节点的 purpose 字段要具体
 
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
@@ -587,10 +587,10 @@ def _offline_demo(goal: str) -> Graph:
     """No API key → 返回硬编码示例，让 UI 流程可演示。"""
     nodes_raw = [
         {"id": "root", "type": "planning", "title": goal[:30] or "Project", "x": 0, "y": 0},
-        {"id": "design", "type": "prompt", "title": "需求拆解", "x": -220, "y": 300},
-        {"id": "data", "type": "memory", "title": "项目记忆", "x": 0, "y": 300},
-        {"id": "impl", "type": "code", "title": "代码实现", "x": 220, "y": 300},
-        {"id": "test", "type": "task", "title": "测试验证", "x": 0, "y": 600},
+        {"id": "design", "type": "prompt", "title": "需求拆解", "x": 300, "y": -120},
+        {"id": "data", "type": "memory", "title": "项目记忆", "x": 300, "y": 120},
+        {"id": "impl", "type": "code", "title": "代码实现", "x": 600, "y": 0},
+        {"id": "test", "type": "task", "title": "测试验证", "x": 900, "y": 0},
     ]
     links_raw = [
         {"source": "root", "target": "design"},

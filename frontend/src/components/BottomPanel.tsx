@@ -20,7 +20,6 @@ const INSPECTOR_VIEWS: ReadonlySet<Tab> = new Set<Tab>(["props", "output", "scop
 
 export default function BottomPanel() {
   const bottomOpen = usePanelStore((s) => s.bottomOpen);
-  const toggleBottom = usePanelStore((s) => s.toggleBottom);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const [activeTab, setActiveTab] = useState<Tab>("props");
 
@@ -30,19 +29,7 @@ export default function BottomPanel() {
     setActiveTab((prev) => (INSPECTOR_VIEWS.has(prev) ? prev : "props"));
   }, [selectedNodeId]);
 
-  if (!bottomOpen) {
-    return (
-      <div className="bg-panel border-t border-zinc-800 flex items-center justify-center" style={{ height: 28 }}>
-        <button
-          className="text-zinc-500 hover:text-accent text-xs"
-          onClick={toggleBottom}
-          title="展开底部面板"
-        >
-          &#9650;
-        </button>
-      </div>
-    );
-  }
+  if (!bottomOpen) return null;
 
   return (
     <div className="bg-panel border-t border-zinc-800 flex flex-col h-full">
@@ -62,13 +49,6 @@ export default function BottomPanel() {
             </button>
           </Fragment>
         ))}
-        <button
-          className="ml-auto text-zinc-500 hover:text-accent shrink-0"
-          onClick={toggleBottom}
-          title="折叠底部面板"
-        >
-          &#9660;
-        </button>
       </div>
       <div className="flex-1 min-h-0 overflow-hidden">
         {INSPECTOR_VIEWS.has(activeTab) ? (
