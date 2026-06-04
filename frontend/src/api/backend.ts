@@ -1,4 +1,4 @@
-import type { ContextMode, DataPort, Graph } from "@shared/types";
+import type { ContextMode, DataPort, Graph, ToolTraceItem } from "@shared/types";
 import type { DagProgress, TokenUsage } from "@/store/monitorStore";
 
 const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
@@ -167,7 +167,9 @@ export interface CodeRunInput {
   fileScopeDeny?: string[];
   parentOutputs?: Record<string, string>;
   userPrompt?: string;
+  provider?: Provider;
   model?: string;
+  apiKey?: string;
   runId?: string;
 }
 
@@ -189,6 +191,8 @@ export interface CodeRunCallbacks {
   onLog?: RunNodeCallbacks["onLog"];
   onUsage?: RunNodeCallbacks["onUsage"];
   onProgress?: RunNodeCallbacks["onProgress"];
+  onToolStart?: (trace: ToolTraceItem) => void;
+  onToolResult?: (trace: ToolTraceItem) => void;
   signal?: AbortSignal;
 }
 
@@ -199,10 +203,23 @@ export async function runNodeCode(
   cb: CodeRunCallbacks,
 ): Promise<void> {
   const url = await getBackendUrl();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (input.apiKey) headers["X-Provider-Key"] = input.apiKey;
   const res = await fetch(`${url}/run/node/code`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
+    headers,
+    body: JSON.stringify({
+      node: input.node,
+      projectDir: input.projectDir,
+      projectPath: input.projectPath,
+      fileScopeAllow: input.fileScopeAllow,
+      fileScopeDeny: input.fileScopeDeny,
+      parentOutputs: input.parentOutputs,
+      userPrompt: input.userPrompt,
+      provider: input.provider,
+      model: input.model,
+      runId: input.runId,
+    }),
     signal: cb.signal,
   });
   if (!res.ok || !res.body) {
@@ -247,6 +264,25 @@ export async function runNodeCode(
           cb.onUsage?.(parseJson(event.data, {}));
         } else if (event.type === "progress") {
           cb.onProgress?.(parseJson(event.data, {}));
+        } else if (event.type === "tool_start") {
+          cb.onToolStart?.(parseJson<ToolTraceItem>(event.data, {
+            id: crypto.randomUUID(),
+            step: 0,
+            tool: "finish",
+            status: "running",
+            startedAt: new Date().toISOString(),
+            input: {},
+          }));
+        } else if (event.type === "tool_result") {
+          cb.onToolResult?.(parseJson<ToolTraceItem>(event.data, {
+            id: crypto.randomUUID(),
+            step: 0,
+            tool: "finish",
+            status: "error",
+            startedAt: new Date().toISOString(),
+            input: {},
+            error: "Failed to parse tool result.",
+          }));
         }
       }
     }

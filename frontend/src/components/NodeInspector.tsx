@@ -6,7 +6,7 @@ import {
   type ConfirmationAnswers,
   type ConfirmationRequest,
 } from "@/utils/confirmation";
-import { NODE_TYPES, type NodeType } from "@shared/types";
+import { NODE_TYPES, type Edge, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
 
 function nodeTypeLabel(type: NodeType): string {
   if (type === "planning") return "Planning";
@@ -44,6 +44,8 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const purpose = node.purpose ?? (node.data?.purpose as string | undefined) ?? "";
   const generatedFiles = (node.data?.generatedFiles as string[] | undefined) ?? [];
   const codeDiff = node.data?.codeDiff as { diff?: string; truncated?: boolean; warnings?: string[] } | undefined;
+  const latestRun = node.runHistory?.[node.runHistory.length - 1];
+  const toolTrace = latestRun?.toolTrace ?? [];
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
@@ -51,7 +53,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const isCodeAnalysisNode = node.type === "analysis";
   const isStructureGraphNode = node.type === "subgraph";
   const isPlanningNode = node.type === "planning";
-  const canGenerateNodes = isGraphNode && output.trim().length > 0;
+  const canGenerateNodes = isGraphNode;
   const expandSubgraphsFlag = Boolean(node.data?.expandSubgraphs);
   const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
@@ -62,6 +64,99 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     useGraphStore.getState().patchNodeData(node.id, {
       confirmationAnswers: { ...confirmationAnswers, [id]: value },
     });
+  };
+
+  const createTraceSubgraph = () => {
+    if (!latestRun || toolTrace.length === 0) return;
+    const store = useGraphStore.getState();
+    const oldTraceNodeIds = new Set(
+      store.nodes
+        .filter((item) => item.metadata?.traceSourceNodeId === node.id)
+        .map((item) => item.id),
+    );
+    for (const oldId of oldTraceNodeIds) store.removeNode(oldId);
+
+    const ordered = [...toolTrace].sort((a, b) => a.step - b.step);
+    const newNodes: NodeBase[] = ordered.map((trace, idx) => ({
+      id: crypto.randomUUID(),
+      type: trace.tool === "apply_patch" ? "code" : "task",
+      title: `${trace.step}. ${trace.tool}`,
+      position: { x: idx * 280, y: trace.status === "error" ? 120 : 0 },
+      contextMode: "explicit",
+      fileScope: { allow: [], deny: [] },
+      toolPolicy: { tools: [], deny: [] },
+      parentId: node.id,
+      purpose: tracePurpose(trace),
+      data: {
+        purpose: tracePurpose(trace),
+        status: trace.status,
+        trace,
+      },
+      runHistory: [],
+      resourceRefs: [],
+      metadata: {
+        traceNode: true,
+        traceRunId: latestRun.id,
+        traceToolId: trace.id,
+        traceSourceNodeId: node.id,
+      },
+    }));
+    const newLinks: Edge[] = newNodes.slice(1).map((child, idx) => ({
+      id: crypto.randomUUID(),
+      source: newNodes[idx].id,
+      target: child.id,
+      label: "next",
+    }));
+    for (const child of newNodes) store.addNode(child);
+    for (const link of newLinks) store.addLink(link);
+    store.patchNodeData(node.id, {
+      traceSubgraphRunId: latestRun.id,
+      traceSubgraphUpdatedAt: new Date().toISOString(),
+    });
+    store.enterSubgraph(node.id);
+  };
+
+  const promoteTrace = (trace: ToolTraceItem) => {
+    const store = useGraphStore.getState();
+    const promoted: NodeBase = {
+      id: crypto.randomUUID(),
+      type: trace.tool === "apply_patch" ? "code" : "task",
+      title: `${trace.tool}: ${node.title}`,
+      position: {
+        x: node.position.x + 320,
+        y: node.position.y + trace.step * 80,
+      },
+      contextMode: "inherit",
+      fileScope: node.fileScope,
+      toolPolicy: { tools: [], deny: [] },
+      parentId: node.parentId,
+      purpose: tracePurpose(trace),
+      data: {
+        purpose: tracePurpose(trace),
+        status: trace.status,
+        promotedFromTrace: {
+          sourceNodeId: node.id,
+          runId: latestRun?.id,
+          trace,
+        },
+      },
+      runHistory: [],
+      resourceRefs: [],
+      metadata: {
+        promotedFromTrace: true,
+        traceSourceNodeId: node.id,
+        traceRunId: latestRun?.id,
+        traceToolId: trace.id,
+      },
+    };
+    store.addNode(promoted);
+    store.addLink({
+      id: crypto.randomUUID(),
+      source: node.id,
+      target: promoted.id,
+      label: `promoted ${trace.tool}`,
+    });
+    store.selectNode(promoted.id);
   };
 
   const continueWithConfirmation = () => {
@@ -203,14 +298,23 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                   </button>
                 ) : null}
                 {isCodeNode ? (
-                  <button
-                    className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
-                    onClick={() => runCode(node.id)}
-                    disabled={runningId !== null || !projectDir}
-                    title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "Claude Code 生成代码"}
-                  >
-                    ⚡ Code
-                  </button>
+                  <>
+                    <button
+                      className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
+                      onClick={() => runCode(node.id)}
+                      disabled={runningId !== null || !projectDir}
+                      title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "MAG Native Code Runner"}
+                    >
+                      ⚡ Code
+                    </button>
+                    <button
+                      className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
+                      onClick={() => enterSubgraph(node.id)}
+                      disabled={runningId !== null}
+                    >
+                      Enter Code
+                    </button>
+                  </>
                 ) : null}
               </>
             )}
@@ -276,6 +380,60 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 {codeDiff.warnings.join(" ")}
               </div>
             ) : null}
+          </details>
+        ) : null}
+
+        {toolTrace.length > 0 ? (
+          <details className="text-xs" open={isRunning}>
+            <summary className="text-zinc-500 cursor-pointer select-none">
+              Tool Trace
+            </summary>
+            <div className="mt-2 flex gap-2">
+              <button
+                className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-accent hover:text-accent"
+                onClick={createTraceSubgraph}
+              >
+                Render Subgraph
+              </button>
+            </div>
+            <div className="mt-2 space-y-1">
+              {toolTrace.map((trace) => (
+                <div key={trace.id} className="rounded bg-canvas px-2 py-1 text-[11px]">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-zinc-500">#{trace.step}</span>
+                    <span className="font-mono text-zinc-200">{trace.tool}</span>
+                    <button
+                      className="ml-auto rounded border border-zinc-700 px-1.5 py-0.5 text-[10px] text-zinc-400 hover:border-accent hover:text-accent"
+                      onClick={() => promoteTrace(trace)}
+                    >
+                      Promote
+                    </button>
+                    <span
+                      className={
+                        trace.status === "error"
+                          ? "text-red-300"
+                          : trace.status === "running"
+                            ? "text-accent"
+                            : "text-emerald-300"
+                      }
+                    >
+                      {trace.status}
+                    </span>
+                  </div>
+                  {trace.outputSummary ? (
+                    <div className="mt-0.5 text-zinc-500 line-clamp-2">{trace.outputSummary}</div>
+                  ) : null}
+                  {trace.error ? (
+                    <div className="mt-0.5 text-red-300 line-clamp-2">{trace.error}</div>
+                  ) : null}
+                  {trace.affectedFiles && trace.affectedFiles.length > 0 ? (
+                    <div className="mt-0.5 font-mono text-emerald-400">
+                      {trace.affectedFiles.join(", ")}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </details>
         ) : null}
 
@@ -363,7 +521,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                   : isCodeAnalysisNode
                     ? "选择 Project Dir 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
                   : isGraphNode
-                    ? "填写 Purpose 后点 ▶ Explain 生成规划，再用 ✦ Generate Nodes 展开子节点"
+                    ? "填写 Purpose 后直接点 ✦ Generate Nodes 展开子节点；想先看/改规划可先点 ▶ Explain"
                     : "点 ▶ Explain 文本展开"}
               </div>
             )
@@ -450,6 +608,19 @@ function getConfirmationAnswers(value: unknown): ConfirmationAnswers {
     if (typeof answer === "string") answers[key] = answer;
   }
   return answers;
+}
+
+function tracePurpose(trace: ToolTraceItem): string {
+  const input = JSON.stringify(trace.input ?? {}, null, 2);
+  const parts = [
+    `Tool call ${trace.step}: ${trace.tool}`,
+    `Status: ${trace.status}`,
+    input && input !== "{}" ? `Input:\n${input}` : "",
+    trace.outputSummary ? `Output:\n${trace.outputSummary}` : "",
+    trace.error ? `Error:\n${trace.error}` : "",
+    trace.affectedFiles?.length ? `Affected files: ${trace.affectedFiles.join(", ")}` : "",
+  ].filter(Boolean);
+  return parts.join("\n\n");
 }
 
 function contextHint(mode: "inherit" | "explicit" | "isolated"): string {

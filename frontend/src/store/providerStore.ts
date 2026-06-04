@@ -6,7 +6,7 @@ const MODEL_STORAGE_KEY = "mag.providerModels.v1";
 
 export const DEFAULT_MODELS: Record<Provider, string> = {
   anthropic: "claude-sonnet-4-6",
-  deepseek: "deepseek-chat",
+  deepseek: "deepseek-v4-flash",
   openai: "gpt-4.1",
   "local-claude": "sonnet",
   "local-codex": "",

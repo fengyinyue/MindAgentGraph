@@ -87,6 +87,35 @@
           "diffWarnings": {
             "type": "array",
             "items": { "type": "string" }
+          },
+          "toolTrace": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "step", "tool", "status", "startedAt", "input"],
+              "properties": {
+                "id": { "type": "string" },
+                "step": { "type": "integer" },
+                "tool": {
+                  "type": "string",
+                  "enum": ["list_files", "read_file", "grep", "apply_patch", "get_diff", "finish"]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": ["running", "done", "error"]
+                },
+                "startedAt": { "type": "string" },
+                "finishedAt": { "type": "string" },
+                "input": { "type": "object" },
+                "outputSummary": { "type": "string" },
+                "error": { "type": "string" },
+                "affectedFiles": {
+                  "type": "array",
+                  "items": { "type": "string" }
+                }
+              }
+            },
+            "default": []
           }
         }
       },

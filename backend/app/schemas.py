@@ -38,6 +38,7 @@ class RunRecord(BaseModel):
     diff: Optional[str] = None
     diffTruncated: Optional[bool] = None
     diffWarnings: list[str] = Field(default_factory=list)
+    toolTrace: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class Node(BaseModel):
@@ -125,6 +126,7 @@ class CodeRunRequest(BaseModel):
     fileScopeDeny: Optional[list[str]] = None
     parentOutputs: Optional[dict[str, str]] = None
     userPrompt: Optional[str] = None
+    provider: Optional[ProviderName] = None
     model: Optional[str] = None
     runId: Optional[str] = None
 

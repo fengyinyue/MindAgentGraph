@@ -38,7 +38,7 @@ from app.services.planner import expand_plan, expand_modules, plan_graph
 from app.services.graph_chat import edit_graph_with_chat, stream_graph_chat_reply
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
-from app.services.code_runner import cancel_claude_run, run_node_with_claude
+from app.services.code_runner import cancel_code_run, run_node_native_code
 from app.services.code_analysis_runner import run_code_analysis_with_claude
 from app.services.memory import read_memory, write_memory
 from app.services.dag_executor import run_dag_stream
@@ -257,7 +257,7 @@ async def run_node(
 
 @app.post("/run/node/code/cancel")
 async def cancel_node_code(req: CodeCancelRequest) -> dict[str, bool]:
-    cancelled = await cancel_claude_run(req.runId)
+    cancelled = await cancel_code_run(req.runId)
     return {"cancelled": cancelled}
 
 
@@ -313,8 +313,11 @@ async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
 
 
 @app.post("/run/node/code")
-async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
-    """SSE stream of Claude Code CLI output.
+async def run_node_code(
+    req: CodeRunRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+) -> StreamingResponse:
+    """SSE stream of MAG Native Code Runner output.
 
     Same SSE wire format as /run/node, with extra event types:
       event: files\\n
@@ -330,7 +333,7 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 memory_text = read_memory(req.projectPath, req.node.memoryRef)
 
             output_parts: list[str] = []
-            async for chunk in run_node_with_claude(
+            async for chunk in run_node_native_code(
                 node_title=req.node.title,
                 node_type=req.node.type,
                 node_purpose=req.node.purpose or "",
@@ -342,7 +345,9 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 context_mode=req.node.contextMode,
                 memory_text=memory_text,
                 system_prompt=req.node.systemPrompt,
+                provider=req.provider,
                 model=req.model,
+                api_key=x_provider_key,
                 run_id=req.runId,
             ):
                 # Check for special metadata markers (may have leading whitespace).
@@ -353,6 +358,18 @@ async def run_node_code(req: CodeRunRequest) -> StreamingResponse:
                 elif stripped.startswith("__diff__:"):
                     diff_json = stripped[len("__diff__:"):].strip()
                     yield f"event: diff\ndata: {diff_json}\n\n"
+                elif stripped.startswith("__tool_start__:"):
+                    tool_json = stripped[len("__tool_start__:"):].strip()
+                    yield f"event: tool_start\ndata: {tool_json}\n\n"
+                elif stripped.startswith("__tool_result__:"):
+                    tool_json = stripped[len("__tool_result__:"):].strip()
+                    yield f"event: tool_result\ndata: {tool_json}\n\n"
+                elif stripped.startswith("__usage__:"):
+                    usage_json = stripped[len("__usage__:"):].strip()
+                    yield f"event: usage\ndata: {usage_json}\n\n"
+                elif stripped.startswith("__log__:"):
+                    log_json = stripped[len("__log__:"):].strip()
+                    yield f"event: log\ndata: {log_json}\n\n"
                 else:
                     output_parts.append(chunk)
                     yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"

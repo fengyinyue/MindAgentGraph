@@ -1,59 +1,117 @@
-"""Run a node with Claude Code CLI (`claude --print`).
+"""MAG Native Code Runner for code nodes.
 
-Spawns a `claude` subprocess in the project directory with a node-specific
-context (purpose, fileScope, parent outputs).  Streams stdout chunks back.
-After the subprocess finishes, detects which files were created/modified
-and appends a special marker event so the frontend can show a file list.
+The runner drives DeepSeek tool calls and executes file tools in-process so MAG
+can enforce file scope, stream structured tool traces, and capture changed files.
 """
 
 from __future__ import annotations
 import asyncio
 import difflib
+import fnmatch
 import os
-import shutil
+import json
+import re
 import signal
-import subprocess
 import sys
 import uuid
-from typing import AsyncIterator
+from datetime import datetime, timezone
+from typing import Any, AsyncIterator
+
+from openai import APIConnectionError, APIStatusError, AsyncOpenAI
+
+from app.services.providers.base import ProviderError
 
 CODE_DIFF_MAX_BYTES = 200_000
 SNAPSHOT_MAX_BYTES = 1_000_000
+NATIVE_MAX_TOOL_STEPS = 20
+DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
 
-CODE_RUN_SYSTEM = """你需要完成以下编程任务。直接执行，不要提问、不要解释、不要等确认。
-
-## 节点系统 Prompt
-{system_prompt}
-
-## 任务
-{task}
-{purpose_hint}
-
-## 工作目录
-当前工作目录是：{project_dir}
-
-## ContextMode
-{context_mode}
-
-## 文件约束
-你**只能**在以下路径操作文件：
-{allow_globs}
-{banned_section}
-
-## 上游参考
-{parent_context}
-
-## Memory
-{memory_context}
-
-## 规则
-1. 直接调用 write_file / edit / bash 工具完成任务
-2. 不要输出"我可以帮你..."之类的解释，直接干活
-3. 生成完整可运行的代码
-"""
-
+NATIVE_TOOLS: list[dict[str, Any]] = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_files",
+            "description": "List project files under an optional relative path.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"},
+                    "pattern": {"type": "string"},
+                    "limit": {"type": "integer"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read a text file from the project.",
+            "parameters": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {"path": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "grep",
+            "description": "Search text files for a literal or regex pattern.",
+            "parameters": {
+                "type": "object",
+                "required": ["pattern"],
+                "properties": {
+                    "pattern": {"type": "string"},
+                    "path": {"type": "string"},
+                    "regex": {"type": "boolean"},
+                    "limit": {"type": "integer"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "apply_patch",
+            "description": "Replace oldText with newText in a single project file.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "oldText", "newText"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "oldText": {"type": "string"},
+                    "newText": {"type": "string"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_diff",
+            "description": "Inspect the current changed files and text diff.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "finish",
+            "description": "Finish the code run with a concise summary.",
+            "parameters": {
+                "type": "object",
+                "required": ["summary"],
+                "properties": {"summary": {"type": "string"}},
+            },
+        },
+    },
+]
 
 _ACTIVE_CLAUDE_RUNS: dict[str, asyncio.subprocess.Process] = {}
+_CANCELLED_NATIVE_RUNS: set[str] = set()
 
 
 def _normalize_rel_path(path: str) -> str | None:
@@ -205,60 +263,20 @@ async def cancel_claude_run(run_id: str) -> bool:
     return await _kill_process_tree(proc, run_id)
 
 
-def _assemble_prompt(
-    *,
-    node_title: str,
-    node_type: str,
-    node_purpose: str,
-    project_dir: str,
-    file_scope_allow: list[str],
-    file_scope_deny: list[str],
-    parent_outputs: dict[str, str] | None,
-    user_prompt: str | None,
-    context_mode: str,
-    memory_text: str | None,
-    system_prompt: str | None,
-) -> str:
-    allow = (
-        ", ".join(file_scope_allow)
-        if file_scope_allow
-        else "**/* (全部 — 未设置文件作用域)"
-    )
-    banned = ""
-    if file_scope_deny:
-        banned = "禁止操作以下路径：\n" + "\n".join(
-            f"  - 禁止：{g}" for g in file_scope_deny
-        )
+async def cancel_code_run(run_id: str) -> bool:
+    _CANCELLED_NATIVE_RUNS.add(run_id)
+    proc = _ACTIVE_CLAUDE_RUNS.get(run_id)
+    if proc is not None:
+        return await _kill_process_tree(proc, run_id)
+    return True
 
-    mode = context_mode if context_mode in {"inherit", "explicit", "isolated"} else "explicit"
-    parent_context = ""
-    if mode == "inherit" and parent_outputs:
-        for pid, text in parent_outputs.items():
-            snippet = text[:800] + ("…" if len(text) > 800 else "")
-            parent_context += f"\n上游节点 {pid} 的输出：\n{snippet}\n"
 
-    memory_context = "(无)"
-    if mode == "inherit" and memory_text and memory_text.strip():
-        memory_context = memory_text.strip()[:1600]
-        if len(memory_text.strip()) > 1600:
-            memory_context += "…"
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
-    task = user_prompt.strip() if user_prompt and user_prompt.strip() else f"实现 {node_title} 节点的全部代码（{node_purpose}）"
-    purpose_hint = ""
-    if node_purpose and not (user_prompt and user_prompt.strip()):
-        purpose_hint = f"\n具体目标：{node_purpose}"
 
-    return CODE_RUN_SYSTEM.format(
-        system_prompt=(system_prompt.strip() if system_prompt and system_prompt.strip() else "按节点职责完成代码生成。"),
-        project_dir=project_dir,
-        context_mode=mode,
-        allow_globs=allow,
-        banned_section=banned,
-        parent_context=parent_context or "(无)",
-        memory_context=memory_context,
-        task=task,
-        purpose_hint=purpose_hint,
-    )
+def _marker(name: str, payload: object) -> str:
+    return f"__{name}__:{json.dumps(payload, ensure_ascii=False)}"
 
 
 def _mtime_after_marker(project_dir: str, rel_path: str, before_marker_file: str | None) -> bool:
@@ -426,7 +444,261 @@ async def _capture_code_diff(
     }
 
 
-async def run_node_with_claude(
+def _matches_scope(rel_path: str, patterns: list[str]) -> bool:
+    rel = rel_path.replace("\\", "/")
+    return any(fnmatch.fnmatch(rel, pattern.replace("\\", "/")) for pattern in patterns)
+
+
+def _check_scope(rel_path: str, allow: list[str], deny: list[str]) -> None:
+    rel = rel_path.replace("\\", "/")
+    if not _normalize_rel_path(rel):
+        raise ValueError(f"path is not allowed: {rel_path}")
+    if deny and _matches_scope(rel, deny):
+        raise ValueError(f"path denied by file scope: {rel}")
+    if allow and not _matches_scope(rel, allow):
+        raise ValueError(f"path is outside file scope allow list: {rel}")
+
+
+def _resolve_project_path(project_dir: str, path: str, allow: list[str], deny: list[str]) -> tuple[str, str]:
+    rel = _normalize_rel_path(path or ".")
+    if rel is None:
+        raise ValueError(f"path is not allowed: {path}")
+    if rel != ".":
+        _check_scope(rel, allow, deny)
+    root = os.path.abspath(project_dir)
+    abs_path = os.path.abspath(os.path.join(root, rel))
+    if not (abs_path == root or abs_path.startswith(root + os.sep)):
+        raise ValueError(f"path escapes project directory: {path}")
+    return rel, abs_path
+
+
+def _safe_summary(value: object, max_chars: int = 600) -> str:
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return text[:max_chars] + ("..." if len(text) > max_chars else "")
+
+
+def _iter_text_files(project_dir: str, base_abs: str, allow: list[str], deny: list[str]):
+    root = os.path.abspath(project_dir)
+    if os.path.isfile(base_abs):
+        candidates = [base_abs]
+    else:
+        candidates = []
+        for current, dirs, files in os.walk(base_abs):
+            dirs[:] = [
+                d for d in dirs
+                if d not in {".git", "node_modules", "__pycache__"} and not d.startswith(".mag_")
+            ]
+            for filename in files:
+                candidates.append(os.path.join(current, filename))
+
+    for abs_path in candidates:
+        try:
+            rel = os.path.relpath(abs_path, root).replace("\\", "/")
+            _check_scope(rel, allow, deny)
+            if os.path.getsize(abs_path) > SNAPSHOT_MAX_BYTES:
+                continue
+            with open(abs_path, "rb") as f:
+                data = f.read(4096)
+            if not _is_text_bytes(data):
+                continue
+            yield rel, abs_path
+        except (OSError, ValueError):
+            continue
+
+
+def _tool_list_files(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or "."), allow, deny)
+    pattern = str(args.get("pattern") or "*")
+    limit = int(args.get("limit") or 80)
+    if not os.path.exists(abs_path):
+        raise ValueError(f"path not found: {rel}")
+    root = os.path.abspath(project_dir)
+    files: list[str] = []
+    for file_rel, _ in _iter_text_files(project_dir, abs_path, allow, deny):
+        if fnmatch.fnmatch(os.path.basename(file_rel), pattern) or fnmatch.fnmatch(file_rel, pattern):
+            files.append(file_rel)
+        if len(files) >= limit:
+            break
+    return {"files": files, "truncated": len(files) >= limit}
+
+
+def _tool_read_file(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or ""), allow, deny)
+    if not os.path.isfile(abs_path):
+        raise ValueError(f"file not found: {rel}")
+    if os.path.getsize(abs_path) > SNAPSHOT_MAX_BYTES:
+        raise ValueError(f"file is too large to read: {rel}")
+    with open(abs_path, "rb") as f:
+        data = f.read()
+    if not _is_text_bytes(data):
+        raise ValueError(f"file is binary: {rel}")
+    return {"path": rel, "content": data.decode("utf-8", "replace")}
+
+
+def _tool_grep(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    pattern = str(args.get("pattern") or "")
+    if not pattern:
+        raise ValueError("grep pattern is required")
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or "."), allow, deny)
+    use_regex = bool(args.get("regex"))
+    limit = int(args.get("limit") or 80)
+    regex = re.compile(pattern) if use_regex else None
+    matches: list[dict[str, Any]] = []
+    for file_rel, file_abs in _iter_text_files(project_dir, abs_path, allow, deny):
+        try:
+            with open(file_abs, "r", encoding="utf-8", errors="replace") as f:
+                for lineno, line in enumerate(f, start=1):
+                    hit = bool(regex.search(line)) if regex else pattern in line
+                    if hit:
+                        matches.append({"path": file_rel, "line": lineno, "text": line.rstrip("\n")[:500]})
+                        if len(matches) >= limit:
+                            return {"matches": matches, "truncated": True}
+        except OSError:
+            continue
+    return {"matches": matches, "truncated": False}
+
+
+def _tool_apply_patch(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or ""), allow, deny)
+    old_text = str(args.get("oldText") or "")
+    new_text = str(args.get("newText") or "")
+    if os.path.exists(abs_path):
+        if os.path.getsize(abs_path) > SNAPSHOT_MAX_BYTES:
+            raise ValueError(f"file is too large to edit: {rel}")
+        with open(abs_path, "rb") as f:
+            data = f.read()
+        if not _is_text_bytes(data):
+            raise ValueError(f"file is binary: {rel}")
+        text = data.decode("utf-8", "replace")
+    else:
+        if old_text:
+            raise ValueError(f"file not found for non-empty oldText: {rel}")
+        os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+        with open(abs_path, "w", encoding="utf-8", newline="") as f:
+            f.write(new_text)
+        return {"path": rel, "replacements": 0, "created": True, "affectedFiles": [rel]}
+    if not old_text:
+        raise ValueError("oldText is required when editing an existing file")
+    occurrences = text.count(old_text)
+    if occurrences != 1:
+        raise ValueError(f"oldText must match exactly once in {rel}; matched {occurrences}")
+    updated = text.replace(old_text, new_text, 1)
+    with open(abs_path, "w", encoding="utf-8", newline="") as f:
+        f.write(updated)
+    return {"path": rel, "replacements": 1, "affectedFiles": [rel]}
+
+
+async def _tool_get_diff(
+    project_dir: str,
+    before_status: dict[str, str],
+    before_snapshots: dict[str, str | None],
+    marker: str | None,
+) -> dict[str, Any]:
+    changed = await _detect_changed_files(project_dir, marker, before_status)
+    diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
+    return {"changedFiles": changed, "diff": diff_info}
+
+
+async def _execute_native_tool(
+    *,
+    tool_name: str,
+    args: dict[str, Any],
+    project_dir: str,
+    allow: list[str],
+    deny: list[str],
+    before_status: dict[str, str],
+    before_snapshots: dict[str, str | None],
+    marker: str | None,
+) -> tuple[dict[str, Any], list[str]]:
+    if tool_name == "list_files":
+        result = _tool_list_files(project_dir, args, allow, deny)
+        return result, []
+    if tool_name == "read_file":
+        result = _tool_read_file(project_dir, args, allow, deny)
+        return result, []
+    if tool_name == "grep":
+        result = _tool_grep(project_dir, args, allow, deny)
+        return result, []
+    if tool_name == "apply_patch":
+        result = _tool_apply_patch(project_dir, args, allow, deny)
+        return result, list(result.get("affectedFiles", []))
+    if tool_name == "get_diff":
+        result = await _tool_get_diff(project_dir, before_status, before_snapshots, marker)
+        return result, list(result.get("changedFiles", []))
+    if tool_name == "finish":
+        return {"summary": str(args.get("summary") or "Done.")}, []
+    if tool_name == "run_command":
+        raise ValueError("run_command is disabled in MAG Native Code Runner v1")
+    raise ValueError(f"unknown native code tool: {tool_name}")
+
+
+def _build_native_user_message(
+    *,
+    node_title: str,
+    node_type: str,
+    node_purpose: str,
+    project_dir: str,
+    file_scope_allow: list[str],
+    file_scope_deny: list[str],
+    parent_outputs: dict[str, str] | None,
+    user_prompt: str | None,
+    context_mode: str,
+    memory_text: str | None,
+    system_prompt: str | None,
+) -> str:
+    mode = context_mode if context_mode in {"inherit", "explicit", "isolated"} else "inherit"
+    parent_context = ""
+    if mode == "inherit" and parent_outputs:
+        parent_context = "\n\n".join(
+            f"### {key}\n{text[:1200]}{'...' if len(text) > 1200 else ''}"
+            for key, text in parent_outputs.items()
+        )
+    memory_context = ""
+    if mode == "inherit" and memory_text and memory_text.strip():
+        memory_context = memory_text.strip()[:2000]
+        if len(memory_text.strip()) > 2000:
+            memory_context += "..."
+    task = user_prompt.strip() if user_prompt and user_prompt.strip() else f"Implement the code task for node: {node_title}"
+    if node_purpose:
+        task += f"\nPurpose: {node_purpose}"
+    return "\n".join([
+        f"Node: {node_title}",
+        f"Type: {node_type}",
+        f"Project directory: {project_dir}",
+        f"Context mode: {mode}",
+        "",
+        "System prompt:",
+        system_prompt.strip() if system_prompt and system_prompt.strip() else "Complete the implementation safely.",
+        "",
+        "Task:",
+        task,
+        "",
+        "File scope allow:",
+        "\n".join(f"- {item}" for item in file_scope_allow) if file_scope_allow else "- all project files",
+        "",
+        "File scope deny:",
+        "\n".join(f"- {item}" for item in file_scope_deny) if file_scope_deny else "- none",
+        "",
+        "Upstream outputs:",
+        parent_context or "(none)",
+        "",
+        "Memory:",
+        memory_context or "(none)",
+    ])
+
+
+def _compact_tool_result(result: dict[str, Any]) -> str:
+    payload = dict(result)
+    if isinstance(payload.get("content"), str) and len(payload["content"]) > 30000:
+        payload["content"] = payload["content"][:30000] + "\n... [truncated]"
+    if isinstance(payload.get("diff"), dict) and isinstance(payload["diff"].get("diff"), str):
+        diff_text = payload["diff"]["diff"]
+        if len(diff_text) > 30000:
+            payload["diff"] = {**payload["diff"], "diff": diff_text[:30000] + "\n... [truncated]"}
+    return json.dumps(payload, ensure_ascii=False)
+
+
+async def run_node_native_code(
     *,
     node_title: str,
     node_type: str,
@@ -439,143 +711,204 @@ async def run_node_with_claude(
     context_mode: str = "inherit",
     memory_text: str | None = None,
     system_prompt: str | None = None,
+    provider: str | None = "deepseek",
     model: str | None = None,
+    api_key: str | None = None,
     run_id: str | None = None,
 ) -> AsyncIterator[str]:
-    """Yield stdout chunks from ``claude --print``, then final metadata markers."""
-    effective_run_id = run_id or f"local-{uuid.uuid4().hex[:8]}"
-    _log_claude(effective_run_id, "START", f"node={node_title!r} cwd={project_dir}")
+    effective_run_id = run_id or f"native-{uuid.uuid4().hex[:8]}"
+    chosen_provider = (provider or "deepseek").lower()
+    if chosen_provider != "deepseek":
+        raise ProviderError("MAG Native Code Runner v1 only supports provider=deepseek")
+    api_key = api_key or os.environ.get("DEEPSEEK_API_KEY")
+    if not api_key:
+        raise ProviderError("DEEPSEEK_API_KEY not set")
     if not os.path.isdir(project_dir):
-        _log_claude(effective_run_id, "ERROR", f"missing cwd={project_dir}")
-        yield f"[error] 工程目录不存在: {project_dir}\n"
+        yield f"[error] 瀹搞儳鈻奸惄顔肩秿娑撳秴鐡ㄩ崷? {project_dir}\n"
         return
 
-    prompt = _assemble_prompt(
-        node_title=node_title,
-        node_type=node_type,
-        node_purpose=node_purpose,
-        project_dir=project_dir,
-        file_scope_allow=file_scope_allow or [],
-        file_scope_deny=file_scope_deny or [],
-        parent_outputs=parent_outputs,
-        user_prompt=user_prompt,
-        context_mode=context_mode,
-        memory_text=memory_text,
-        system_prompt=system_prompt,
-    )
-
+    allow = file_scope_allow or []
+    deny = file_scope_deny or []
     before_status = await _git_status_map(project_dir) if await _is_git_repo(project_dir) else {}
     before_snapshots = await _snapshot_dirty_files(project_dir, before_status) if before_status else {}
-
-    # Marker file for timestamp-based file detection.
     marker = os.path.join(project_dir, ".mag_code_run_marker")
     try:
-        with open(marker, "w") as f:
+        with open(marker, "w", encoding="utf-8") as f:
             f.write("marker")
     except OSError:
-        marker = None  # can't write? skip file detection
+        marker = None
 
-    claude_bin = shutil.which("claude")
-    if not claude_bin:
-        _log_claude(effective_run_id, "ERROR", "claude command not found")
-        # ── fallback: no Claude Code CLI ──
-        yield (
-            "[fallback] 未找到 `claude` 命令行工具。\n"
-            "请安装 Claude Code CLI 或将 claude 加入 PATH。\n\n"
-            f"---\n## 节点：{node_title}\n\n"
-            f"**类型**：{node_type}\n\n"
-            f"**目的**：{node_purpose}\n\n"
-            f"**工作目录**：{project_dir}\n\n"
-            f"**文件作用域（允许）**：{', '.join(file_scope_allow) if file_scope_allow else '未设置'}\n\n"
-            f"**prompt 预览**：\n```\n{prompt[:1200]}\n```\n"
-        )
-        yield f"__files__:{[]}"
-        yield "__diff__:{\"available\":false,\"isGitRepo\":false,\"changedFiles\":[],\"diff\":\"\",\"truncated\":false,\"warnings\":[\"Claude Code CLI was not found.\"]}"
-        return
+    client = AsyncOpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+    messages: list[dict[str, Any]] = [
+        {
+            "role": "system",
+            "content": (
+                "You are MAG Native Code Runner. Work only through the provided tools. "
+                "Do not ask the user to edit files manually. Use apply_patch for changes. "
+                "run_command is not available. Call finish with a concise summary when done."
+            ),
+        },
+        {
+            "role": "user",
+            "content": _build_native_user_message(
+                node_title=node_title,
+                node_type=node_type,
+                node_purpose=node_purpose,
+                project_dir=project_dir,
+                file_scope_allow=allow,
+                file_scope_deny=deny,
+                parent_outputs=parent_outputs,
+                user_prompt=user_prompt,
+                context_mode=context_mode,
+                memory_text=memory_text,
+                system_prompt=system_prompt,
+            ),
+        },
+    ]
 
-    proc = None
+    changed: list[str] = []
+    diff_info: dict[str, Any] = {
+        "available": False,
+        "isGitRepo": False,
+        "changedFiles": [],
+        "diff": "",
+        "truncated": False,
+        "warnings": [],
+    }
+    finished = False
+    step = 0
+
     try:
-        args = [claude_bin, "--print", "--dangerously-skip-permissions"]
-        if model:
-            args += ["--model", model]
+        yield "MAG Native Code Runner started (DeepSeek tool calls).\n"
+        for _ in range(NATIVE_MAX_TOOL_STEPS):
+            if effective_run_id in _CANCELLED_NATIVE_RUNS:
+                raise asyncio.CancelledError()
 
-        spawn_kwargs = {
-            "stdin": asyncio.subprocess.PIPE,
-            "stdout": asyncio.subprocess.PIPE,
-            "stderr": asyncio.subprocess.PIPE,
-            "cwd": project_dir,
-            "env": {**os.environ, "NO_COLOR": "1", "CLAUDE_CODE_SIMPLE": "1"},
-        }
-        if os.name == "nt":
-            spawn_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
-        else:
-            spawn_kwargs["start_new_session"] = True
+            try:
+                resp = await client.chat.completions.create(
+                    model=model or DEEPSEEK_DEFAULT_MODEL,
+                    messages=messages,
+                    tools=NATIVE_TOOLS,
+                    tool_choice="auto",
+                    temperature=0.1,
+                )
+            except (APIStatusError, APIConnectionError) as e:
+                raise ProviderError(f"deepseek API error: {e}") from e
 
-        proc = await asyncio.create_subprocess_exec(*args, **spawn_kwargs)
-        _ACTIVE_CLAUDE_RUNS[effective_run_id] = proc
-        _log_claude(effective_run_id, "RUNNING", f"pid={proc.pid}")
-        # Pass prompt via stdin (more reliable than cmdline arg).
-        if proc.stdin:
-            proc.stdin.write(prompt.encode("utf-8"))
-            await proc.stdin.drain()
-            proc.stdin.close()
+            usage = getattr(resp, "usage", None)
+            if usage:
+                yield _marker("usage", {
+                    "inputTokens": getattr(usage, "prompt_tokens", None),
+                    "outputTokens": getattr(usage, "completion_tokens", None),
+                })
 
-        # Read stdout line-by-line, yield immediately for streaming.
-        async for line in proc.stdout:  # type: ignore[attr-defined]
-            text = line.decode("utf-8", "replace")
-            yield text
+            msg = resp.choices[0].message
+            assistant_msg = msg.model_dump(exclude_none=True)
+            messages.append(assistant_msg)
 
-        # Wait for process to finish.
-        await proc.wait()
-        _log_claude(effective_run_id, "EXIT", f"pid={proc.pid} code={proc.returncode}")
+            content = msg.content or ""
+            if content.strip():
+                yield content
+                if not getattr(msg, "tool_calls", None):
+                    finished = True
+                    break
 
-        # Capture stderr for diagnostics.
-        if proc.stderr:
-            stderr_text = (await proc.stderr.read()).decode("utf-8", "replace")
-            if stderr_text.strip():
-                yield f"\n[stderr]\n{stderr_text}"
+            tool_calls = getattr(msg, "tool_calls", None) or []
+            if not tool_calls:
+                finished = True
+                break
 
-        if proc.returncode != 0:
-            yield f"\n[claude exited with code {proc.returncode}]"
+            for call in tool_calls:
+                if effective_run_id in _CANCELLED_NATIVE_RUNS:
+                    raise asyncio.CancelledError()
+                step += 1
+                tool_name = call.function.name
+                raw_args = call.function.arguments or "{}"
+                try:
+                    args = json.loads(raw_args) if isinstance(raw_args, str) else dict(raw_args)
+                except (TypeError, json.JSONDecodeError):
+                    args = {}
+                trace = {
+                    "id": call.id or f"tool-{step}",
+                    "step": step,
+                    "tool": tool_name,
+                    "status": "running",
+                    "startedAt": _utc_now(),
+                    "input": args,
+                }
+                yield _marker("tool_start", trace)
+                yield _marker("log", {
+                    "level": "info",
+                    "source": "code",
+                    "status": "TOOL",
+                    "message": f"{step}. {tool_name}",
+                })
 
-        # Detect changed files (only on clean completion).
+                try:
+                    result, affected = await _execute_native_tool(
+                        tool_name=tool_name,
+                        args=args,
+                        project_dir=project_dir,
+                        allow=allow,
+                        deny=deny,
+                        before_status=before_status,
+                        before_snapshots=before_snapshots,
+                        marker=marker,
+                    )
+                    if tool_name == "get_diff":
+                        changed = list(result.get("changedFiles", []))
+                        diff_info = dict(result.get("diff", diff_info))
+                    if tool_name == "finish":
+                        finished = True
+                        summary = str(result.get("summary") or "Done.")
+                        yield summary + "\n"
+                    trace_result = {
+                        **trace,
+                        "status": "done",
+                        "finishedAt": _utc_now(),
+                        "outputSummary": _safe_summary(result),
+                        "affectedFiles": affected,
+                    }
+                    yield _marker("tool_result", trace_result)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": _compact_tool_result(result),
+                    })
+                    if finished:
+                        break
+                except Exception as e:  # noqa: BLE001
+                    error_result = {"error": str(e)}
+                    trace_result = {
+                        **trace,
+                        "status": "error",
+                        "finishedAt": _utc_now(),
+                        "error": str(e),
+                    }
+                    yield _marker("tool_result", trace_result)
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": json.dumps(error_result, ensure_ascii=False),
+                    })
+            if finished:
+                break
+
+        if not finished:
+            raise ProviderError(f"Native code runner reached max tool steps ({NATIVE_MAX_TOOL_STEPS})")
+
         changed = await _detect_changed_files(project_dir, marker, before_status)
         diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
-        _log_claude(effective_run_id, "DONE", f"files={len(changed)}")
-
     except asyncio.CancelledError:
-        if proc is not None:
-            await _kill_process_tree(proc, effective_run_id)
+        yield "\n[cancelled] Native code run cancelled.\n"
         raise
-
-    except FileNotFoundError:
-        _log_claude(effective_run_id, "ERROR", "claude command not found")
-        yield "\n[error] `claude` 命令未找到。请确认 Claude Code 已安装。\n"
-        changed = []
-        diff_info = {
-            "available": False,
-            "isGitRepo": False,
-            "changedFiles": [],
-            "diff": "",
-            "truncated": False,
-            "warnings": ["Claude Code CLI was not found."],
-        }
-    except Exception as e:
-        _log_claude(effective_run_id, "ERROR", str(e))
-        yield f"\n[error] 执行异常: {e}\n"
-        changed = await _detect_changed_files(project_dir, marker, before_status)
-        diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
-
     finally:
-        _ACTIVE_CLAUDE_RUNS.pop(effective_run_id, None)
-        # Clean up marker.
+        _CANCELLED_NATIVE_RUNS.discard(effective_run_id)
         if marker:
             try:
                 os.remove(marker)
             except OSError:
                 pass
 
-    # Final marker (yield as a separate chunk so main.py can detect it cleanly).
-    import json as _json
-    yield f"__files__:{_json.dumps(changed)}"
-    yield f"__diff__:{_json.dumps(diff_info)}"
+    yield _marker("files", changed)
+    yield _marker("diff", diff_info)

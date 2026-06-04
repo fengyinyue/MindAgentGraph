@@ -19,7 +19,7 @@ const PROVIDERS: ProviderInfo[] = [
   {
     id: "deepseek",
     label: "DeepSeek",
-    hint: "在 platform.deepseek.com 创建。OpenAI 兼容端点，仅 deepseek-chat 支持工具调用。",
+    hint: "在 platform.deepseek.com 创建。OpenAI 兼容端点，默认使用 deepseek-v4-flash。",
     placeholder: "sk-...",
   },
   {

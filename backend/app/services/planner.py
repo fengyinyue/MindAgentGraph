@@ -23,7 +23,7 @@ _log = logging.getLogger("mag.planner")
 DEFAULT_PROVIDER = os.environ.get("MAG_PROVIDER", "anthropic")
 DEFAULT_MODELS = {
     "anthropic": os.environ.get("MAG_MODEL_ANTHROPIC", "claude-sonnet-4-6"),
-    "deepseek": os.environ.get("MAG_MODEL_DEEPSEEK", "deepseek-chat"),
+    "deepseek": os.environ.get("MAG_MODEL_DEEPSEEK", "deepseek-v4-flash"),
     "openai": os.environ.get("MAG_MODEL_OPENAI", "gpt-4.1"),
     "local-claude": os.environ.get("MAG_MODEL_LOCAL_CLAUDE", "sonnet"),
     "local-codex": os.environ.get("MAG_MODEL_LOCAL_CODEX", ""),

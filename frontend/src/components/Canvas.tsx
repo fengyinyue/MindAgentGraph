@@ -363,8 +363,8 @@ export default function Canvas() {
     : "";
   const contextMenuCanExplain = contextMenuNode !== undefined;
   const contextMenuIsCodeAnalysis = contextMenuNode?.type === "analysis";
-  const contextMenuCanGenerateNodes = (contextMenuNode?.type === "planning" || contextMenuNode?.type === "subgraph") && contextMenuOutput;
-  const contextMenuCanEnter = contextMenuNode?.type === "subgraph";
+  const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" || contextMenuNode?.type === "subgraph";
+  const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code";
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
 
@@ -479,7 +479,9 @@ export default function Canvas() {
         onNodeClick={onNodeClick}
         onNodeDoubleClick={(_, node) => {
           const graphNode = storeNodes.find((item) => item.id === node.id);
-          if (graphNode?.type === "subgraph") enterSubgraph(graphNode.id);
+          if (graphNode?.type === "subgraph" || graphNode?.type === "code") {
+            enterSubgraph(graphNode.id);
+          }
         }}
         onNodeContextMenu={onNodeContextMenu}
         onPaneContextMenu={(e) => {
@@ -561,7 +563,7 @@ export default function Canvas() {
                 closeMenu();
               }}
             >
-              Enter Subgraph
+              {contextMenuNode?.type === "code" ? "Enter Code" : "Enter Subgraph"}
             </button>
           ) : null}
           {contextMenuCanGenerateModuleGraph ? (

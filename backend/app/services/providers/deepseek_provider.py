@@ -22,8 +22,16 @@ from app.services.providers.base import ProviderError
 
 _log = logging.getLogger("mag.deepseek")
 
-DEFAULT_MODEL = "deepseek-chat"
+DEFAULT_MODEL = "deepseek-v4-flash"
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+
+
+def _normalize_model(model: str | None) -> str:
+    # Preserve compatibility with older saved UI/env values while keeping the
+    # provider defaults and actual requests on the V4 model family.
+    if model in {None, "", "deepseek-chat", "deepseek-reasoner"}:
+        return DEFAULT_MODEL
+    return model
 
 
 class DeepSeekProvider:
@@ -42,11 +50,7 @@ class DeepSeekProvider:
         if not api_key:
             raise ProviderError("DEEPSEEK_API_KEY not set")
 
-        chosen_model = model or DEFAULT_MODEL
-        if chosen_model == "deepseek-reasoner":
-            raise ProviderError(
-                "deepseek-reasoner does not support json_object mode; use deepseek-chat"
-            )
+        chosen_model = _normalize_model(model)
 
         client = AsyncOpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
 
@@ -120,9 +124,7 @@ class DeepSeekProvider:
         if not api_key:
             raise ProviderError("DEEPSEEK_API_KEY not set")
 
-        chosen_model = model or DEFAULT_MODEL
-        if chosen_model == "deepseek-reasoner":
-            chosen_model = DEFAULT_MODEL
+        chosen_model = _normalize_model(model)
 
         client = AsyncOpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
         acc: list[str] = []

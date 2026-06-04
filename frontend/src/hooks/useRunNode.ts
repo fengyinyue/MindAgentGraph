@@ -7,7 +7,7 @@ import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
 import { useProviderStore } from "@/store/providerStore";
 import { parseConfirmationRequest } from "@/utils/confirmation";
-import type { Edge, NodeBase } from "@shared/types";
+import type { Edge, NodeBase, ToolTraceItem } from "@shared/types";
 
 interface RunState {
   runningId: string | null;
@@ -208,6 +208,23 @@ function finishRunRecord(nodeId: string, runId: string, patch: Partial<NonNullab
       record.id === runId ? { ...record, ...patch } : record,
     ),
   });
+}
+
+function upsertToolTrace(nodeId: string, runId: string, trace: ToolTraceItem): void {
+  const node = useGraphStore.getState().nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const runHistory = (node.runHistory ?? []).map((record) => {
+    if (record.id !== runId) return record;
+    const existing = record.toolTrace ?? [];
+    const found = existing.some((item) => item.id === trace.id);
+    return {
+      ...record,
+      toolTrace: found
+        ? existing.map((item) => (item.id === trace.id ? { ...item, ...trace } : item))
+        : [...existing, trace],
+    };
+  });
+  useGraphStore.getState().updateNode(nodeId, { runHistory });
 }
 
 export function useRunNode() {
@@ -517,11 +534,16 @@ export function useRunNode() {
           status: "WARN",
           nodeId,
           nodeTitle: node.title,
-          message: `${provider} API Key 未在前端配置；Code 节点依赖本地 CLI 配置。`,
+          message: `${provider} API Key 未在前端配置；Code 节点会尝试使用后端环境变量。`,
         });
       }
 
-      state.patchNodeData(nodeId, { codeOutput: "", codeError: undefined, generatedFiles: undefined, codeDiff: undefined });
+      state.patchNodeData(nodeId, {
+        codeOutput: "",
+        codeError: undefined,
+        generatedFiles: undefined,
+        codeDiff: undefined,
+      });
       const runRecordId = crypto.randomUUID();
       appendRunRecord(node, {
         id: runRecordId,
@@ -558,7 +580,9 @@ export function useRunNode() {
           fileScopeDeny: node.fileScope.deny,
           parentOutputs,
           userPrompt: opts.userPrompt,
+          provider,
           model,
+          apiKey: useKeyStore.getState().getKey(provider),
           runId,
         },
         {
@@ -601,6 +625,28 @@ export function useRunNode() {
               message: diff.diff
                 ? `Diff captured (${diff.diff.length} chars${diff.truncated ? ", truncated" : ""})`
                 : `No diff captured${diff.warnings.length ? `: ${diff.warnings.join("; ")}` : ""}`,
+            });
+          },
+          onToolStart: (trace) => {
+            upsertToolTrace(nodeId, runRecordId, trace);
+            useMonitorStore.getState().addLog({
+              level: "info",
+              source: "code",
+              status: "TOOL",
+              nodeId,
+              nodeTitle: node.title,
+              message: `${trace.step}. ${trace.tool}`,
+            });
+          },
+          onToolResult: (trace) => {
+            upsertToolTrace(nodeId, runRecordId, trace);
+            useMonitorStore.getState().addLog({
+              level: trace.status === "error" ? "error" : "info",
+              source: "code",
+              status: trace.status === "error" ? "TOOL_ERROR" : "TOOL_DONE",
+              nodeId,
+              nodeTitle: node.title,
+              message: trace.error ?? `${trace.step}. ${trace.tool} done`,
             });
           },
           onDone: () => {
@@ -651,7 +697,9 @@ export function useRunNode() {
       if (!planningNode || !graphKind) return false;
       if (useRunState.getState().runningId) return false;
 
-      const planText = outputText(planningNode).trim();
+      const planText =
+        outputText(planningNode).trim() ||
+        (planningNode.purpose ?? (planningNode.data?.purpose as string | undefined) ?? "").trim();
       if (!planText) {
         useMonitorStore.getState().addLog({
           level: "warn",
@@ -659,7 +707,7 @@ export function useRunNode() {
           status: "SKIPPED",
           nodeId: planningNodeId,
           nodeTitle: planningNode.title,
-          message: "Planning 节点还没有 output，请先 Explain 生成规划文本。",
+          message: "请先填写 Purpose，或点 ▶ Explain 生成规划文本。",
         });
         return false;
       }

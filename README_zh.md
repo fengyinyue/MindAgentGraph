@@ -150,7 +150,7 @@ Windows 用户也可双击 `start-dev.bat`。
 |--------|---------|---------|
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-4.1` |
-| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 
 ### Tauri 桌面模式
 

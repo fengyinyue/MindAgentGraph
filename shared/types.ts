@@ -50,6 +50,19 @@ export interface ToolPolicy {
   deny: string[];
 }
 
+export interface ToolTraceItem {
+  id: string;
+  step: number;
+  tool: "list_files" | "read_file" | "grep" | "apply_patch" | "get_diff" | "finish";
+  status: "running" | "done" | "error";
+  startedAt: string;
+  finishedAt?: string;
+  input: Record<string, unknown>;
+  outputSummary?: string;
+  error?: string;
+  affectedFiles?: string[];
+}
+
 export interface RunRecord {
   id: string;
   startedAt: string;
@@ -64,6 +77,7 @@ export interface RunRecord {
   diff?: string;
   diffTruncated?: boolean;
   diffWarnings?: string[];
+  toolTrace?: ToolTraceItem[];
 }
 
 export interface NodeBase {

@@ -150,7 +150,7 @@ Or set environment variables:
 |----------|---------------------|---------------|
 | Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
 | OpenAI | `OPENAI_API_KEY` | `gpt-4.1` |
-| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-chat` |
+| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
 
 ### Tauri Desktop Mode
 

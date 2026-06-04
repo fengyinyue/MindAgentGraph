@@ -89,7 +89,7 @@ key 错误（401/404 等认证失败）也会 fallback，并在后端日志里�
 | provider | 环境变量 | 默认 model | 说明 |
 |---|---|---|---|
 | `anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` | 工具调用强约束 |
-| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-chat` | OpenAI 兼容端点，仅 `deepseek-chat` 支持工具调用，`deepseek-reasoner` 不支持 |
+| `deepseek` | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` | OpenAI 兼容端点，默认使用 V4 Flash |
 
 ```bash
 # Windows PowerShell — 配置任意一个或两个
@@ -109,7 +109,7 @@ export MAG_PROVIDER=deepseek
 
 请求体也可以覆盖默认：
 ```json
-POST /plan  { "goal": "...", "provider": "deepseek", "model": "deepseek-chat" }
+POST /plan  { "goal": "...", "provider": "deepseek", "model": "deepseek-v4-flash" }
 ```
 
 ---
