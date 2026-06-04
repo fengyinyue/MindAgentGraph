@@ -477,6 +477,21 @@ def _safe_summary(value: object, max_chars: int = 600) -> str:
     return text[:max_chars] + ("..." if len(text) > max_chars else "")
 
 
+def _capped_output(result: dict[str, Any], max_chars: int = 4000) -> Any:
+    """Full structured tool result with large text fields capped, for the trace.
+
+    Lets the UI show/edit real output without shipping huge file contents.
+    """
+    payload = dict(result)
+    if isinstance(payload.get("content"), str) and len(payload["content"]) > max_chars:
+        payload["content"] = payload["content"][:max_chars] + "\n... [truncated]"
+    if isinstance(payload.get("diff"), dict) and isinstance(payload["diff"].get("diff"), str):
+        diff_text = payload["diff"]["diff"]
+        if len(diff_text) > max_chars:
+            payload["diff"] = {**payload["diff"], "diff": diff_text[:max_chars] + "\n... [truncated]"}
+    return payload
+
+
 def _iter_text_files(project_dir: str, base_abs: str, allow: list[str], deny: list[str]):
     root = os.path.abspath(project_dir)
     if os.path.isfile(base_abs):
@@ -867,6 +882,7 @@ async def run_node_native_code(
                         "status": "done",
                         "finishedAt": _utc_now(),
                         "outputSummary": _safe_summary(result),
+                        "output": _capped_output(result),
                         "affectedFiles": affected,
                     }
                     yield _marker("tool_result", trace_result)
@@ -901,6 +917,127 @@ async def run_node_native_code(
         diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
     except asyncio.CancelledError:
         yield "\n[cancelled] Native code run cancelled.\n"
+        raise
+    finally:
+        _CANCELLED_NATIVE_RUNS.discard(effective_run_id)
+        if marker:
+            try:
+                os.remove(marker)
+            except OSError:
+                pass
+
+    yield _marker("files", changed)
+    yield _marker("diff", diff_info)
+
+
+async def replay_tool_sequence(
+    *,
+    project_dir: str,
+    file_scope_allow: list[str] | None = None,
+    file_scope_deny: list[str] | None = None,
+    steps: list[dict[str, Any]],
+    run_id: str | None = None,
+) -> AsyncIterator[str]:
+    """Deterministically replay a recorded tool sequence WITHOUT any LLM.
+
+    Each step is {id?, tool, input}. Args are self-contained (as recorded), so
+    no inter-step data wiring is needed. Emits the same markers as a real code
+    run (tool_start/tool_result/files/diff/log) so the UI path is identical.
+    """
+    effective_run_id = run_id or f"replay-{uuid.uuid4().hex[:8]}"
+    if not os.path.isdir(project_dir):
+        yield f"[error] project directory not found: {project_dir}\n"
+        return
+
+    allow = file_scope_allow or []
+    deny = file_scope_deny or []
+    before_status = await _git_status_map(project_dir) if await _is_git_repo(project_dir) else {}
+    before_snapshots = await _snapshot_dirty_files(project_dir, before_status) if before_status else {}
+    marker = os.path.join(project_dir, ".mag_code_run_marker")
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write("marker")
+    except OSError:
+        marker = None
+
+    changed: list[str] = []
+    diff_info: dict[str, Any] = {
+        "available": False,
+        "isGitRepo": False,
+        "changedFiles": [],
+        "diff": "",
+        "truncated": False,
+        "warnings": [],
+    }
+
+    try:
+        yield "MAG tool replay started (no LLM).\n"
+        for index, step in enumerate(steps, start=1):
+            if effective_run_id in _CANCELLED_NATIVE_RUNS:
+                raise asyncio.CancelledError()
+
+            tool_name = str(step.get("tool") or "")
+            raw_input = step.get("input")
+            args = dict(raw_input) if isinstance(raw_input, dict) else {}
+            trace = {
+                "id": str(step.get("id") or f"replay-{index}"),
+                "step": index,
+                "tool": tool_name,
+                "status": "running",
+                "startedAt": _utc_now(),
+                "input": args,
+            }
+            yield _marker("tool_start", trace)
+            yield _marker("log", {
+                "level": "info",
+                "source": "code",
+                "status": "REPLAY",
+                "message": f"{index}. {tool_name}",
+            })
+
+            if tool_name == "finish":
+                # Terminal no-op in replay; record and stop.
+                yield _marker("tool_result", {
+                    **trace,
+                    "status": "done",
+                    "finishedAt": _utc_now(),
+                    "outputSummary": _safe_summary({"summary": args.get("summary") or "Done."}),
+                    "output": {"summary": args.get("summary") or "Done."},
+                    "affectedFiles": [],
+                })
+                break
+
+            try:
+                result, affected = await _execute_native_tool(
+                    tool_name=tool_name,
+                    args=args,
+                    project_dir=project_dir,
+                    allow=allow,
+                    deny=deny,
+                    before_status=before_status,
+                    before_snapshots=before_snapshots,
+                    marker=marker,
+                )
+                yield _marker("tool_result", {
+                    **trace,
+                    "status": "done",
+                    "finishedAt": _utc_now(),
+                    "outputSummary": _safe_summary(result),
+                    "output": _capped_output(result),
+                    "affectedFiles": affected,
+                })
+            except Exception as e:  # noqa: BLE001
+                yield _marker("tool_result", {
+                    **trace,
+                    "status": "error",
+                    "finishedAt": _utc_now(),
+                    "error": str(e),
+                })
+
+        changed = await _detect_changed_files(project_dir, marker, before_status)
+        diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
+    except asyncio.CancelledError:
+        yield "\n[cancelled] Tool replay cancelled.\n"
         raise
     finally:
         _CANCELLED_NATIVE_RUNS.discard(effective_run_id)

@@ -35,6 +35,7 @@ const typeColor: Record<string, string> = {
   asset: "#ef6cef",
   agent: "#6cefef",
   task: "#bcef6c",
+  tool: "#f0a868",
   semantic: "#a0a0a0",
 };
 
@@ -141,6 +142,10 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
   task: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  tool: {
+    inputs: [{ id: "in", name: "In", type: "unknown" }],
+    outputs: [{ id: "out", name: "Out", type: "unknown" }],
   },
   semantic: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
@@ -347,7 +352,7 @@ export default function Canvas() {
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
-  const { run, runCode, runDag, expandPlanNodes, expandModuleGraph, runningId } = useRunNode();
+  const { run, runCode, replayTools, runDag, expandPlanNodes, expandModuleGraph, runningId } = useRunNode();
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
   const { screenToFlowPosition } = useReactFlow();
@@ -511,6 +516,20 @@ export default function Canvas() {
             </button>
             <span className="text-zinc-500">Inside</span>
             <span className="max-w-64 truncate text-zinc-200">{activeParentNode.title}</span>
+            {activeParentNode.type === "code" &&
+            storeNodes.some((n) => n.parentId === activeParentNode.id && typeof n.data?.tool === "string") ? (
+              <button
+                className="rounded border border-emerald-700 px-2 py-0.5 text-emerald-300 hover:border-emerald-400 hover:text-emerald-200 disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  replayTools(activeParentNode.id);
+                }}
+                disabled={runningId !== null || !projectDir}
+                title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "按 tool 序列确定性重放（不过 LLM）"}
+              >
+                ▶ Replay
+              </button>
+            ) : null}
           </div>
         ) : null}
         <Background color="#1f2330" gap={20} />

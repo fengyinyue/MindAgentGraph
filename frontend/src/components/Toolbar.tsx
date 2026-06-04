@@ -11,6 +11,7 @@ const buttonBase = "inline-flex h-7 items-center gap-1.5 rounded border px-2.5 t
 const buttonNeutral = `${buttonBase} border-zinc-700 bg-panel text-zinc-200 hover:border-accent/70 hover:text-accent`;
 const buttonPrimary = `${buttonBase} border-accent/70 bg-accent/15 text-accent hover:bg-accent/25`;
 const buttonSuccess = `${buttonBase} border-emerald-700/70 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20`;
+const buttonInfo = `${buttonBase} border-violet-700/70 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20`;
 const iconButton = "inline-flex h-7 w-7 items-center justify-center rounded border border-zinc-700 bg-panel text-xs transition-colors hover:border-accent/70 hover:text-accent";
 
 export default function Toolbar() {
@@ -141,14 +142,12 @@ export default function Toolbar() {
           + Node
         </button>
         <button
-          className={buttonNeutral}
+          className={buttonInfo}
           onClick={() => {
             const positions = autoLayoutGraph(nodes, links);
             if (positions.size === 0) return;
-            const updated = nodes.map((n) =>
-              positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n,
-            );
-            useGraphStore.getState().setGraph({ nodes: updated, links });
+            // setNodePositions preserves the current subgraph view (setGraph would exit it).
+            useGraphStore.getState().setNodePositions(positions);
           }}
           disabled={runningId !== null || nodes.length === 0}
           title="按拓扑顺序自动排版（每个 Subgraph 内部独立排版）"

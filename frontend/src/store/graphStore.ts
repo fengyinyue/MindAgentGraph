@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { NodeBase, Edge, Graph, ProjectMeta, NodeType } from "@shared/types";
+import type { NodeBase, Edge, Graph, ProjectMeta, NodeType, Position } from "@shared/types";
 
 function normalizeNodeType(type: string): NodeType {
   if (type === "workflow_graph") return "planning";
@@ -22,6 +22,7 @@ interface GraphState {
   addNode: (node: NodeBase) => void;
   addLink: (link: Edge) => void;
   updateNode: (id: string, patch: Partial<NodeBase>) => void;
+  setNodePositions: (positions: Map<string, Position>) => void;
   patchNodeData: (id: string, dataPatch: Record<string, unknown>) => void;
   removeNode: (id: string) => void;
   removeLink: (id: string) => void;
@@ -65,6 +66,13 @@ export const useGraphStore = create<GraphState>((set) => ({
   updateNode: (id, patch) =>
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    })),
+  // Apply new positions only; preserves activeParentId/selection (unlike setGraph).
+  setNodePositions: (positions) =>
+    set((s) => ({
+      nodes: s.nodes.map((n) =>
+        positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n,
+      ),
     })),
   patchNodeData: (id, dataPatch) =>
     set((s) => ({

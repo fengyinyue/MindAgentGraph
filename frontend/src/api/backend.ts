@@ -226,8 +226,17 @@ export async function runNodeCode(
     cb.onError(`/run/node/code failed: ${res.status}`);
     return;
   }
+  await consumeCodeSse(res, cb);
+}
 
-  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+// Shared SSE consumer for the code-runner wire format
+// (text/files/diff/tool_start/tool_result/log/usage/progress/done/error).
+// Used by both runNodeCode and replayToolSequence.
+async function consumeCodeSse(
+  res: Response,
+  cb: CodeRunCallbacks,
+): Promise<void> {
+  const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = "";
   try {
     for (;;) {
@@ -291,6 +300,46 @@ export async function runNodeCode(
     if ((e as Error).name === "AbortError") return;
     cb.onError(e instanceof Error ? e.message : String(e));
   }
+}
+
+export interface ToolStep {
+  id?: string;
+  tool: string;
+  input: Record<string, unknown>;
+}
+
+export interface ReplayToolSequenceInput {
+  projectDir: string;
+  fileScopeAllow?: string[];
+  fileScopeDeny?: string[];
+  steps: ToolStep[];
+  runId?: string;
+}
+
+// Deterministic replay of a recorded tool sequence (no LLM). Same SSE wire
+// format as runNodeCode, so it reuses consumeCodeSse.
+export async function replayToolSequence(
+  input: ReplayToolSequenceInput,
+  cb: CodeRunCallbacks,
+): Promise<void> {
+  const url = await getBackendUrl();
+  const res = await fetch(`${url}/run/tool-sequence`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      projectDir: input.projectDir,
+      fileScopeAllow: input.fileScopeAllow,
+      fileScopeDeny: input.fileScopeDeny,
+      steps: input.steps,
+      runId: input.runId,
+    }),
+    signal: cb.signal,
+  });
+  if (!res.ok || !res.body) {
+    cb.onError(`/run/tool-sequence failed: ${res.status}`);
+    return;
+  }
+  await consumeCodeSse(res, cb);
 }
 
 export async function runNodeCodeAnalysis(

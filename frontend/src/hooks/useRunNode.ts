@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { create } from "zustand";
-import { cancelCodeRun, expandModules, expandPlan, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream } from "@/api/backend";
+import { cancelCodeRun, expandModules, expandPlan, replayToolSequence, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream } from "@/api/backend";
 import type { CodeDiffInfo, ExpandPlanResult } from "@/api/backend";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
@@ -689,6 +689,95 @@ export function useRunNode() {
     [setRunning],
   );
 
+  // Deterministic replay of a code node's materialized tool subgraph (no LLM).
+  // Collects child tool nodes, sorts by data.order, replays their toolInput.
+  const replayTools = useCallback(
+    async (codeNodeId: string, stepNodeIds?: string[]): Promise<boolean> => {
+      const state = useGraphStore.getState();
+      const codeNode = state.nodes.find((n) => n.id === codeNodeId);
+      if (!codeNode) return false;
+      if (useRunState.getState().runningId) return false;
+
+      const projectDir = state.projectDir;
+      if (!projectDir) {
+        const message = "未设置工程目录，请先在工具栏点 📁 选择工程目录";
+        useMonitorStore.getState().addLog({ level: "error", source: "code", status: "ERROR", nodeId: codeNodeId, nodeTitle: codeNode.title, message });
+        return false;
+      }
+
+      const onlyIds = stepNodeIds ? new Set(stepNodeIds) : null;
+      const toolNodes = state.nodes
+        .filter((n) => n.parentId === codeNodeId && typeof n.data?.tool === "string")
+        .filter((n) => !onlyIds || onlyIds.has(n.id))
+        .sort((a, b) => Number(a.data?.order ?? 0) - Number(b.data?.order ?? 0));
+      if (toolNodes.length === 0) {
+        useMonitorStore.getState().addLog({ level: "warn", source: "code", status: "SKIPPED", nodeId: codeNodeId, nodeTitle: codeNode.title, message: "没有可重放的 tool 节点，请先 Render Subgraph。" });
+        return false;
+      }
+
+      const steps = toolNodes.map((n) => ({
+        id: n.id,
+        tool: n.data?.tool as string,
+        input: (n.data?.toolInput as Record<string, unknown>) ?? {},
+      }));
+
+      useMonitorStore.getState().addLog({ level: "info", source: "code", status: "START", nodeId: codeNodeId, nodeTitle: codeNode.title, message: `Tool replay started (${steps.length} steps, no LLM)` });
+      setRunning(codeNodeId);
+      const ctrl = new AbortController();
+      const runId = crypto.randomUUID();
+      activeAbort = ctrl;
+      activeCodeRunId = runId;
+      let ok = true;
+
+      await replayToolSequence(
+        {
+          projectDir,
+          fileScopeAllow: codeNode.fileScope.allow,
+          fileScopeDeny: codeNode.fileScope.deny,
+          steps,
+          runId,
+        },
+        {
+          onText: () => { /* narration only */ },
+          onFiles: (files) => {
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "FILES", nodeId: codeNodeId, nodeTitle: codeNode.title, message: `Files changed: ${files.length ? files.join(", ") : "none"}` });
+          },
+          onDiff: (diff) => {
+            useMonitorStore.getState().addLog({ level: diff.diff ? "info" : "warn", source: "code", status: "DIFF", nodeId: codeNodeId, nodeTitle: codeNode.title, message: diff.diff ? `Diff captured (${diff.diff.length} chars)` : "No diff captured" });
+          },
+          onToolStart: (trace) => {
+            useGraphStore.getState().patchNodeData(trace.id, { status: "running" });
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "REPLAY", nodeId: codeNodeId, nodeTitle: codeNode.title, message: `${trace.step}. ${trace.tool}` });
+          },
+          onToolResult: (trace) => {
+            useGraphStore.getState().patchNodeData(trace.id, {
+              status: trace.status,
+              lastOutput: trace.output ?? trace.outputSummary ?? trace.error,
+            });
+            useMonitorStore.getState().addLog({ level: trace.status === "error" ? "error" : "info", source: "code", status: trace.status === "error" ? "TOOL_ERROR" : "TOOL_DONE", nodeId: codeNodeId, nodeTitle: codeNode.title, message: trace.error ?? `${trace.step}. ${trace.tool} done` });
+          },
+          onDone: () => {
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", nodeId: codeNodeId, nodeTitle: codeNode.title, message: "Tool replay done" });
+            setRunning(null);
+            if (activeAbort === ctrl) activeAbort = null;
+            if (activeCodeRunId === runId) activeCodeRunId = null;
+          },
+          onError: (message) => {
+            ok = false;
+            useMonitorStore.getState().addLog({ level: "error", source: "code", status: "ERROR", nodeId: codeNodeId, nodeTitle: codeNode.title, message });
+            setRunning(null);
+            if (activeAbort === ctrl) activeAbort = null;
+            if (activeCodeRunId === runId) activeCodeRunId = null;
+          },
+          signal: ctrl.signal,
+        },
+      );
+      if (activeCodeRunId === runId) activeCodeRunId = null;
+      return ok && !ctrl.signal.aborted;
+    },
+    [setRunning],
+  );
+
   const expandPlanNodes = useCallback(
     async (planningNodeId: string): Promise<boolean> => {
       const state = useGraphStore.getState();
@@ -1135,5 +1224,5 @@ export function useRunNode() {
     useMonitorStore.getState().addLog({ level: "warn", source: "node", status: "CANCELLED", message: "Run cancelled" });
   }, [setRunning]);
 
-  return { run, runCode, expandPlanNodes, expandModuleGraph, runDag, cancel, runningId };
+  return { run, runCode, replayTools, expandPlanNodes, expandModuleGraph, runDag, cancel, runningId };
 }

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 NodeType = Literal[
     "prompt", "planning", "subgraph", "memory", "filescope",
-    "analysis", "code", "api", "asset", "agent", "task", "semantic",
+    "analysis", "code", "api", "asset", "agent", "task", "tool", "semantic",
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
 ProviderName = Literal["anthropic", "deepseek", "openai", "local-claude", "local-codex"]
@@ -145,6 +145,20 @@ class CodeAnalysisRequest(BaseModel):
 
 class CodeCancelRequest(BaseModel):
     runId: str
+
+
+class ToolStep(BaseModel):
+    id: Optional[str] = None
+    tool: str
+    input: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolSequenceRequest(BaseModel):
+    projectDir: str
+    fileScopeAllow: Optional[list[str]] = None
+    fileScopeDeny: Optional[list[str]] = None
+    steps: list[ToolStep] = Field(default_factory=list)
+    runId: Optional[str] = None
 
 
 class ExpandNodeSummary(BaseModel):

@@ -10,11 +10,12 @@ export type NodeType =
   | "asset"
   | "agent"
   | "task"
+  | "tool"
   | "semantic";
 
 export const NODE_TYPES: NodeType[] = [
   "prompt", "planning", "subgraph", "memory", "filescope",
-  "analysis", "code", "api", "asset", "agent", "task", "semantic",
+  "analysis", "code", "api", "asset", "agent", "task", "tool", "semantic",
 ];
 
 export type ContextMode = "inherit" | "explicit" | "isolated";
@@ -59,6 +60,7 @@ export interface ToolTraceItem {
   finishedAt?: string;
   input: Record<string, unknown>;
   outputSummary?: string;
+  output?: unknown;
   error?: string;
   affectedFiles?: string[];
 }

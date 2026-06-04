@@ -7,6 +7,7 @@ import {
   type ConfirmationRequest,
 } from "@/utils/confirmation";
 import { NODE_TYPES, type Edge, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
+import { toolSpec } from "@/toolRegistry";
 
 function nodeTypeLabel(type: NodeType): string {
   if (type === "planning") return "Planning";
@@ -22,7 +23,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const node = useGraphStore((s) =>
     s.nodes.find((n) => n.id === selectedId),
   );
-  const { run, runCode, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
+  const { run, runCode, replayTools, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
   const enterSubgraph = useGraphStore((s) => s.enterSubgraph);
@@ -49,6 +50,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const systemPrompt = node.systemPrompt ?? "";
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
+  const isToolNode = node.type === "tool";
   const isGraphNode = node.type === "planning" || node.type === "subgraph";
   const isCodeAnalysisNode = node.type === "analysis";
   const isStructureGraphNode = node.type === "subgraph";
@@ -79,7 +81,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     const ordered = [...toolTrace].sort((a, b) => a.step - b.step);
     const newNodes: NodeBase[] = ordered.map((trace, idx) => ({
       id: crypto.randomUUID(),
-      type: trace.tool === "apply_patch" ? "code" : "task",
+      type: "tool",
       title: `${trace.step}. ${trace.tool}`,
       position: { x: idx * 280, y: trace.status === "error" ? 120 : 0 },
       contextMode: "explicit",
@@ -89,7 +91,12 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
       purpose: tracePurpose(trace),
       data: {
         purpose: tracePurpose(trace),
+        // 执行层：可编辑/可重放的工具调用
+        tool: trace.tool,
+        toolInput: trace.input ?? {},
+        order: trace.step,
         status: trace.status,
+        lastOutput: trace.output ?? trace.outputSummary,
         trace,
       },
       runHistory: [],
@@ -120,7 +127,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     const store = useGraphStore.getState();
     const promoted: NodeBase = {
       id: crypto.randomUUID(),
-      type: trace.tool === "apply_patch" ? "code" : "task",
+      type: "tool",
       title: `${trace.tool}: ${node.title}`,
       position: {
         x: node.position.x + 320,
@@ -133,7 +140,11 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
       purpose: tracePurpose(trace),
       data: {
         purpose: tracePurpose(trace),
+        tool: trace.tool,
+        toolInput: trace.input ?? {},
+        order: trace.step,
         status: trace.status,
+        lastOutput: trace.output ?? trace.outputSummary,
         promotedFromTrace: {
           sourceNodeId: node.id,
           runId: latestRun?.id,
@@ -322,6 +333,57 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               {contextHint(node.contextMode)}
             </span>
           </div>
+
+          {isToolNode ? (
+            <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Tool</span>
+                <span className="text-xs font-mono text-zinc-200">{String(node.data?.tool ?? "?")}</span>
+                {toolSpec(String(node.data?.tool ?? ""))?.writes ? (
+                  <span className="text-[10px] text-amber-400 border border-amber-700/60 rounded px-1">写文件</span>
+                ) : null}
+                <span className="text-[10px] text-zinc-600">{toolSpec(String(node.data?.tool ?? ""))?.description ?? ""}</span>
+              </div>
+              <div>
+                <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Tool Input (JSON，可编辑)</div>
+                <textarea
+                  key={node.id}
+                  className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16 font-mono"
+                  rows={4}
+                  defaultValue={JSON.stringify(node.data?.toolInput ?? {}, null, 2)}
+                  onBlur={(e) => {
+                    try {
+                      const parsed = JSON.parse(e.target.value);
+                      useGraphStore.getState().patchNodeData(node.id, { toolInput: parsed });
+                    } catch {
+                      /* 无效 JSON：保留输入不提交 */
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <button
+                  className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
+                  onClick={() => replayTools(node.parentId ?? node.id, [node.id])}
+                  disabled={runningId !== null || !projectDir || !node.parentId}
+                  title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : !node.parentId ? "该 tool 节点不在某个执行器内部，无法单步重放" : "仅重跑这一步（不过 LLM）"}
+                >
+                  ▶ Replay this step
+                </button>
+                <span className="text-[10px] text-zinc-600">编辑后失焦保存，再点重放按新参数执行</span>
+              </div>
+              {node.data?.lastOutput !== undefined ? (
+                <div>
+                  <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Last Output</div>
+                  <pre className="w-full bg-canvas border border-zinc-800 rounded px-2 py-1 mt-0.5 text-[11px] text-zinc-400 overflow-x-auto max-h-40 whitespace-pre-wrap">
+                    {typeof node.data.lastOutput === "string"
+                      ? node.data.lastOutput
+                      : JSON.stringify(node.data.lastOutput, null, 2)}
+                  </pre>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     );

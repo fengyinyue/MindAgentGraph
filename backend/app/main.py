@@ -33,12 +33,12 @@ logging.getLogger("mag").setLevel(_log_level)
 logging.getLogger("mag").addHandler(_log_handler)
 logging.getLogger("mag").propagate = False
 
-from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, Graph, RunDagRequest, ExpandPlanRequest, ExpandModulesRequest, ProjectScanRequest, ProjectScanResult, GraphEditRequest, GraphEditResult
+from app.schemas import HealthResponse, PlanRequest, RunNodeRequest, CodeRunRequest, CodeAnalysisRequest, CodeCancelRequest, ToolSequenceRequest, Graph, RunDagRequest, ExpandPlanRequest, ExpandModulesRequest, ProjectScanRequest, ProjectScanResult, GraphEditRequest, GraphEditResult
 from app.services.planner import expand_plan, expand_modules, plan_graph
 from app.services.graph_chat import edit_graph_with_chat, stream_graph_chat_reply
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
-from app.services.code_runner import cancel_code_run, run_node_native_code
+from app.services.code_runner import cancel_code_run, run_node_native_code, replay_tool_sequence
 from app.services.code_analysis_runner import run_code_analysis_with_claude
 from app.services.memory import read_memory, write_memory
 from app.services.dag_executor import run_dag_stream
@@ -312,6 +312,28 @@ async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
     )
 
 
+# Maps the in-band string markers emitted by the native code runner to SSE
+# events. Returns the translated SSE frame, or None when the chunk is plain text
+# (caller decides how to handle text, e.g. accumulate it for memory).
+_CODE_MARKERS = {
+    "__files__:": "files",
+    "__diff__:": "diff",
+    "__tool_start__:": "tool_start",
+    "__tool_result__:": "tool_result",
+    "__usage__:": "usage",
+    "__log__:": "log",
+}
+
+
+def _marker_to_sse(chunk: str) -> Optional[str]:
+    stripped = chunk.strip()
+    for prefix, event in _CODE_MARKERS.items():
+        if stripped.startswith(prefix):
+            payload = stripped[len(prefix):].strip()
+            return f"event: {event}\ndata: {payload}\n\n"
+    return None
+
+
 @app.post("/run/node/code")
 async def run_node_code(
     req: CodeRunRequest,
@@ -350,26 +372,9 @@ async def run_node_code(
                 api_key=x_provider_key,
                 run_id=req.runId,
             ):
-                # Check for special metadata markers (may have leading whitespace).
-                stripped = chunk.strip()
-                if stripped.startswith("__files__:"):
-                    files_json = stripped[len("__files__:"):].strip()
-                    yield f"event: files\ndata: {files_json}\n\n"
-                elif stripped.startswith("__diff__:"):
-                    diff_json = stripped[len("__diff__:"):].strip()
-                    yield f"event: diff\ndata: {diff_json}\n\n"
-                elif stripped.startswith("__tool_start__:"):
-                    tool_json = stripped[len("__tool_start__:"):].strip()
-                    yield f"event: tool_start\ndata: {tool_json}\n\n"
-                elif stripped.startswith("__tool_result__:"):
-                    tool_json = stripped[len("__tool_result__:"):].strip()
-                    yield f"event: tool_result\ndata: {tool_json}\n\n"
-                elif stripped.startswith("__usage__:"):
-                    usage_json = stripped[len("__usage__:"):].strip()
-                    yield f"event: usage\ndata: {usage_json}\n\n"
-                elif stripped.startswith("__log__:"):
-                    log_json = stripped[len("__log__:"):].strip()
-                    yield f"event: log\ndata: {log_json}\n\n"
+                sse = _marker_to_sse(chunk)
+                if sse is not None:
+                    yield sse
                 else:
                     output_parts.append(chunk)
                     yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
@@ -381,6 +386,48 @@ async def run_node_code(
                     "".join(output_parts),
                     node_title=req.node.title,
                 )
+            yield "event: done\ndata: {}\n\n"
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:
+            yield f"event: error\ndata: {json.dumps({'message': str(e)})}\n\n"
+
+    return StreamingResponse(
+        gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.post("/run/tool-sequence")
+async def run_tool_sequence(req: ToolSequenceRequest) -> StreamingResponse:
+    """SSE stream of a deterministic tool-sequence replay (no LLM).
+
+    Same wire format as /run/node/code (tool_start/tool_result/files/diff/log),
+    so the frontend reuses the runNodeCode SSE parser. No provider key needed.
+    """
+
+    async def gen():
+        try:
+            steps = [
+                {"id": s.id, "tool": s.tool, "input": s.input}
+                for s in req.steps
+            ]
+            async for chunk in replay_tool_sequence(
+                project_dir=req.projectDir,
+                file_scope_allow=req.fileScopeAllow,
+                file_scope_deny=req.fileScopeDeny,
+                steps=steps,
+                run_id=req.runId,
+            ):
+                sse = _marker_to_sse(chunk)
+                if sse is not None:
+                    yield sse
+                else:
+                    yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
             yield "event: done\ndata: {}\n\n"
         except asyncio.CancelledError:
             raise
