@@ -778,12 +778,20 @@ export function useRunNode() {
     [setRunning],
   );
 
+  // mode controls how a planning node expands:
+  //  - "design"  → internal dataflow design (structure expansion, children inside the plan)
+  //  - "execute" → external execution nodes (workflow expansion, siblings outside)
+  // subgraph nodes always expand as structure regardless of mode.
   const expandPlanNodes = useCallback(
-    async (planningNodeId: string): Promise<boolean> => {
+    async (planningNodeId: string, mode: "design" | "execute" = "execute"): Promise<boolean> => {
       const state = useGraphStore.getState();
       const planningNode = state.nodes.find((n) => n.id === planningNodeId);
-      const graphKind = planningNode ? graphKindForNode(planningNode) : null;
-      if (!planningNode || !graphKind) return false;
+      const baseKind = planningNode ? graphKindForNode(planningNode) : null;
+      if (!planningNode || !baseKind) return false;
+      const graphKind: "workflow" | "structure" =
+        planningNode.type === "planning"
+          ? (mode === "design" ? "structure" : "workflow")
+          : baseKind;
       if (useRunState.getState().runningId) return false;
 
       const planText =
@@ -824,8 +832,8 @@ export function useRunNode() {
           )
           .map(summarizeNodeForExpand);
         const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, planningNodeId);
-        const expandSubgraphs =
-          graphKind === "workflow" && Boolean(planningNode.data?.expandSubgraphs);
+        // 默认深度展开：workflow 展开时一并生成每个 Subgraph 的内部数据流。
+        const expandSubgraphs = graphKind === "workflow";
         const result = await expandPlan(planText, {
           graphKind,
           expandSubgraphs,

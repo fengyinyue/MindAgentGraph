@@ -369,7 +369,7 @@ export default function Canvas() {
   const contextMenuCanExplain = contextMenuNode !== undefined;
   const contextMenuIsCodeAnalysis = contextMenuNode?.type === "analysis";
   const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" || contextMenuNode?.type === "subgraph";
-  const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code";
+  const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code" || contextMenuNode?.type === "planning";
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
 
@@ -484,7 +484,7 @@ export default function Canvas() {
         onNodeClick={onNodeClick}
         onNodeDoubleClick={(_, node) => {
           const graphNode = storeNodes.find((item) => item.id === node.id);
-          if (graphNode?.type === "subgraph" || graphNode?.type === "code") {
+          if (graphNode?.type === "subgraph" || graphNode?.type === "code" || graphNode?.type === "planning") {
             enterSubgraph(graphNode.id);
           }
         }}
@@ -566,12 +566,24 @@ export default function Canvas() {
             <button
               className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
               onClick={() => {
-                expandPlanNodes(menu.nodeId);
+                expandPlanNodes(menu.nodeId, "design");
                 closeMenu();
               }}
               disabled={runningId !== null}
             >
               ✦ Generate Nodes
+            </button>
+          ) : null}
+          {contextMenuNode?.type === "planning" ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                expandPlanNodes(menu.nodeId, "execute");
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              ▶ 执行（生成执行节点）
             </button>
           ) : null}
           {contextMenuCanEnter ? (
@@ -582,7 +594,11 @@ export default function Canvas() {
                 closeMenu();
               }}
             >
-              {contextMenuNode?.type === "code" ? "Enter Code" : "Enter Subgraph"}
+              {contextMenuNode?.type === "code"
+                ? "Enter Code"
+                : contextMenuNode?.type === "planning"
+                  ? "Enter（进入设计）"
+                  : "Enter Subgraph"}
             </button>
           ) : null}
           {contextMenuCanGenerateModuleGraph ? (

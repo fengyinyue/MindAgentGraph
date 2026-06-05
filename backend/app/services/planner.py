@@ -36,13 +36,15 @@ PLANNER_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 节点类型说明：
 - planning: 高层工作流规划/总控节点（通常是根节点）
 - subgraph: 结构化数据流/依赖图入口节点
-- prompt: 与 AI 对话生成内容的节点
-- code: 代码实现节点
+- prompt: 与 AI 对话只生成文本内容的节点（不执行、不碰文件）
+- code: 唯一能真正“执行”的节点——会调用文件工具实际写代码/改文件。凡是要动手做的步骤都用 code：实现功能、写测试并运行、构建、打包、生成产物等
 - analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
 - asset: 资源/素材节点
-- task: 待办任务节点
+- task: 仅用于真正需要人工的检查点（如“人工验收”），系统不会自动执行它。绝不要把“写测试/构建/打包/生成文件”等可自动完成的活儿放进 task —— 这些必须是 code
 - memory: 记忆/上下文节点
 - filescope: 文件作用域定义
+
+关键规则：执行期只有 code 节点会真正干活（跑工具改文件）；prompt/task 只产出文字或作为人工 gate。任何“能自动做完”的步骤一律用 code。
 
 设计原则：
 1. 5-12 个节点，覆盖目标的关键模块
@@ -355,12 +357,14 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 - planning: 仅用于大型项目中独立子系统的规划入口
 - subgraph: 用于生成端口化的数据流/结构图入口
 - analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
-- code: 代码实现节点
-- prompt: 与 AI 对话生成内容的节点
+- code: 唯一能真正“执行”的节点——会调用文件工具实际写代码/改文件。凡是要动手做的步骤都用 code：实现功能、写测试并运行、构建、打包、生成产物文件等
+- prompt: 与 AI 对话只生成文本内容的节点（不执行、不碰文件）
 - asset: 资源/素材节点
-- task: 待办任务节点
+- task: 仅用于真正需要人工的检查点（如“人工验收”“确认设计方案”），系统不会自动执行它。绝不要把“写测试/构建/打包/生成文件”等可自动完成的活儿放进 task —— 这些必须是 code
 - memory: 记忆/上下文节点
 - filescope: 文件作用域定义
+
+关键规则：执行期只有 code 节点会真正干活（跑工具改文件）；prompt/task 只产出文字或作为人工 gate。任何“能自动做完”的步骤一律用 code，不要用 task。
 
 设计原则：
 1. 3-10 个节点，覆盖规划中的关键模块
@@ -702,7 +706,7 @@ def _offline_demo(goal: str) -> Graph:
         {"id": "design", "type": "prompt", "title": "需求拆解", "x": 300, "y": -120},
         {"id": "data", "type": "memory", "title": "项目记忆", "x": 300, "y": 120},
         {"id": "impl", "type": "code", "title": "代码实现", "x": 600, "y": 0},
-        {"id": "test", "type": "task", "title": "测试验证", "x": 900, "y": 0},
+        {"id": "test", "type": "code", "title": "测试验证", "x": 900, "y": 0},
     ]
     links_raw = [
         {"source": "root", "target": "design"},
