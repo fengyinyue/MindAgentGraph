@@ -6,8 +6,9 @@ import {
   type ConfirmationAnswers,
   type ConfirmationRequest,
 } from "@/utils/confirmation";
-import { NODE_TYPES, type Edge, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
+import { allowedNodeTypes, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
 import { toolSpec } from "@/toolRegistry";
+import { tracePurpose } from "@/utils/traceNodes";
 
 function nodeTypeLabel(type: NodeType): string {
   if (type === "planning") return "Planning";
@@ -23,6 +24,12 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const node = useGraphStore((s) =>
     s.nodes.find((n) => n.id === selectedId),
   );
+  // Layer of the selected node = type of its container (Phase 3 type vocabulary).
+  const parentType = useGraphStore((s) => {
+    const self = s.nodes.find((n) => n.id === selectedId);
+    if (!self?.parentId) return null;
+    return s.nodes.find((n) => n.id === self.parentId)?.type ?? null;
+  });
   const { run, runCode, replayTools, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
@@ -64,61 +71,6 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     useGraphStore.getState().patchNodeData(node.id, {
       confirmationAnswers: { ...confirmationAnswers, [id]: value },
     });
-  };
-
-  const createTraceSubgraph = () => {
-    if (!latestRun || toolTrace.length === 0) return;
-    const store = useGraphStore.getState();
-    const oldTraceNodeIds = new Set(
-      store.nodes
-        .filter((item) => item.metadata?.traceSourceNodeId === node.id)
-        .map((item) => item.id),
-    );
-    for (const oldId of oldTraceNodeIds) store.removeNode(oldId);
-
-    const ordered = [...toolTrace].sort((a, b) => a.step - b.step);
-    const newNodes: NodeBase[] = ordered.map((trace, idx) => ({
-      id: crypto.randomUUID(),
-      type: "tool",
-      title: `${trace.step}. ${trace.tool}`,
-      position: { x: idx * 280, y: trace.status === "error" ? 120 : 0 },
-      contextMode: "explicit",
-      fileScope: { allow: [], deny: [] },
-      toolPolicy: { tools: [], deny: [] },
-      parentId: node.id,
-      purpose: tracePurpose(trace),
-      data: {
-        purpose: tracePurpose(trace),
-        // 执行层：可编辑/可重放的工具调用
-        tool: trace.tool,
-        toolInput: trace.input ?? {},
-        order: trace.step,
-        status: trace.status,
-        lastOutput: trace.output ?? trace.outputSummary,
-        trace,
-      },
-      runHistory: [],
-      resourceRefs: [],
-      metadata: {
-        traceNode: true,
-        traceRunId: latestRun.id,
-        traceToolId: trace.id,
-        traceSourceNodeId: node.id,
-      },
-    }));
-    const newLinks: Edge[] = newNodes.slice(1).map((child, idx) => ({
-      id: crypto.randomUUID(),
-      source: newNodes[idx].id,
-      target: child.id,
-      label: "next",
-    }));
-    for (const child of newNodes) store.addNode(child);
-    for (const link of newLinks) store.addLink(link);
-    store.patchNodeData(node.id, {
-      traceSubgraphRunId: latestRun.id,
-      traceSubgraphUpdatedAt: new Date().toISOString(),
-    });
-    store.enterSubgraph(node.id);
   };
 
   const promoteTrace = (trace: ToolTraceItem) => {
@@ -194,7 +146,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               value={node.type}
               onChange={(e) => updateNode(node.id, { type: e.target.value as NodeType })}
             >
-              {NODE_TYPES.map((nt) => (
+              {Array.from(new Set([node.type, ...allowedNodeTypes(parentType)])).map((nt) => (
                 <option key={nt} value={nt}>{nodeTypeLabel(nt)}</option>
               ))}
             </select>
@@ -441,13 +393,8 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             <summary className="text-zinc-500 cursor-pointer select-none">
               Tool Trace
             </summary>
-            <div className="mt-2 flex gap-2">
-              <button
-                className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-accent hover:text-accent"
-                onClick={createTraceSubgraph}
-              >
-                Render Subgraph
-              </button>
+            <div className="mt-1 text-[10px] text-zinc-600">
+              运行后自动在执行器内部生成可编辑/可重放的工具节点，进入查看。
             </div>
             <div className="mt-2 space-y-1">
               {toolTrace.map((trace) => (
@@ -661,19 +608,6 @@ function getConfirmationAnswers(value: unknown): ConfirmationAnswers {
     if (typeof answer === "string") answers[key] = answer;
   }
   return answers;
-}
-
-function tracePurpose(trace: ToolTraceItem): string {
-  const input = JSON.stringify(trace.input ?? {}, null, 2);
-  const parts = [
-    `Tool call ${trace.step}: ${trace.tool}`,
-    `Status: ${trace.status}`,
-    input && input !== "{}" ? `Input:\n${input}` : "",
-    trace.outputSummary ? `Output:\n${trace.outputSummary}` : "",
-    trace.error ? `Error:\n${trace.error}` : "",
-    trace.affectedFiles?.length ? `Affected files: ${trace.affectedFiles.join(", ")}` : "",
-  ].filter(Boolean);
-  return parts.join("\n\n");
 }
 
 function contextHint(mode: "inherit" | "explicit" | "isolated"): string {

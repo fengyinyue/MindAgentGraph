@@ -4,7 +4,7 @@ import { usePanelStore } from "@/store/panelStore";
 import { openProjectDialog, saveProjectAt, saveProjectDialog } from "@/api/project";
 import { useRunNode } from "@/hooks/useRunNode";
 import { autoLayoutGraph } from "@/utils/layout";
-import type { NodeBase, ProjectMeta } from "@shared/types";
+import { allowedNodeTypes, type NodeBase, type ProjectMeta } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
 const buttonBase = "inline-flex h-7 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45";
@@ -124,14 +124,18 @@ export default function Toolbar() {
           className={buttonSuccess}
           title="Add Node"
           onClick={() => {
-            useGraphStore.getState().addNode({
+            const state = useGraphStore.getState();
+            const parent = state.activeParentId ? state.nodes.find((n) => n.id === state.activeParentId) : null;
+            const type = allowedNodeTypes(parent?.type)[0];
+            state.addNode({
               id: crypto.randomUUID(),
-              type: "prompt",
-              title: "Prompt",
+              type,
+              title: type.charAt(0).toUpperCase() + type.slice(1),
               position: { x: 250, y: 250 },
               contextMode: "inherit",
               fileScope: { allow: [], deny: [] },
               toolPolicy: { tools: [], deny: [] },
+              parentId: state.activeParentId ?? undefined,
               data: {},
               runHistory: [],
               resourceRefs: [],

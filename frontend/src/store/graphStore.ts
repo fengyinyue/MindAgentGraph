@@ -93,7 +93,14 @@ export const useGraphStore = create<GraphState>((set) => ({
   removeLink: (id) => set((s) => ({ links: s.links.filter((e) => e.id !== id) })),
   selectNode: (id) => set({ selectedNodeId: id }),
   enterSubgraph: (id) => set({ activeParentId: id, selectedNodeId: null }),
-  exitSubgraph: () => set({ activeParentId: null, selectedNodeId: null }),
+  // Pop up exactly one level (not straight to top), so nested drill-in
+  // (plan > subgraph > dataflow) returns to the enclosing container.
+  exitSubgraph: () => set((s) => {
+    const current = s.activeParentId
+      ? s.nodes.find((n) => n.id === s.activeParentId)
+      : null;
+    return { activeParentId: current?.parentId ?? null, selectedNodeId: null };
+  }),
   setProjectPath: (path) => set({ projectPath: path }),
   setProjectDir: (dir) => set({ projectDir: dir }),
   clear: () => set({

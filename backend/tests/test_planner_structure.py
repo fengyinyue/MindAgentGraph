@@ -166,7 +166,12 @@ def test_expand_plan_workflow_uses_plain_expand_system(monkeypatch: pytest.Monke
         )
     )
 
-    assert fake.calls[0]["system_prompt"] == planner.EXPAND_SYSTEM
+    prompt = fake.calls[0]["system_prompt"]
+    assert prompt.startswith(planner.EXPAND_SYSTEM)
+    # workflow + 非深度 = 执行层：含执行层段，不含设计层/深度展开段
+    assert planner.EXPAND_EXECUTE_SECTION in prompt
+    assert planner.EXPAND_DESIGN_SECTION not in prompt
+    assert planner.EXPAND_DEEP_SUBGRAPH_SECTION not in prompt
 
 
 def test_expand_plan_workflow_strips_port_graph_fields(monkeypatch: pytest.MonkeyPatch) -> None:

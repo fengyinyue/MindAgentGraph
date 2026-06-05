@@ -341,40 +341,33 @@ EXPAND_SYSTEM = """你是 MindAgentGraph 的项目规划助手。
 
 你的任务：根据已有的高层规划文本，将其拆解成一组节点组成的 DAG (有向无环图)。
 
-节点类型选择规则：
-- 小/中型项目（单一系统，如"番茄钟"、"Markdown编辑器"）：直接生成实现节点（code、task、prompt），不要创建 planning 子节点
-- 大型项目（覆盖多个独立子系统，如"电商平台"、"游戏引擎"）：可以为每个子系统创建一个 planning 节点（后续可各自 Explain + Generate Nodes 展开），子系统之间直接生成实现节点
-- 当某个阶段的核心工作是设计结构、数据流、模块依赖、资源/资产管线、生成规则图、Blueprint/节点图、PCG 或可视化流程时，优先生成一个 subgraph 节点作为结构设计入口，而不是直接把该结构拆成多个 code/task 节点
-- subgraph 节点应位于后续 code/task/prompt 节点上游；后续实现节点的 purpose 中要明确它依赖 Subgraph 的结构输出
-- 不要把 subgraph 用作普通任务清单；只有当下游需要端口化结构、数据流或依赖关系时才使用它
-- planning 外层不要重复拆解 subgraph 内部的数据流节点；内部输入/转换/输出节点应留给 Subgraph 自己展开
-- 当 planning 中已有 subgraph 时，不要把 Validate/Material/LOD/Collider/Prefab 等内部处理阶段逐个镜像成外层 code 节点；外层 code 节点应是粗粒度工作包，例如"实现管线运行框架"、"根据 Subgraph 实现处理器集合"、"集成导出与报告"、"验证与交付"
-- 仅 subgraph 节点需要声明 inputs / outputs 端口（每个端口为 {id, name, type}，type 取值 spline/point/polygon/bounds/graph/debug/asset/unknown），作为该子图对外的接口契约；其他类型节点不要填写端口
-- links 涉及 subgraph 的一端，请填写对应的 sourceHandle / targetHandle，且必须命中该 subgraph 已声明的端口 id；非 subgraph 一侧的 handle 请省略
-- 工具返回的 links 只能连接本次返回的 nodes；如果需要依赖已有节点，请在新节点 purpose 中明确写"依赖已有节点：<title>"
-
-节点类型说明：
-- planning: 仅用于大型项目中独立子系统的规划入口
-- subgraph: 用于生成端口化的数据流/结构图入口
-- analysis: 使用 Claude Code 只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围
-- code: 唯一能真正“执行”的节点——会调用文件工具实际写代码/改文件。凡是要动手做的步骤都用 code：实现功能、写测试并运行、构建、打包、生成产物文件等
-- prompt: 与 AI 对话只生成文本内容的节点（不执行、不碰文件）
-- asset: 资源/素材节点
-- task: 仅用于真正需要人工的检查点（如“人工验收”“确认设计方案”），系统不会自动执行它。绝不要把“写测试/构建/打包/生成文件”等可自动完成的活儿放进 task —— 这些必须是 code
-- memory: 记忆/上下文节点
-- filescope: 文件作用域定义
-
-关键规则：执行期只有 code 节点会真正干活（跑工具改文件）；prompt/task 只产出文字或作为人工 gate。任何“能自动做完”的步骤一律用 code，不要用 task。
+通用规则：
+- code 是唯一能真正“执行”的节点（调用文件工具实际写代码/改文件）；任何“能自动做完”的步骤一律用 code（实现功能、写测试并运行、构建、打包、生成产物等）。
+- analysis：只读分析已有代码，输出架构理解、实现入口、风险和建议改动范围。
+- planning：子系统/模块的规划入口（其内部承载该模块的数据流设计）。
+- task：仅用于真正需要人工的检查点（如“人工验收”），系统不会自动执行它；绝不要把可自动完成的活儿放进 task。
+- 用 links 表达数据依赖（A 的输出是 B 的输入）；工具返回的 links 只能连接本次返回的 nodes，依赖已有节点请在 purpose 中写“依赖已有节点：<title>”。
 
 设计原则：
-1. 3-10 个节点，覆盖规划中的关键模块
-2. 每个节点应有清晰的单一职责
-3. 用 links 表达数据依赖（A 的输出是 B 的输入）
-4. 节点位置 (position) 分散。流程从左到右排列，父子节点 x 间距 ≥ 280
-5. 根节点放在 (0,0)，下游节点向右展开，并行分支用 y 上下错开
-6. 节点的 purpose 字段要具体
+1. 3-10 个节点，覆盖关键模块，单一职责，purpose 具体
+2. 位置从左到右、父子 x 间距 ≥ 280、根放 (0,0)、并行分支用 y 错开
 
 必须用 emit_graph 工具返回结构化结果，不要写自由文本。"""
+
+
+EXPAND_EXECUTE_SECTION = """本次展开的是「执行层」（外层 DAG）。**外层只允许三种节点类型：planning、code、analysis**。
+绝不要在外层生成 subgraph / task / asset / prompt / memory / filescope —— 这些是「设计层」词汇，只能存在于某个 planning 节点内部。
+- 结构设计、数据流、模块依赖、资源/资产管线等设计工作**不在这里做**：遇到需要结构设计的部分，就生成一个 planning 节点（标题写明该子系统/模块），让它后续在内部设计；不要在外层铺数据流节点。
+- 小/中型项目：直接生成 code 节点（粗粒度工作包）。需要先理解已有代码时生成 analysis 节点。
+- 大型项目：为每个独立子系统生成一个 planning 节点。
+- 外层节点都**不需要声明端口**。"""
+
+
+EXPAND_DESIGN_SECTION = """本次展开的是某个 planning 节点的「设计层」（其内部）。这里可使用设计类节点：subgraph、code、asset、task、prompt、memory。
+- 当某部分核心工作是设计结构、数据流、模块依赖、资源/资产管线、生成规则图等，生成一个 subgraph 节点作为该结构的设计入口（深度展开模式下会同时生成它的内部数据流）。
+- subgraph 应位于其下游 code/task 节点的上游；下游实现节点的 purpose 中说明它依赖该 Subgraph 的结构输出。
+- 仅 subgraph 节点声明 inputs / outputs 端口（每个端口 {id, name, type}，type 取值 spline/point/polygon/bounds/graph/debug/asset/unknown）作为对外接口契约；其他类型节点不要填端口。
+- links 涉及 subgraph 一端时，填对应 sourceHandle / targetHandle 并命中其端口 id；非 subgraph 一侧省略 handle。"""
 
 
 EXPAND_DEEP_SUBGRAPH_SECTION = """深度展开模式（已开启）：
@@ -454,9 +447,12 @@ async def expand_plan(
             existing_nodes=existing_nodes or [],
             upstream_outputs=upstream_outputs or {},
         )
-        system_prompt = EXPAND_SYSTEM
+        # expand_subgraphs True 即「设计层」(plan 内部)：允许 subgraph + 深度展开；
+        # 否则为「执行层」(外层)：仅 planning/code/analysis。
         if expand_subgraphs:
-            system_prompt = EXPAND_SYSTEM + "\n\n" + EXPAND_DEEP_SUBGRAPH_SECTION
+            system_prompt = EXPAND_SYSTEM + "\n\n" + EXPAND_DESIGN_SECTION + "\n\n" + EXPAND_DEEP_SUBGRAPH_SECTION
+        else:
+            system_prompt = EXPAND_SYSTEM + "\n\n" + EXPAND_EXECUTE_SECTION
         payload = await impl.emit_graph(
             system_prompt=system_prompt,
             user_goal=user_goal,

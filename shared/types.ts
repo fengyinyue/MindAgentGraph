@@ -18,6 +18,21 @@ export const NODE_TYPES: NodeType[] = [
   "analysis", "code", "api", "asset", "agent", "task", "tool", "semantic",
 ];
 
+// Layering (Phase 3): the execution layer (top level, or inside a code node)
+// only allows planner/executor/tool/analysis. Every other type is a design
+// vocabulary that may only be used INSIDE a plan node (design layer, drill-in).
+export const EXECUTION_LAYER_TYPES: NodeType[] = ["planning", "code", "tool", "analysis"];
+
+/** A node whose own type makes it a design container (drill-in = design layer). */
+export function isDesignContainer(type: NodeType | null | undefined): boolean {
+  return type === "planning" || type === "subgraph";
+}
+
+/** Node types creatable in the given layer, decided by the active container's type. */
+export function allowedNodeTypes(containerType: NodeType | null | undefined): NodeType[] {
+  return isDesignContainer(containerType) ? NODE_TYPES : EXECUTION_LAYER_TYPES;
+}
+
 export type ContextMode = "inherit" | "explicit" | "isolated";
 
 export type DataPortType =

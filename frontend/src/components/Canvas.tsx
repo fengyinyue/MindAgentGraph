@@ -21,7 +21,7 @@ import "@xyflow/react/dist/style.css";
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
 import { useOutputPanelStore } from "@/store/outputPanelStore";
-import { NODE_TYPES, type DataPort, type DataPortType, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
+import { allowedNodeTypes, type DataPort, type DataPortType, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
 
 const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
@@ -451,7 +451,7 @@ export default function Canvas() {
     [activeParentId],
   );
 
-  // Keyboard shortcut "N": add a prompt node at viewport center.
+  // Keyboard shortcut "N": add a layer-appropriate node at viewport center.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
@@ -463,7 +463,9 @@ export default function Canvas() {
           x: window.innerWidth / 2,
           y: window.innerHeight / 2,
         });
-        addNode("prompt", center);
+        const state = useGraphStore.getState();
+        const parent = state.activeParentId ? state.nodes.find((n) => n.id === state.activeParentId) : null;
+        addNode(allowedNodeTypes(parent?.type)[0], center);
       }
     };
     window.addEventListener("keydown", handler);
@@ -683,7 +685,7 @@ export default function Canvas() {
             Add Node
           </div>
           <hr className="border-zinc-700 my-0.5" />
-          {NODE_TYPES.map((nt) => (
+          {allowedNodeTypes(activeParentNode?.type).map((nt) => (
             <button
               key={nt}
               className="block w-full text-left px-3 py-1 hover:bg-canvas"

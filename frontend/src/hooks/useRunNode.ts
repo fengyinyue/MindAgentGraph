@@ -7,6 +7,7 @@ import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
 import { useProviderStore } from "@/store/providerStore";
 import { parseConfirmationRequest } from "@/utils/confirmation";
+import { materializeTraceNodes } from "@/utils/traceNodes";
 import type { Edge, NodeBase, ToolTraceItem } from "@shared/types";
 
 interface RunState {
@@ -658,6 +659,12 @@ export function useRunNode() {
               diffTruncated: codeDiff?.truncated,
               diffWarnings: codeDiff?.warnings,
             });
+            // Auto-materialize the tool trace into editable/replayable nodes
+            // inside this code node (drill in to view; no manual step needed).
+            const rec = useGraphStore.getState().nodes
+              .find((n) => n.id === nodeId)?.runHistory
+              ?.find((r) => r.id === runRecordId);
+            materializeTraceNodes(nodeId, rec);
             useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", nodeId, nodeTitle: node.title, message: "Code run done" });
             setRunning(null);
             if (activeAbort === ctrl) activeAbort = null;
@@ -788,10 +795,13 @@ export function useRunNode() {
       const planningNode = state.nodes.find((n) => n.id === planningNodeId);
       const baseKind = planningNode ? graphKindForNode(planningNode) : null;
       if (!planningNode || !baseKind) return false;
-      const graphKind: "workflow" | "structure" =
-        planningNode.type === "planning"
-          ? (mode === "design" ? "structure" : "workflow")
-          : baseKind;
+      const isSubgraphNode = planningNode.type === "subgraph";
+      // 后端展开族：subgraph 用 structure(扁平数据流)；planning 用 workflow(可含 subgraph)。
+      const graphKind: "workflow" | "structure" = isSubgraphNode ? "structure" : "workflow";
+      // intoParent: 产物挂进容器内部(设计层) vs 外层兄弟(执行层)。
+      const intoParent = isSubgraphNode || mode === "design";
+      // 仅 plan 内部设计层允许 subgraph + 深度展开；执行层与 subgraph 内部都不展。
+      const expandSubgraphs = !isSubgraphNode && mode === "design";
       if (useRunState.getState().runningId) return false;
 
       const planText =
@@ -832,8 +842,6 @@ export function useRunNode() {
           )
           .map(summarizeNodeForExpand);
         const upstreamOutputs = collectUpstreamOutputs(state.nodes, state.links, planningNodeId);
-        // 默认深度展开：workflow 展开时一并生成每个 Subgraph 的内部数据流。
-        const expandSubgraphs = graphKind === "workflow";
         const result = await expandPlan(planText, {
           graphKind,
           expandSubgraphs,
@@ -851,8 +859,8 @@ export function useRunNode() {
         }
 
         const positions = layoutExpandedNodes(result.nodes, result.links, {
-          x: graphKind === "workflow" ? planningNode.position.x + 360 : planningNode.position.x,
-          y: graphKind === "workflow" ? planningNode.position.y : planningNode.position.y + 220,
+          x: intoParent ? planningNode.position.x : planningNode.position.x + 360,
+          y: intoParent ? planningNode.position.y + 220 : planningNode.position.y,
         }, "horizontal");
         const isWorkflowExpansion = graphKind === "workflow";
 
@@ -871,7 +879,7 @@ export function useRunNode() {
           let nodeParentId: string | undefined;
           if (isChild && raw.parent_id) {
             nodeParentId = idMap.get(raw.parent_id) ?? raw.parent_id;
-          } else if (graphKind === "structure") {
+          } else if (intoParent) {
             nodeParentId = planningNode.id;
           } else {
             nodeParentId = planningNode.parentId;
@@ -880,14 +888,14 @@ export function useRunNode() {
           // relative to (0,0) of that frame so the canvas pans nicely on Enter.
           const fallbackPosition = isChild
             ? { x: raw.x, y: raw.y }
-            : graphKind === "workflow"
+            : intoParent
               ? {
-                  x: planningNode.position.x + 360 + raw.x,
-                  y: planningNode.position.y + raw.y,
-                }
-              : {
                   x: planningNode.position.x + raw.x,
                   y: planningNode.position.y + 350 + raw.y,
+                }
+              : {
+                  x: planningNode.position.x + 360 + raw.x,
+                  y: planningNode.position.y + raw.y,
                 };
           return {
             id: idMap.get(raw.id)!,
@@ -934,9 +942,9 @@ export function useRunNode() {
           };
         });
 
-        // Find root nodes (no incoming edges from other new nodes) and connect planning → root.
-        // Skip subgraph children: they live inside a different frame.
-        if (graphKind === "workflow") {
+        // Execution layer only: connect planning → sibling root nodes.
+        // Design layer (intoParent) keeps nodes inside the plan, no outer connector.
+        if (!intoParent) {
           const newTargets = new Set(newEdges.map((e) => e.target));
           const topLevelNodes = newNodes.filter(
             (n) => n.parentId === planningNode.parentId,
