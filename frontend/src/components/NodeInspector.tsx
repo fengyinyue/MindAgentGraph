@@ -7,7 +7,7 @@ import {
   type ConfirmationRequest,
 } from "@/utils/confirmation";
 import { allowedNodeTypes, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
-import { toolSpec } from "@/toolRegistry";
+import { toolSpec, TOOL_REGISTRY } from "@/toolRegistry";
 import { tracePurpose } from "@/utils/traceNodes";
 
 function nodeTypeLabel(type: NodeType): string {
@@ -281,7 +281,18 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Tool</span>
-                <span className="text-xs font-mono text-zinc-200">{String(node.data?.tool ?? "?")}</span>
+                <select
+                  className="bg-canvas border border-zinc-700 rounded px-1.5 py-0.5 text-xs outline-none focus:border-accent"
+                  value={String(node.data?.tool ?? "")}
+                  onChange={(e) =>
+                    useGraphStore.getState().patchNodeData(node.id, { tool: e.target.value })
+                  }
+                >
+                  <option value="">（选择工具）</option>
+                  {Object.keys(TOOL_REGISTRY).map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
                 {toolSpec(String(node.data?.tool ?? ""))?.writes ? (
                   <span className="text-[10px] text-amber-400 border border-amber-700/60 rounded px-1">写文件</span>
                 ) : null}

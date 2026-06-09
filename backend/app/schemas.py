@@ -147,10 +147,17 @@ class CodeCancelRequest(BaseModel):
     runId: str
 
 
+class ToolBinding(BaseModel):
+    targetArg: str          # 下游工具的参数键（输入端口 id）
+    sourceStepId: str       # 上游步骤 id
+    sourceField: str        # 上游结果字段名（输出端口 id）
+
+
 class ToolStep(BaseModel):
     id: Optional[str] = None
     tool: str
     input: dict[str, Any] = Field(default_factory=dict)
+    bindings: list[ToolBinding] = Field(default_factory=list)
 
 
 class ToolSequenceRequest(BaseModel):

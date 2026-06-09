@@ -413,7 +413,12 @@ async def run_tool_sequence(req: ToolSequenceRequest) -> StreamingResponse:
     async def gen():
         try:
             steps = [
-                {"id": s.id, "tool": s.tool, "input": s.input}
+                {
+                    "id": s.id,
+                    "tool": s.tool,
+                    "input": s.input,
+                    "bindings": [b.model_dump() for b in s.bindings],
+                }
                 for s in req.steps
             ]
             async for chunk in replay_tool_sequence(

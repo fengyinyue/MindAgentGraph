@@ -22,6 +22,7 @@ import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
 import { useOutputPanelStore } from "@/store/outputPanelStore";
 import { allowedNodeTypes, type DataPort, type DataPortType, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
+import { toolPorts } from "@/toolRegistry";
 
 const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
@@ -154,6 +155,10 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
 };
 
 function nodePorts(node: NodeBase): { inputs: DataPort[]; outputs: DataPort[] } {
+  // tool 节点的端口由注册表派生（单一来源），以便用连线做数据绑定。
+  if (node.type === "tool" && typeof node.data?.tool === "string") {
+    return toolPorts(node.data.tool as string);
+  }
   const inputs = normalizePorts(node.data?.inputs, "input");
   const outputs = normalizePorts(node.data?.outputs, "output");
   if (inputs.length || outputs.length) {

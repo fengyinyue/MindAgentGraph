@@ -30,7 +30,11 @@ interface RunOptions {
 
 function outputText(node: NodeBase | undefined): string {
   if (!node) return "";
-  const text = node.output ?? node.data?.output ?? node.data?.codeOutput;
+  // Code nodes keep their result in data.codeOutput (output stays the Explain
+  // text). Prefer codeOutput for code nodes so downstream inherits the code result.
+  const text = node.type === "code"
+    ? (node.data?.codeOutput ?? node.output ?? node.data?.output)
+    : (node.output ?? node.data?.output ?? node.data?.codeOutput);
   return typeof text === "string" ? text : "";
 }
 
@@ -599,8 +603,9 @@ export function useRunNode() {
               });
             }
             acc += chunk;
+            // Code result lives in codeOutput only; do not clobber the node's
+            // Explain output. outputText() reads codeOutput for code nodes.
             useGraphStore.getState().patchNodeData(nodeId, { codeOutput: acc });
-            useGraphStore.getState().updateNode(nodeId, { output: acc });
           },
           onFiles: (files) => {
             changedFiles = files;
@@ -722,11 +727,30 @@ export function useRunNode() {
         return false;
       }
 
-      const steps = toolNodes.map((n) => ({
-        id: n.id,
-        tool: n.data?.tool as string,
-        input: (n.data?.toolInput as Record<string, unknown>) ?? {},
-      }));
+      const toolNodeIds = new Set(toolNodes.map((n) => n.id));
+      // Port-wired edges within the tool subgraph = data bindings:
+      // upstream output port (sourceHandle) → downstream input port (targetHandle).
+      const steps = toolNodes.map((n) => {
+        const bindings = state.links
+          .filter(
+            (l) =>
+              l.target === n.id &&
+              toolNodeIds.has(l.source) &&
+              l.sourceHandle &&
+              l.targetHandle,
+          )
+          .map((l) => ({
+            targetArg: l.targetHandle as string,
+            sourceStepId: l.source,
+            sourceField: l.sourceHandle as string,
+          }));
+        return {
+          id: n.id,
+          tool: n.data?.tool as string,
+          input: (n.data?.toolInput as Record<string, unknown>) ?? {},
+          bindings,
+        };
+      });
 
       useMonitorStore.getState().addLog({ level: "info", source: "code", status: "START", nodeId: codeNodeId, nodeTitle: codeNode.title, message: `Tool replay started (${steps.length} steps, no LLM)` });
       setRunning(codeNodeId);

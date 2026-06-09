@@ -969,6 +969,21 @@ async def replay_tool_sequence(
         "truncated": False,
         "warnings": [],
     }
+    # Accumulated results per step id, so a step's input args can be bound to an
+    # upstream step's output field (data binding via port edges).
+    results_by_id: dict[str, Any] = {}
+
+    def _apply_bindings(args: dict[str, Any], step: dict[str, Any]) -> dict[str, Any]:
+        bindings = step.get("bindings") or []
+        for b in bindings:
+            src = results_by_id.get(str(b.get("sourceStepId") or ""))
+            if not isinstance(src, dict):
+                continue
+            field = str(b.get("sourceField") or "")
+            target = str(b.get("targetArg") or "")
+            if field in src and target:
+                args[target] = src[field]
+        return args
 
     try:
         yield "MAG tool replay started (no LLM).\n"
@@ -976,11 +991,13 @@ async def replay_tool_sequence(
             if effective_run_id in _CANCELLED_NATIVE_RUNS:
                 raise asyncio.CancelledError()
 
+            step_id = str(step.get("id") or f"replay-{index}")
             tool_name = str(step.get("tool") or "")
             raw_input = step.get("input")
             args = dict(raw_input) if isinstance(raw_input, dict) else {}
+            args = _apply_bindings(args, step)  # upstream outputs override literals
             trace = {
-                "id": str(step.get("id") or f"replay-{index}"),
+                "id": step_id,
                 "step": index,
                 "tool": tool_name,
                 "status": "running",
@@ -995,14 +1012,31 @@ async def replay_tool_sequence(
                 "message": f"{index}. {tool_name}",
             })
 
-            if tool_name == "finish":
-                # Terminal no-op in replay; record and stop.
+            if tool_name == "value":
+                # Constant/parameter node: emits its literal so downstream
+                # input ports can bind to it. No file access.
+                value_result = {"value": args.get("value")}
+                results_by_id[step_id] = value_result
                 yield _marker("tool_result", {
                     **trace,
                     "status": "done",
                     "finishedAt": _utc_now(),
-                    "outputSummary": _safe_summary({"summary": args.get("summary") or "Done."}),
-                    "output": {"summary": args.get("summary") or "Done."},
+                    "outputSummary": _safe_summary(value_result),
+                    "output": value_result,
+                    "affectedFiles": [],
+                })
+                continue
+
+            if tool_name == "finish":
+                # Terminal no-op in replay; record and stop.
+                summary_result = {"summary": args.get("summary") or "Done."}
+                results_by_id[step_id] = summary_result
+                yield _marker("tool_result", {
+                    **trace,
+                    "status": "done",
+                    "finishedAt": _utc_now(),
+                    "outputSummary": _safe_summary(summary_result),
+                    "output": summary_result,
                     "affectedFiles": [],
                 })
                 break
@@ -1018,6 +1052,7 @@ async def replay_tool_sequence(
                     before_snapshots=before_snapshots,
                     marker=marker,
                 )
+                results_by_id[step_id] = result
                 yield _marker("tool_result", {
                     **trace,
                     "status": "done",

@@ -302,10 +302,17 @@ async function consumeCodeSse(
   }
 }
 
+export interface ToolBinding {
+  targetArg: string;
+  sourceStepId: string;
+  sourceField: string;
+}
+
 export interface ToolStep {
   id?: string;
   tool: string;
   input: Record<string, unknown>;
+  bindings?: ToolBinding[];
 }
 
 export interface ReplayToolSequenceInput {

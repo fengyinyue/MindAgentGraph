@@ -47,6 +47,15 @@ MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
 
 典型协作方式是：先用 Planning 决定项目要做什么；遇到需要具体管线、依赖或数据结构的步骤时，放入 Subgraph；后续 code/task 节点再根据 Subgraph 的结构输出进行实现、验证或交付。
 
+### 设计层 / 执行层（两层模型）
+
+项目按"先设计、后执行"分成两层，落在每个 **Planning（规划器）** 节点上：
+
+- **设计层（drill-in 进入 Planning 内部）** — 双击进入规划器，用 **✦ Generate Nodes** 生成内部的数据流架构设计（带端口、连线）。它只表达架构、不执行。
+- **执行层（Planning 外层）** — 在规划器上点 **▶ 执行**，在外层分解出可执行的 **code 节点**兄弟，由"执行器"实际跑工具产出代码。
+
+数据流的端口连线是**设计期**的表达，不参与执行；真正干活靠 `Planning → code → tools`。配套有**分层约束**：执行层（顶层及非设计容器内部）只允许 `planning / code / tool / analysis`，其余类型只能作为 Planning 内部的设计节点使用。
+
 ## 目标用户
 
 - 独立游戏开发者
@@ -62,11 +71,14 @@ MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
 ## 功能特性
 
 - **可视化 DAG 画布** — 基于 @xyflow/react 的无限画布。拖拽、连接、配置节点。内置小地图、背景网格和缩放控制。
-- **节点类型** — `planning`、`subgraph`、`prompt`、`memory`、`filescope`、`analysis`、`code`、`api`、`asset`、`agent`、`task`、`semantic`
+- **节点类型** — `planning`、`subgraph`、`prompt`、`memory`、`filescope`、`analysis`、`code`、`api`、`asset`、`agent`、`task`、`tool`、`semantic`。其中 `code` 是唯一会"执行"（调用文件工具改文件）的节点，`task` 仅作为人工检查点，`tool` 是物化的单个工具调用。
 - **AI 图生成** — 输入目标语句，AI 自动生成完整的 DAG 连接图
-- **图展开** — Planning 展开为高层工作包；Subgraph 展开为带端口的数据流 subgraph
-- **Subgraph 导航** — Subgraph 可以包含内部子节点，让细节管线和顶层工作流分开管理
-- **代码分析与生成** — 只读项目扫描、Claude Code 驱动的代码分析，以及带 diff 追踪和 FileScope 约束的代码生成
+- **两层执行模型** — Planning 节点可 drill-in 做数据流**设计**，并用 **▶ 执行** 在外层分解出可执行的 code 节点（详见上文"设计层 / 执行层"）
+- **图展开** — Planning 内部展开为带端口的数据流设计；外层 ▶ 执行 展开为粗粒度 code 工作包（默认深度展开 Subgraph）
+- **原生代码执行器** — code 节点由 DeepSeek 驱动，通过受 FileScope 约束的文件工具（`list_files` / `read_file` / `grep` / `apply_patch` / `get_diff`）在工程内自主读写代码，并捕获改动文件与 diff
+- **工具执行可视化与确定性重放** — 每次 code 运行的工具调用都被记录为 Tool Trace，可一键 **Render Subgraph** 物化成 code 节点内部的 `tool` 子图；编辑某步参数后可 **▶ Replay** 按图**脱离 LLM 确定性重跑**（含真实写文件）
+- **端口数据绑定 + 常量节点** — `tool` 节点的端口由工具注册表派生，把上游工具的输出端口连到下游的输入端口即完成数据绑定；`value` 常量节点可把字面值接到任意输入端口
+- **代码分析** — 只读项目扫描、Claude Code 驱动的只读代码分析（`analysis` 节点）
 - **模块图** — 代码分析结果可展开为可视化模块依赖图
 - **逐节点上下文控制** — 三种模式：`inherit`（继承上游 + 内存）、`explicit`（仅节点字段）、`isolated`（无上游、无内存）
 - **确认协议** — 节点在遇到阻塞时发出结构化 `mag-confirmation` 块，暂停 DAG 执行等待用户输入
@@ -172,7 +184,8 @@ MindAgentGraph/
 │       ├── api/           # API 客户端 + SSE 流式处理
 │       ├── components/    # Canvas、NodeInspector、Monitor、Settings 等
 │       ├── store/         # Zustand 状态 (graph、keys、monitor、panels)
-│       ├── hooks/         # useRunNode — 核心执行 hook
+│       ├── hooks/         # useRunNode — 核心执行 hook（含 code 重放 replayTools）
+│       ├── toolRegistry.ts # 工具声明式注册表（名称/参数/端口）
 │       └── utils/         # 确认协议解析器
 ├── backend/               # FastAPI Python 后端
 │   └── app/

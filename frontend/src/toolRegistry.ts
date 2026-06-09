@@ -1,11 +1,19 @@
 // 执行器(code 节点)可调用的原生 tool 注册表 —— 声明式雏形。
 //
 // 这是"无限技能"飞轮里"不断扩展 tool"的注册中心起点：每加一个 tool，
-// 在这里登记一项即可。当前只描述每个 tool 的名字、是否写文件、参数键，
-// 不含数据流端口（执行层重放靠自包含 args，不需要端口连线）。
+// 在这里登记一项即可。每项声明它的名字、是否写文件、参数键，以及
+// 输入/输出端口 —— 端口用于在 code 节点内部用连线做"数据绑定"
+// (上游 output 端口 → 下游 input 端口)。tool 节点的端口由此派生，
+// 不写死在节点 data 里(单一来源)。
 //
 // 必须与后端 NATIVE_TOOLS / _execute_native_tool 保持一致
 // (backend/app/services/code_runner.py)。
+//
+// 约定：
+//   - 输入端口 id == 工具参数键(args 的 key)，绑定时把上游值灌进该参数。
+//   - 输出端口 id == 工具返回结果 dict 的字段名(顶层)，绑定时按此取值。
+
+import type { DataPort } from "@shared/types";
 
 export type ToolName =
   | "list_files"
@@ -13,7 +21,8 @@ export type ToolName =
   | "grep"
   | "apply_patch"
   | "get_diff"
-  | "finish";
+  | "finish"
+  | "value";
 
 export interface ToolSpec {
   /** 工具名，对应后端 _execute_native_tool 的分发 key */
@@ -22,46 +31,73 @@ export interface ToolSpec {
   writes: boolean;
   /** 该工具接受的参数键，用于编辑器提示与默认 toolInput */
   argKeys: string[];
+  /** 输入端口（id == 参数键）—— 连线进来即数据绑定 */
+  inputs: DataPort[];
+  /** 输出端口（id == 结果字段名）—— 连线出去供下游绑定 */
+  outputs: DataPort[];
   /** 给人看的简短说明 */
   description: string;
 }
+
+const U = "unknown" as const;
+const p = (id: string, name: string): DataPort => ({ id, name, type: U });
 
 export const TOOL_REGISTRY: Record<ToolName, ToolSpec> = {
   list_files: {
     name: "list_files",
     writes: false,
     argKeys: ["path", "pattern", "limit"],
+    inputs: [p("path", "path"), p("pattern", "pattern"), p("limit", "limit")],
+    outputs: [p("files", "files")],
     description: "列出项目文件",
   },
   read_file: {
     name: "read_file",
     writes: false,
     argKeys: ["path"],
+    inputs: [p("path", "path")],
+    outputs: [p("content", "content"), p("path", "path")],
     description: "读取文本文件",
   },
   grep: {
     name: "grep",
     writes: false,
     argKeys: ["pattern", "path", "regex", "limit"],
+    inputs: [p("pattern", "pattern"), p("path", "path"), p("regex", "regex"), p("limit", "limit")],
+    outputs: [p("matches", "matches")],
     description: "搜索文本内容",
   },
   apply_patch: {
     name: "apply_patch",
     writes: true,
     argKeys: ["path", "oldText", "newText"],
+    inputs: [p("path", "path"), p("oldText", "oldText"), p("newText", "newText")],
+    outputs: [p("affectedFiles", "affectedFiles"), p("path", "path")],
     description: "替换文件中的一段文本（写文件）",
   },
   get_diff: {
     name: "get_diff",
     writes: false,
     argKeys: [],
+    inputs: [],
+    outputs: [p("changedFiles", "changedFiles"), p("diff", "diff")],
     description: "查看本次改动的 diff",
   },
   finish: {
     name: "finish",
     writes: false,
     argKeys: ["summary"],
+    inputs: [p("summary", "summary")],
+    outputs: [],
     description: "结束并给出总结",
+  },
+  value: {
+    name: "value",
+    writes: false,
+    argKeys: ["value"],
+    inputs: [],
+    outputs: [p("value", "value")],
+    description: "常量/参数值（把字面值接到下游端口）",
   },
 };
 
@@ -77,4 +113,11 @@ export function toolSpec(name: string): ToolSpec | undefined {
 export function toolWrites(name: string): boolean {
   const spec = toolSpec(name);
   return spec ? spec.writes : true;
+}
+
+/** tool 节点的端口（由注册表派生）。未知工具回退到单 in/out。 */
+export function toolPorts(name: string): { inputs: DataPort[]; outputs: DataPort[] } {
+  const spec = toolSpec(name);
+  if (!spec) return { inputs: [p("in", "In")], outputs: [p("out", "Out")] };
+  return { inputs: spec.inputs, outputs: spec.outputs };
 }
