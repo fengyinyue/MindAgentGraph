@@ -98,7 +98,7 @@
                 "step": { "type": "integer" },
                 "tool": {
                   "type": "string",
-                  "enum": ["list_files", "read_file", "grep", "apply_patch", "get_diff", "finish"]
+                  "enum": ["list_files", "read_file", "grep", "apply_patch", "write_file", "delete_file", "move_file", "mkdir", "run_command", "inspect_project", "get_diff", "finish", "value"]
                 },
                 "status": {
                   "type": "string",

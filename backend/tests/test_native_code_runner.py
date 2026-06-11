@@ -5,7 +5,12 @@ import pytest
 from app.services.code_runner import (
     _execute_native_tool,
     _tool_apply_patch,
+    _tool_delete_file,
+    _tool_inspect_project,
+    _tool_mkdir,
+    _tool_move_file,
     _tool_read_file,
+    _tool_write_file,
 )
 
 
@@ -56,12 +61,102 @@ def test_native_apply_patch_rejects_out_of_scope_write(tmp_path: Path) -> None:
         )
 
 
+def test_native_write_file_creates_and_requires_overwrite(tmp_path: Path) -> None:
+    result = _tool_write_file(
+        str(tmp_path),
+        {"path": "src/new.txt", "content": "hello\n"},
+        allow=["src/**"],
+        deny=[],
+    )
+
+    assert result["affectedFiles"] == ["src/new.txt"]
+    assert (tmp_path / "src" / "new.txt").read_text(encoding="utf-8") == "hello\n"
+
+    with pytest.raises(ValueError, match="overwrite=true"):
+        _tool_write_file(
+            str(tmp_path),
+            {"path": "src/new.txt", "content": "again\n"},
+            allow=["src/**"],
+            deny=[],
+        )
+
+
+def test_native_delete_file_requires_confirm(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "old.txt"
+    source.parent.mkdir()
+    source.write_text("old\n", encoding="utf-8")
+
+    with pytest.raises(ValueError, match="confirm=true"):
+        _tool_delete_file(str(tmp_path), {"path": "src/old.txt"}, allow=["src/**"], deny=[])
+
+    result = _tool_delete_file(
+        str(tmp_path),
+        {"path": "src/old.txt", "confirm": True},
+        allow=["src/**"],
+        deny=[],
+    )
+
+    assert result["deleted"] is True
+    assert not source.exists()
+
+
+def test_native_move_file_and_mkdir_respect_scope(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "old.txt"
+    source.parent.mkdir()
+    source.write_text("old\n", encoding="utf-8")
+
+    mkdir_result = _tool_mkdir(str(tmp_path), {"path": "src/nested"}, allow=["src/**"], deny=[])
+    assert mkdir_result["created"] is True
+
+    move_result = _tool_move_file(
+        str(tmp_path),
+        {"sourcePath": "src/old.txt", "targetPath": "src/nested/new.txt"},
+        allow=["src/**"],
+        deny=[],
+    )
+
+    assert move_result["affectedFiles"] == ["src/old.txt", "src/nested/new.txt"]
+    assert not source.exists()
+    assert (tmp_path / "src" / "nested" / "new.txt").read_text(encoding="utf-8") == "old\n"
+
+
+def test_native_inspect_project_detects_package_scripts(tmp_path: Path) -> None:
+    (tmp_path / "package.json").write_text(
+        '{"scripts":{"build":"vite build","test":"vitest"}}',
+        encoding="utf-8",
+    )
+
+    result = _tool_inspect_project(str(tmp_path))
+
+    assert result["packageManager"] == "npm"
+    assert result["scripts"]["build"] == "vite build"
+    assert "npm run build" in result["suggestedCommands"]
+
+
 @pytest.mark.asyncio
-async def test_native_run_command_is_disabled(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="disabled"):
+async def test_native_run_command_allows_whitelisted_command(tmp_path: Path) -> None:
+    result, affected = await _execute_native_tool(
+        tool_name="run_command",
+        args={"command": "python -m pytest", "timeoutSeconds": 20},
+        project_dir=str(tmp_path),
+        allow=[],
+        deny=[],
+        before_status={},
+        before_snapshots={},
+        marker=None,
+    )
+
+    assert affected == []
+    assert result["command"] == "python -m pytest"
+    assert isinstance(result["exitCode"], int)
+
+
+@pytest.mark.asyncio
+async def test_native_run_command_rejects_non_whitelisted_command(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="not whitelisted"):
         await _execute_native_tool(
             tool_name="run_command",
-            args={"command": "pytest"},
+            args={"command": "python -m pip"},
             project_dir=str(tmp_path),
             allow=[],
             deny=[],

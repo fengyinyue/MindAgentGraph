@@ -45,7 +45,7 @@ function isTableDivider(line: string): boolean {
   return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line);
 }
 
-function MarkdownPreview({ value }: { value: string }) {
+export function MarkdownPreview({ value, compact = false }: { value: string; compact?: boolean }) {
   const lines = value.replace(/\r\n/g, "\n").split("\n");
   const blocks: ReactNode[] = [];
   let i = 0;
@@ -85,8 +85,13 @@ function MarkdownPreview({ value }: { value: string }) {
     if (heading) {
       const level = heading[1].length;
       const content = inlineMarkdown(heading[2]);
-      const className =
-        level === 1
+      const className = compact
+        ? level === 1
+          ? "mt-1 border-b border-zinc-800 pb-1 text-sm font-semibold text-zinc-50"
+          : level === 2
+            ? "mt-3 border-b border-zinc-800 pb-1 text-sm font-semibold text-zinc-50"
+            : "mt-2 text-xs font-semibold text-zinc-100"
+        : level === 1
           ? "mt-1 border-b border-zinc-800 pb-2 text-2xl font-semibold text-zinc-50"
           : level === 2
             ? "mt-7 border-b border-zinc-800 pb-1 text-xl font-semibold text-zinc-50"
@@ -194,7 +199,11 @@ function MarkdownPreview({ value }: { value: string }) {
     );
   }
 
-  return <div className="mx-auto max-w-4xl space-y-4 text-[15px] leading-7">{blocks}</div>;
+  return (
+    <div className={compact ? "space-y-2 text-xs leading-5" : "mx-auto max-w-4xl space-y-4 text-[15px] leading-7"}>
+      {blocks}
+    </div>
+  );
 }
 
 export default function OutputViewer() {
@@ -264,7 +273,7 @@ export default function OutputViewer() {
         </header>
 
         <div className="h-[calc(100%-44px)] overflow-auto bg-canvas p-5">
-          {output && previewMode && mode !== "code" ? (
+          {output && previewMode ? (
             <MarkdownPreview value={output} />
           ) : output ? (
             <pre

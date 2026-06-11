@@ -2,6 +2,8 @@ import { useCallback } from "react";
 import { create } from "zustand";
 import { cancelCodeRun, expandModules, expandPlan, replayToolSequence, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream } from "@/api/backend";
 import type { CodeDiffInfo, ExpandPlanResult } from "@/api/backend";
+import { collectToolSteps } from "@/utils/toolSteps";
+import { useSkillStore } from "@/store/skillStore";
 import { useGraphStore } from "@/store/graphStore";
 import { useKeyStore } from "@/store/keyStore";
 import { useMonitorStore } from "@/store/monitorStore";
@@ -727,30 +729,7 @@ export function useRunNode() {
         return false;
       }
 
-      const toolNodeIds = new Set(toolNodes.map((n) => n.id));
-      // Port-wired edges within the tool subgraph = data bindings:
-      // upstream output port (sourceHandle) → downstream input port (targetHandle).
-      const steps = toolNodes.map((n) => {
-        const bindings = state.links
-          .filter(
-            (l) =>
-              l.target === n.id &&
-              toolNodeIds.has(l.source) &&
-              l.sourceHandle &&
-              l.targetHandle,
-          )
-          .map((l) => ({
-            targetArg: l.targetHandle as string,
-            sourceStepId: l.source,
-            sourceField: l.sourceHandle as string,
-          }));
-        return {
-          id: n.id,
-          tool: n.data?.tool as string,
-          input: (n.data?.toolInput as Record<string, unknown>) ?? {},
-          bindings,
-        };
-      });
+      const steps = collectToolSteps(state.nodes, state.links, codeNodeId, onlyIds ?? undefined);
 
       useMonitorStore.getState().addLog({ level: "info", source: "code", status: "START", nodeId: codeNodeId, nodeTitle: codeNode.title, message: `Tool replay started (${steps.length} steps, no LLM)` });
       setRunning(codeNodeId);
@@ -796,6 +775,71 @@ export function useRunNode() {
           onError: (message) => {
             ok = false;
             useMonitorStore.getState().addLog({ level: "error", source: "code", status: "ERROR", nodeId: codeNodeId, nodeTitle: codeNode.title, message });
+            setRunning(null);
+            if (activeAbort === ctrl) activeAbort = null;
+            if (activeCodeRunId === runId) activeCodeRunId = null;
+          },
+          signal: ctrl.signal,
+        },
+      );
+      if (activeCodeRunId === runId) activeCodeRunId = null;
+      return ok && !ctrl.signal.aborted;
+    },
+    [setRunning],
+  );
+
+  // Run a saved skill: parameterized deterministic replay of its frozen tool
+  // subgraph. paramValues override the matching value-node steps by step id.
+  const runSkill = useCallback(
+    async (skillId: string, paramValues: Record<string, unknown> = {}): Promise<boolean> => {
+      const skill = useSkillStore.getState().skills.find((k) => k.id === skillId);
+      if (!skill) return false;
+      if (useRunState.getState().runningId) return false;
+
+      const state = useGraphStore.getState();
+      const projectDir = state.projectDir;
+      if (!projectDir) {
+        useMonitorStore.getState().addLog({ level: "error", source: "code", status: "ERROR", message: "未设置工程目录，请先在工具栏点 📁 选择工程目录" });
+        return false;
+      }
+
+      const steps = skill.steps.map((s) =>
+        s.tool === "value" && s.id && paramValues[s.id] !== undefined
+          ? { ...s, input: { ...s.input, value: paramValues[s.id] } }
+          : s,
+      );
+
+      useMonitorStore.getState().addLog({ level: "info", source: "code", status: "START", message: `Skill "${skill.name}" started (${steps.length} steps, no LLM)` });
+      setRunning(`skill:${skill.id}`);
+      const ctrl = new AbortController();
+      const runId = crypto.randomUUID();
+      activeAbort = ctrl;
+      activeCodeRunId = runId;
+      let ok = true;
+
+      await replayToolSequence(
+        { projectDir, fileScopeAllow: [], fileScopeDeny: [], steps, runId },
+        {
+          onText: () => {},
+          onFiles: (files) => {
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "FILES", message: `Skill "${skill.name}" changed: ${files.length ? files.join(", ") : "none"}` });
+          },
+          onDiff: () => {},
+          onToolStart: (trace) => {
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "REPLAY", message: `${skill.name}: ${trace.step}. ${trace.tool}` });
+          },
+          onToolResult: (trace) => {
+            useMonitorStore.getState().addLog({ level: trace.status === "error" ? "error" : "info", source: "code", status: trace.status === "error" ? "TOOL_ERROR" : "TOOL_DONE", message: trace.error ?? `${trace.step}. ${trace.tool} done` });
+          },
+          onDone: () => {
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", message: `Skill "${skill.name}" done` });
+            setRunning(null);
+            if (activeAbort === ctrl) activeAbort = null;
+            if (activeCodeRunId === runId) activeCodeRunId = null;
+          },
+          onError: (message) => {
+            ok = false;
+            useMonitorStore.getState().addLog({ level: "error", source: "code", status: "ERROR", message });
             setRunning(null);
             if (activeAbort === ctrl) activeAbort = null;
             if (activeCodeRunId === runId) activeCodeRunId = null;
@@ -1264,5 +1308,5 @@ export function useRunNode() {
     useMonitorStore.getState().addLog({ level: "warn", source: "node", status: "CANCELLED", message: "Run cancelled" });
   }, [setRunning]);
 
-  return { run, runCode, replayTools, expandPlanNodes, expandModuleGraph, runDag, cancel, runningId };
+  return { run, runCode, replayTools, runSkill, expandPlanNodes, expandModuleGraph, runDag, cancel, runningId };
 }

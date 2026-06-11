@@ -1,6 +1,8 @@
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
 import { useOutputPanelStore } from "@/store/outputPanelStore";
+import { useMonitorStore } from "@/store/monitorStore";
+import { MarkdownPreview } from "@/components/OutputViewer";
 import {
   buildConfirmationPrompt,
   type ConfirmationAnswers,
@@ -8,6 +10,8 @@ import {
 } from "@/utils/confirmation";
 import { allowedNodeTypes, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
 import { toolSpec, TOOL_REGISTRY } from "@/toolRegistry";
+import { useSkillStore } from "@/store/skillStore";
+import { collectToolSteps } from "@/utils/toolSteps";
 import { tracePurpose } from "@/utils/traceNodes";
 
 function nodeTypeLabel(type: NodeType): string {
@@ -30,11 +34,12 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     if (!self?.parentId) return null;
     return s.nodes.find((n) => n.id === self.parentId)?.type ?? null;
   });
-  const { run, runCode, replayTools, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
+  const { run, runCode, replayTools, runSkill, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
   const projectDir = useGraphStore((s) => s.projectDir);
   const enterSubgraph = useGraphStore((s) => s.enterSubgraph);
   const openOutputPanel = useOutputPanelStore((s) => s.open);
+  const skills = useSkillStore((s) => s.skills);
 
   if (!node) {
     return (
@@ -66,6 +71,30 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
   const needsConfirmation = node.data?.status === "needs_confirmation" && confirmation !== null;
+
+  // Save this code node's tool subgraph as a reusable, parameterized skill.
+  const saveAsSkill = () => {
+    const state = useGraphStore.getState();
+    const steps = collectToolSteps(state.nodes, state.links, node.id);
+    if (steps.length === 0) {
+      useMonitorStore.getState().addLog({ level: "warn", source: "code", status: "SKIPPED", nodeId: node.id, nodeTitle: node.title, message: "没有可保存的 tool 子图，请先 Render Subgraph。" });
+      return;
+    }
+    const params = steps
+      .filter((s) => s.tool === "value")
+      .map((s) => {
+        const vn = state.nodes.find((n) => n.id === s.id);
+        return { stepId: s.id as string, name: vn?.title || (s.id as string), default: (s.input as Record<string, unknown>).value };
+      });
+    useSkillStore.getState().saveSkill({
+      id: crypto.randomUUID(),
+      name: node.title || "Skill",
+      createdAt: new Date().toISOString(),
+      steps,
+      params,
+    });
+    useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", nodeId: node.id, nodeTitle: node.title, message: `已保存为技能 "${node.title}"（${params.length} 个参数）` });
+  };
 
   const updateConfirmationAnswer = (id: string, value: string) => {
     useGraphStore.getState().patchNodeData(node.id, {
@@ -338,6 +367,62 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               ) : null}
             </div>
           ) : null}
+
+          {isCodeNode ? (
+            <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Skills</span>
+                <button
+                  className="px-2 py-0.5 bg-purple-800 rounded text-[11px] disabled:opacity-50"
+                  onClick={saveAsSkill}
+                  disabled={runningId !== null}
+                  title="把该执行器内部的 tool 子图存成可复用、可传参的技能"
+                >
+                  ★ Save as Skill
+                </button>
+              </div>
+              {skills.length === 0 ? (
+                <div className="text-[10px] text-zinc-600 italic">还没有保存的技能。先在执行器内部搭好 tool 子图，再点 Save as Skill。</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {skills.map((skill) => (
+                    <form
+                      key={skill.id}
+                      className="border border-zinc-800 rounded px-2 py-1.5 space-y-1"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.currentTarget);
+                        const paramValues: Record<string, unknown> = {};
+                        for (const p of skill.params) paramValues[p.stepId] = fd.get(p.stepId);
+                        runSkill(skill.id, paramValues);
+                      }}
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-zinc-200 truncate">{skill.name}</span>
+                        <span className="text-[10px] text-zinc-600">{skill.steps.length} 步 / {skill.params.length} 参数</span>
+                        <button type="submit" className="ml-auto px-2 py-0.5 bg-emerald-700 rounded text-[11px] disabled:opacity-50" disabled={runningId !== null || !projectDir}>▶ Run</button>
+                        <button
+                          type="button"
+                          className="px-2 py-0.5 border border-zinc-700 rounded text-[11px] text-zinc-400 hover:text-red-400"
+                          onClick={() => useSkillStore.getState().removeSkill(skill.id)}
+                        >🗑</button>
+                      </div>
+                      {skill.params.map((p) => (
+                        <div key={p.stepId} className="flex items-center gap-2">
+                          <span className="text-[10px] text-zinc-500 w-24 truncate" title={p.name}>{p.name}</span>
+                          <input
+                            name={p.stepId}
+                            defaultValue={String(p.default ?? "")}
+                            className="flex-1 bg-canvas border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] font-mono outline-none focus:border-accent"
+                          />
+                        </div>
+                      ))}
+                    </form>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -364,9 +449,9 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
 {codeError}
               </pre>
             ) : (
-              <pre className="bg-canvas text-xs p-2 rounded whitespace-pre-wrap font-mono leading-relaxed max-h-96 overflow-y-auto">
-{codeOutput}
-              </pre>
+              <div className="bg-canvas p-2 rounded max-h-96 overflow-y-auto">
+                <MarkdownPreview value={codeOutput} compact />
+              </div>
             )}
           </div>
         ) : null}

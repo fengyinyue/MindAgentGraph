@@ -75,7 +75,7 @@ MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
 - **AI 图生成** — 输入目标语句，AI 自动生成完整的 DAG 连接图
 - **两层执行模型** — Planning 节点可 drill-in 做数据流**设计**，并用 **▶ 执行** 在外层分解出可执行的 code 节点（详见上文"设计层 / 执行层"）
 - **图展开** — Planning 内部展开为带端口的数据流设计；外层 ▶ 执行 展开为粗粒度 code 工作包（默认深度展开 Subgraph）
-- **原生代码执行器** — code 节点由 DeepSeek 驱动，通过受 FileScope 约束的文件工具（`list_files` / `read_file` / `grep` / `apply_patch` / `get_diff`）在工程内自主读写代码，并捕获改动文件与 diff
+- **原生代码执行器** — code 节点由 DeepSeek 驱动，通过受 FileScope 约束的文件工具（`list_files` / `read_file` / `grep` / `apply_patch` / `write_file` / `delete_file` / `move_file` / `mkdir` / `inspect_project` / `run_command` / `get_diff`）在工程内自主读写代码、识别项目并运行白名单验证命令，同时捕获改动文件与 diff
 - **工具执行可视化与确定性重放** — 每次 code 运行的工具调用都被记录为 Tool Trace，可一键 **Render Subgraph** 物化成 code 节点内部的 `tool` 子图；编辑某步参数后可 **▶ Replay** 按图**脱离 LLM 确定性重跑**（含真实写文件）
 - **端口数据绑定 + 常量节点** — `tool` 节点的端口由工具注册表派生，把上游工具的输出端口连到下游的输入端口即完成数据绑定；`value` 常量节点可把字面值接到任意输入端口
 - **代码分析** — 只读项目扫描、Claude Code 驱动的只读代码分析（`analysis` 节点）

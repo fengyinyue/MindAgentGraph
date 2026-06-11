@@ -11,6 +11,7 @@ import fnmatch
 import os
 import json
 import re
+import shlex
 import signal
 import sys
 import uuid
@@ -26,6 +27,20 @@ SNAPSHOT_MAX_BYTES = 1_000_000
 NATIVE_MAX_TOOL_STEPS = 20
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
+RUN_COMMAND_MAX_OUTPUT = 30_000
+RUN_COMMAND_DEFAULT_TIMEOUT = 60
+RUN_COMMAND_MAX_TIMEOUT = 120
+RUN_COMMAND_ALLOWLIST: dict[tuple[str, ...], str] = {
+    ("npm", "run", "build"): "Build frontend/package scripts",
+    ("npm", "test"): "Run npm test",
+    ("npm", "run", "test"): "Run npm test script",
+    ("pytest",): "Run pytest",
+    ("python", "-m", "pytest"): "Run pytest via python",
+    ("uv", "run", "pytest"): "Run pytest via uv",
+    ("ruff", "check"): "Run ruff check",
+    ("ruff", "format", "--check"): "Check ruff formatting",
+    ("tsc", "--noEmit"): "Run TypeScript type check",
+}
 
 NATIVE_TOOLS: list[dict[str, Any]] = [
     {
@@ -53,6 +68,90 @@ NATIVE_TOOLS: list[dict[str, Any]] = [
                 "required": ["path"],
                 "properties": {"path": {"type": "string"}},
             },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "write_file",
+            "description": "Create a new text file or overwrite an existing project file when overwrite=true.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "content"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "content": {"type": "string"},
+                    "overwrite": {"type": "boolean"},
+                    "createDirs": {"type": "boolean"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_file",
+            "description": "Delete a project file. Requires confirm=true.",
+            "parameters": {
+                "type": "object",
+                "required": ["path", "confirm"],
+                "properties": {
+                    "path": {"type": "string"},
+                    "confirm": {"type": "boolean"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "move_file",
+            "description": "Move or rename a project file.",
+            "parameters": {
+                "type": "object",
+                "required": ["sourcePath", "targetPath"],
+                "properties": {
+                    "sourcePath": {"type": "string"},
+                    "targetPath": {"type": "string"},
+                    "overwrite": {"type": "boolean"},
+                    "createDirs": {"type": "boolean"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "mkdir",
+            "description": "Create a directory inside the project.",
+            "parameters": {
+                "type": "object",
+                "required": ["path"],
+                "properties": {"path": {"type": "string"}},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_command",
+            "description": "Run a whitelisted validation command in the project directory.",
+            "parameters": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {"type": "string"},
+                    "timeoutSeconds": {"type": "integer"},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "inspect_project",
+            "description": "Inspect project files to identify languages, package managers, scripts, and suggested validation commands.",
+            "parameters": {"type": "object", "properties": {}},
         },
     },
     {
@@ -603,6 +702,202 @@ def _tool_apply_patch(project_dir: str, args: dict[str, Any], allow: list[str], 
     return {"path": rel, "replacements": 1, "affectedFiles": [rel]}
 
 
+def _tool_write_file(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or ""), allow, deny)
+    content = str(args.get("content") or "")
+    overwrite = bool(args.get("overwrite"))
+    create_dirs = args.get("createDirs")
+    should_create_dirs = True if create_dirs is None else bool(create_dirs)
+    existed = os.path.exists(abs_path)
+    if existed and not os.path.isfile(abs_path):
+        raise ValueError(f"path is not a file: {rel}")
+    if existed and not overwrite:
+        raise ValueError(f"file already exists; pass overwrite=true to replace: {rel}")
+    parent = os.path.dirname(abs_path)
+    if parent and not os.path.isdir(parent):
+        if not should_create_dirs:
+            raise ValueError(f"parent directory does not exist: {os.path.dirname(rel)}")
+        os.makedirs(parent, exist_ok=True)
+    with open(abs_path, "w", encoding="utf-8", newline="") as f:
+        f.write(content)
+    return {
+        "path": rel,
+        "created": not existed,
+        "overwritten": existed,
+        "bytes": len(content.encode("utf-8")),
+        "affectedFiles": [rel],
+    }
+
+
+def _tool_delete_file(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or ""), allow, deny)
+    if not bool(args.get("confirm")):
+        raise ValueError("delete_file requires confirm=true")
+    if not os.path.isfile(abs_path):
+        raise ValueError(f"file not found: {rel}")
+    os.remove(abs_path)
+    return {"path": rel, "deleted": True, "affectedFiles": [rel]}
+
+
+def _tool_move_file(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    source_rel, source_abs = _resolve_project_path(project_dir, str(args.get("sourcePath") or ""), allow, deny)
+    target_rel, target_abs = _resolve_project_path(project_dir, str(args.get("targetPath") or ""), allow, deny)
+    overwrite = bool(args.get("overwrite"))
+    create_dirs = args.get("createDirs")
+    should_create_dirs = True if create_dirs is None else bool(create_dirs)
+    if not os.path.isfile(source_abs):
+        raise ValueError(f"source file not found: {source_rel}")
+    if os.path.exists(target_abs) and not overwrite:
+        raise ValueError(f"target already exists; pass overwrite=true to replace: {target_rel}")
+    parent = os.path.dirname(target_abs)
+    if parent and not os.path.isdir(parent):
+        if not should_create_dirs:
+            raise ValueError(f"target parent directory does not exist: {os.path.dirname(target_rel)}")
+        os.makedirs(parent, exist_ok=True)
+    os.replace(source_abs, target_abs)
+    return {
+        "sourcePath": source_rel,
+        "targetPath": target_rel,
+        "moved": True,
+        "affectedFiles": [source_rel, target_rel],
+    }
+
+
+def _tool_mkdir(project_dir: str, args: dict[str, Any], allow: list[str], deny: list[str]) -> dict[str, Any]:
+    rel, abs_path = _resolve_project_path(project_dir, str(args.get("path") or ""), allow, deny)
+    existed = os.path.isdir(abs_path)
+    if os.path.exists(abs_path) and not existed:
+        raise ValueError(f"path exists and is not a directory: {rel}")
+    os.makedirs(abs_path, exist_ok=True)
+    return {"path": rel, "created": not existed, "affectedFiles": []}
+
+
+def _parse_allowed_command(command: str) -> tuple[list[str], tuple[str, ...]]:
+    if not command.strip():
+        raise ValueError("run_command command is required")
+    if re.search(r"[|&;<>()`$]", command):
+        raise ValueError("run_command does not allow shell operators")
+    try:
+        tokens = shlex.split(command, posix=os.name != "nt")
+    except ValueError as e:
+        raise ValueError(f"invalid command: {e}") from e
+    if not tokens:
+        raise ValueError("run_command command is required")
+    normalized = tuple("npm" if token.lower() == "npm.cmd" else token for token in tokens)
+    if normalized not in RUN_COMMAND_ALLOWLIST:
+        allowed = ", ".join(" ".join(item) for item in sorted(RUN_COMMAND_ALLOWLIST))
+        raise ValueError(f"command is not whitelisted: {command}. Allowed: {allowed}")
+    argv = list(normalized)
+    if os.name == "nt" and argv[0] == "npm":
+        argv[0] = "npm.cmd"
+    return argv, normalized
+
+
+async def _tool_run_command(project_dir: str, args: dict[str, Any]) -> dict[str, Any]:
+    command = str(args.get("command") or "")
+    argv, normalized = _parse_allowed_command(command)
+    timeout = int(args.get("timeoutSeconds") or RUN_COMMAND_DEFAULT_TIMEOUT)
+    timeout = max(1, min(timeout, RUN_COMMAND_MAX_TIMEOUT))
+    started = datetime.now(timezone.utc)
+    proc = await asyncio.create_subprocess_exec(
+        *argv,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        cwd=project_dir,
+    )
+    timed_out = False
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        timed_out = True
+        proc.kill()
+        stdout, stderr = await proc.communicate()
+    finished = datetime.now(timezone.utc)
+    stdout_text = stdout.decode("utf-8", "replace")
+    stderr_text = stderr.decode("utf-8", "replace")
+    if len(stdout_text) > RUN_COMMAND_MAX_OUTPUT:
+        stdout_text = stdout_text[:RUN_COMMAND_MAX_OUTPUT] + "\n... [truncated]"
+    if len(stderr_text) > RUN_COMMAND_MAX_OUTPUT:
+        stderr_text = stderr_text[:RUN_COMMAND_MAX_OUTPUT] + "\n... [truncated]"
+    return {
+        "command": " ".join(normalized),
+        "exitCode": proc.returncode,
+        "timedOut": timed_out,
+        "durationMs": int((finished - started).total_seconds() * 1000),
+        "stdout": stdout_text,
+        "stderr": stderr_text,
+    }
+
+
+def _read_json_file(path: str) -> dict[str, Any] | None:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            value = json.load(f)
+        return value if isinstance(value, dict) else None
+    except (OSError, json.JSONDecodeError):
+        return None
+
+
+def _tool_inspect_project(project_dir: str) -> dict[str, Any]:
+    root_files = sorted(
+        name for name in os.listdir(project_dir)
+        if not name.startswith(".mag_") and name != ".git"
+    )
+    markers = {
+        "package.json": os.path.exists(os.path.join(project_dir, "package.json")),
+        "pnpm-lock.yaml": os.path.exists(os.path.join(project_dir, "pnpm-lock.yaml")),
+        "yarn.lock": os.path.exists(os.path.join(project_dir, "yarn.lock")),
+        "package-lock.json": os.path.exists(os.path.join(project_dir, "package-lock.json")),
+        "pyproject.toml": os.path.exists(os.path.join(project_dir, "pyproject.toml")),
+        "requirements.txt": os.path.exists(os.path.join(project_dir, "requirements.txt")),
+        "uv.lock": os.path.exists(os.path.join(project_dir, "uv.lock")),
+        "Cargo.toml": os.path.exists(os.path.join(project_dir, "Cargo.toml")),
+    }
+    languages: list[str] = []
+    if markers["package.json"]:
+        languages.append("javascript/typescript")
+    if markers["pyproject.toml"] or markers["requirements.txt"] or markers["uv.lock"]:
+        languages.append("python")
+    if markers["Cargo.toml"]:
+        languages.append("rust")
+
+    package_manager = None
+    if markers["pnpm-lock.yaml"]:
+        package_manager = "pnpm"
+    elif markers["yarn.lock"]:
+        package_manager = "yarn"
+    elif markers["package-lock.json"] or markers["package.json"]:
+        package_manager = "npm"
+    elif markers["uv.lock"]:
+        package_manager = "uv"
+
+    scripts: dict[str, str] = {}
+    package_json = _read_json_file(os.path.join(project_dir, "package.json"))
+    if package_json and isinstance(package_json.get("scripts"), dict):
+        scripts = {str(k): str(v) for k, v in package_json["scripts"].items()}
+
+    suggested_commands: list[str] = []
+    if "build" in scripts:
+        suggested_commands.append("npm run build")
+    if "test" in scripts:
+        suggested_commands.append("npm test")
+    if markers["uv.lock"]:
+        suggested_commands.append("uv run pytest")
+    elif markers["pyproject.toml"] or markers["requirements.txt"]:
+        suggested_commands.append("pytest")
+
+    return {
+        "rootFiles": root_files[:120],
+        "rootFilesTruncated": len(root_files) > 120,
+        "markers": markers,
+        "languages": languages,
+        "packageManager": package_manager,
+        "scripts": scripts,
+        "suggestedCommands": suggested_commands,
+        "allowedCommands": [" ".join(item) for item in sorted(RUN_COMMAND_ALLOWLIST)],
+    }
+
+
 async def _tool_get_diff(
     project_dir: str,
     before_status: dict[str, str],
@@ -637,13 +932,29 @@ async def _execute_native_tool(
     if tool_name == "apply_patch":
         result = _tool_apply_patch(project_dir, args, allow, deny)
         return result, list(result.get("affectedFiles", []))
+    if tool_name == "write_file":
+        result = _tool_write_file(project_dir, args, allow, deny)
+        return result, list(result.get("affectedFiles", []))
+    if tool_name == "delete_file":
+        result = _tool_delete_file(project_dir, args, allow, deny)
+        return result, list(result.get("affectedFiles", []))
+    if tool_name == "move_file":
+        result = _tool_move_file(project_dir, args, allow, deny)
+        return result, list(result.get("affectedFiles", []))
+    if tool_name == "mkdir":
+        result = _tool_mkdir(project_dir, args, allow, deny)
+        return result, list(result.get("affectedFiles", []))
+    if tool_name == "run_command":
+        result = await _tool_run_command(project_dir, args)
+        return result, []
+    if tool_name == "inspect_project":
+        result = _tool_inspect_project(project_dir)
+        return result, []
     if tool_name == "get_diff":
         result = await _tool_get_diff(project_dir, before_status, before_snapshots, marker)
         return result, list(result.get("changedFiles", []))
     if tool_name == "finish":
         return {"summary": str(args.get("summary") or "Done.")}, []
-    if tool_name == "run_command":
-        raise ValueError("run_command is disabled in MAG Native Code Runner v1")
     raise ValueError(f"unknown native code tool: {tool_name}")
 
 
@@ -759,8 +1070,10 @@ async def run_node_native_code(
             "role": "system",
             "content": (
                 "You are MAG Native Code Runner. Work only through the provided tools. "
-                "Do not ask the user to edit files manually. Use apply_patch for changes. "
-                "run_command is not available. Call finish with a concise summary when done."
+                "Do not ask the user to edit files manually. Use apply_patch or write_file for changes. "
+                "Use run_command only for whitelisted validation commands. "
+                "Use inspect_project when you need to discover project type or validation commands. "
+                "Call finish with a concise summary when done."
             ),
         },
         {
@@ -794,7 +1107,12 @@ async def run_node_native_code(
     step = 0
 
     try:
-        yield "MAG Native Code Runner started (DeepSeek tool calls).\n"
+        yield _marker("log", {
+            "level": "info",
+            "source": "code",
+            "status": "START",
+            "message": "MAG Native Code Runner started (DeepSeek tool calls).",
+        })
         for _ in range(NATIVE_MAX_TOOL_STEPS):
             if effective_run_id in _CANCELLED_NATIVE_RUNS:
                 raise asyncio.CancelledError()

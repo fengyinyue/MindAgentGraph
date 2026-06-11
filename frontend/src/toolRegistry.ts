@@ -20,6 +20,12 @@ export type ToolName =
   | "read_file"
   | "grep"
   | "apply_patch"
+  | "write_file"
+  | "delete_file"
+  | "move_file"
+  | "mkdir"
+  | "run_command"
+  | "inspect_project"
   | "get_diff"
   | "finish"
   | "value";
@@ -74,6 +80,54 @@ export const TOOL_REGISTRY: Record<ToolName, ToolSpec> = {
     inputs: [p("path", "path"), p("oldText", "oldText"), p("newText", "newText")],
     outputs: [p("affectedFiles", "affectedFiles"), p("path", "path")],
     description: "替换文件中的一段文本（写文件）",
+  },
+  write_file: {
+    name: "write_file",
+    writes: true,
+    argKeys: ["path", "content", "overwrite", "createDirs"],
+    inputs: [p("path", "path"), p("content", "content"), p("overwrite", "overwrite"), p("createDirs", "createDirs")],
+    outputs: [p("affectedFiles", "affectedFiles"), p("path", "path"), p("created", "created"), p("overwritten", "overwritten")],
+    description: "新建或覆盖文本文件",
+  },
+  delete_file: {
+    name: "delete_file",
+    writes: true,
+    argKeys: ["path", "confirm"],
+    inputs: [p("path", "path"), p("confirm", "confirm")],
+    outputs: [p("affectedFiles", "affectedFiles"), p("path", "path"), p("deleted", "deleted")],
+    description: "删除文件（需要 confirm=true）",
+  },
+  move_file: {
+    name: "move_file",
+    writes: true,
+    argKeys: ["sourcePath", "targetPath", "overwrite", "createDirs"],
+    inputs: [p("sourcePath", "sourcePath"), p("targetPath", "targetPath"), p("overwrite", "overwrite"), p("createDirs", "createDirs")],
+    outputs: [p("affectedFiles", "affectedFiles"), p("sourcePath", "sourcePath"), p("targetPath", "targetPath")],
+    description: "移动或重命名文件",
+  },
+  mkdir: {
+    name: "mkdir",
+    writes: true,
+    argKeys: ["path"],
+    inputs: [p("path", "path")],
+    outputs: [p("path", "path"), p("created", "created")],
+    description: "创建目录",
+  },
+  run_command: {
+    name: "run_command",
+    writes: false,
+    argKeys: ["command", "timeoutSeconds"],
+    inputs: [p("command", "command"), p("timeoutSeconds", "timeoutSeconds")],
+    outputs: [p("exitCode", "exitCode"), p("stdout", "stdout"), p("stderr", "stderr"), p("timedOut", "timedOut")],
+    description: "运行白名单验证命令",
+  },
+  inspect_project: {
+    name: "inspect_project",
+    writes: false,
+    argKeys: [],
+    inputs: [],
+    outputs: [p("languages", "languages"), p("packageManager", "packageManager"), p("scripts", "scripts"), p("suggestedCommands", "suggestedCommands")],
+    description: "识别项目类型和可用验证命令",
   },
   get_diff: {
     name: "get_diff",
