@@ -42,6 +42,10 @@ RUN_COMMAND_ALLOWLIST: dict[tuple[str, ...], str] = {
     ("tsc", "--noEmit"): "Run TypeScript type check",
 }
 
+
+def _allowed_run_commands_text() -> str:
+    return ", ".join(" ".join(item) for item in sorted(RUN_COMMAND_ALLOWLIST))
+
 NATIVE_TOOLS: list[dict[str, Any]] = [
     {
         "type": "function",
@@ -207,6 +211,12 @@ NATIVE_TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+]
+
+READ_ONLY_NATIVE_TOOL_NAMES = {"list_files", "read_file", "grep", "inspect_project", "finish"}
+READ_ONLY_NATIVE_TOOLS = [
+    tool for tool in NATIVE_TOOLS
+    if tool["function"]["name"] in READ_ONLY_NATIVE_TOOL_NAMES
 ]
 
 _ACTIVE_CLAUDE_RUNS: dict[str, asyncio.subprocess.Process] = {}
@@ -776,7 +786,11 @@ def _parse_allowed_command(command: str) -> tuple[list[str], tuple[str, ...]]:
     if not command.strip():
         raise ValueError("run_command command is required")
     if re.search(r"[|&;<>()`$]", command):
-        raise ValueError("run_command does not allow shell operators")
+        raise ValueError(
+            "run_command does not allow shell operators, cd, pipes, or chained commands. "
+            "Commands already run in the project directory. "
+            f"Use one allowed command exactly: {_allowed_run_commands_text()}"
+        )
     try:
         tokens = shlex.split(command, posix=os.name != "nt")
     except ValueError as e:
@@ -785,8 +799,7 @@ def _parse_allowed_command(command: str) -> tuple[list[str], tuple[str, ...]]:
         raise ValueError("run_command command is required")
     normalized = tuple("npm" if token.lower() == "npm.cmd" else token for token in tokens)
     if normalized not in RUN_COMMAND_ALLOWLIST:
-        allowed = ", ".join(" ".join(item) for item in sorted(RUN_COMMAND_ALLOWLIST))
-        raise ValueError(f"command is not whitelisted: {command}. Allowed: {allowed}")
+        raise ValueError(f"command is not whitelisted: {command}. Allowed: {_allowed_run_commands_text()}")
     argv = list(normalized)
     if os.name == "nt" and argv[0] == "npm":
         argv[0] = "npm.cmd"
@@ -971,6 +984,7 @@ def _build_native_user_message(
     context_mode: str,
     memory_text: str | None,
     system_prompt: str | None,
+    read_only: bool = False,
 ) -> str:
     mode = context_mode if context_mode in {"inherit", "explicit", "isolated"} else "inherit"
     parent_context = ""
@@ -984,7 +998,12 @@ def _build_native_user_message(
         memory_context = memory_text.strip()[:2000]
         if len(memory_text.strip()) > 2000:
             memory_context += "..."
-    task = user_prompt.strip() if user_prompt and user_prompt.strip() else f"Implement the code task for node: {node_title}"
+    default_task = (
+        f"Analyze the code task for node: {node_title}"
+        if read_only
+        else f"Implement the code task for node: {node_title}"
+    )
+    task = user_prompt.strip() if user_prompt and user_prompt.strip() else default_task
     if node_purpose:
         task += f"\nPurpose: {node_purpose}"
     return "\n".join([
@@ -994,7 +1013,13 @@ def _build_native_user_message(
         f"Context mode: {mode}",
         "",
         "System prompt:",
-        system_prompt.strip() if system_prompt and system_prompt.strip() else "Complete the implementation safely.",
+        system_prompt.strip() if system_prompt and system_prompt.strip()
+        else (
+            "Analyze the project without changing files. Output relevant modules, implementation entry points, "
+            "suggested files to change, risks, acceptance checks, and concrete guidance for the next Code node."
+            if read_only
+            else "Complete the implementation safely."
+        ),
         "",
         "Task:",
         task,
@@ -1041,6 +1066,7 @@ async def run_node_native_code(
     model: str | None = None,
     api_key: str | None = None,
     run_id: str | None = None,
+    read_only: bool = False,
 ) -> AsyncIterator[str]:
     effective_run_id = run_id or f"native-{uuid.uuid4().hex[:8]}"
     chosen_provider = (provider or "deepseek").lower()
@@ -1055,26 +1081,39 @@ async def run_node_native_code(
 
     allow = file_scope_allow or []
     deny = file_scope_deny or []
-    before_status = await _git_status_map(project_dir) if await _is_git_repo(project_dir) else {}
+    before_status = await _git_status_map(project_dir) if (not read_only and await _is_git_repo(project_dir)) else {}
     before_snapshots = await _snapshot_dirty_files(project_dir, before_status) if before_status else {}
-    marker = os.path.join(project_dir, ".mag_code_run_marker")
-    try:
-        with open(marker, "w", encoding="utf-8") as f:
-            f.write("marker")
-    except OSError:
-        marker = None
+    marker = None
+    if not read_only:
+        marker = os.path.join(project_dir, ".mag_code_run_marker")
+        try:
+            with open(marker, "w", encoding="utf-8") as f:
+                f.write("marker")
+        except OSError:
+            marker = None
 
     client = AsyncOpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL)
+    tools = READ_ONLY_NATIVE_TOOLS if read_only else NATIVE_TOOLS
+    system_content = (
+        "You are MAG Native Code Runner in read-only analysis mode. Work only through the provided tools. "
+        "Do not create, modify, delete, move, format, install, build, or test files. "
+        "Use inspect_project, list_files, grep, and read_file to understand the project. "
+        "Call finish with a concise Chinese Markdown analysis when done."
+        if read_only
+        else (
+            "You are MAG Native Code Runner. Work only through the provided tools. "
+            "Do not ask the user to edit files manually. Use apply_patch or write_file for changes. "
+            "Use run_command only for whitelisted validation commands, exactly as listed by inspect_project. "
+            "run_command already executes in the project directory; never include cd, paths, shell operators, "
+            "pipes, or chained commands such as &&. "
+            "Use inspect_project when you need to discover project type or validation commands. "
+            "Call finish with a concise summary when done."
+        )
+    )
     messages: list[dict[str, Any]] = [
         {
             "role": "system",
-            "content": (
-                "You are MAG Native Code Runner. Work only through the provided tools. "
-                "Do not ask the user to edit files manually. Use apply_patch or write_file for changes. "
-                "Use run_command only for whitelisted validation commands. "
-                "Use inspect_project when you need to discover project type or validation commands. "
-                "Call finish with a concise summary when done."
-            ),
+            "content": system_content,
         },
         {
             "role": "user",
@@ -1090,6 +1129,7 @@ async def run_node_native_code(
                 context_mode=context_mode,
                 memory_text=memory_text,
                 system_prompt=system_prompt,
+                read_only=read_only,
             ),
         },
     ]
@@ -1111,7 +1151,7 @@ async def run_node_native_code(
             "level": "info",
             "source": "code",
             "status": "START",
-            "message": "MAG Native Code Runner started (DeepSeek tool calls).",
+            "message": "MAG Native Code Runner started (read-only)." if read_only else "MAG Native Code Runner started (DeepSeek tool calls).",
         })
         for _ in range(NATIVE_MAX_TOOL_STEPS):
             if effective_run_id in _CANCELLED_NATIVE_RUNS:
@@ -1121,7 +1161,7 @@ async def run_node_native_code(
                 resp = await client.chat.completions.create(
                     model=model or DEEPSEEK_DEFAULT_MODEL,
                     messages=messages,
-                    tools=NATIVE_TOOLS,
+                    tools=tools,
                     tool_choice="auto",
                     temperature=0.1,
                 )
@@ -1231,8 +1271,9 @@ async def run_node_native_code(
         if not finished:
             raise ProviderError(f"Native code runner reached max tool steps ({NATIVE_MAX_TOOL_STEPS})")
 
-        changed = await _detect_changed_files(project_dir, marker, before_status)
-        diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
+        if not read_only:
+            changed = await _detect_changed_files(project_dir, marker, before_status)
+            diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
     except asyncio.CancelledError:
         yield "\n[cancelled] Native code run cancelled.\n"
         raise
@@ -1244,8 +1285,9 @@ async def run_node_native_code(
             except OSError:
                 pass
 
-    yield _marker("files", changed)
-    yield _marker("diff", diff_info)
+    if not read_only:
+        yield _marker("files", changed)
+        yield _marker("diff", diff_info)
 
 
 async def replay_tool_sequence(

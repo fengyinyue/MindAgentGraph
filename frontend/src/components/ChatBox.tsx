@@ -24,7 +24,7 @@ const typeAliases: Array<{ type: NodeType; words: string[]; label: string }> = [
   { type: "memory", words: ["memory", "记忆", "知识"], label: "Memory" },
   { type: "filescope", words: ["filescope", "file scope", "文件范围"], label: "File Scope" },
   { type: "analysis", words: ["analysis", "analyze", "代码分析"], label: "Analysis" },
-  { type: "code", words: ["code", "代码"], label: "Code" },
+  { type: "code", words: ["code", "execution", "执行", "代码"], label: "Execution" },
   { type: "api", words: ["api", "接口"], label: "API" },
   { type: "asset", words: ["asset", "资源", "资产"], label: "Asset" },
   { type: "agent", words: ["agent", "智能体"], label: "Agent" },

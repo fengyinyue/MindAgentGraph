@@ -129,6 +129,7 @@ class CodeRunRequest(BaseModel):
     provider: Optional[ProviderName] = None
     model: Optional[str] = None
     runId: Optional[str] = None
+    readOnly: bool = False
 
 
 class CodeAnalysisRequest(BaseModel):

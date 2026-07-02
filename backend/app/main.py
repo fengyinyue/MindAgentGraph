@@ -39,7 +39,6 @@ from app.services.graph_chat import edit_graph_with_chat, stream_graph_chat_repl
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
 from app.services.code_runner import cancel_code_run, run_node_native_code, replay_tool_sequence
-from app.services.code_analysis_runner import run_code_analysis_with_claude
 from app.services.memory import read_memory, write_memory
 from app.services.dag_executor import run_dag_stream
 
@@ -262,8 +261,11 @@ async def cancel_node_code(req: CodeCancelRequest) -> dict[str, bool]:
 
 
 @app.post("/run/node/code-analysis")
-async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
-    """SSE stream of read-only Claude Code analysis output."""
+async def run_node_code_analysis(
+    req: CodeAnalysisRequest,
+    x_provider_key: Annotated[Optional[str], Header(alias="X-Provider-Key")] = None,
+) -> StreamingResponse:
+    """SSE stream of read-only MAG Native Code Runner output."""
 
     async def gen():
         try:
@@ -272,8 +274,9 @@ async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
                 memory_text = read_memory(req.projectPath, req.node.memoryRef)
 
             output_parts: list[str] = []
-            async for chunk in run_code_analysis_with_claude(
+            async for chunk in run_node_native_code(
                 node_title=req.node.title,
+                node_type=req.node.type,
                 node_purpose=req.node.purpose or "",
                 project_dir=req.projectDir,
                 file_scope_allow=req.fileScopeAllow,
@@ -283,11 +286,18 @@ async def run_node_code_analysis(req: CodeAnalysisRequest) -> StreamingResponse:
                 context_mode=req.node.contextMode,
                 memory_text=memory_text,
                 system_prompt=req.node.systemPrompt,
+                provider="deepseek",
                 model=req.model,
+                api_key=x_provider_key,
                 run_id=req.runId,
+                read_only=True,
             ):
-                output_parts.append(chunk)
-                yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+                sse = _marker_to_sse(chunk)
+                if sse is not None:
+                    yield sse
+                else:
+                    output_parts.append(chunk)
+                    yield f"event: text\ndata: {json.dumps(chunk, ensure_ascii=False)}\n\n"
 
             if req.node.contextMode != "isolated":
                 write_memory(
@@ -371,6 +381,7 @@ async def run_node_code(
                 model=req.model,
                 api_key=x_provider_key,
                 run_id=req.runId,
+                read_only=req.readOnly,
             ):
                 sse = _marker_to_sse(chunk)
                 if sse is not None:

@@ -175,6 +175,7 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "planning") return "Planning";
   if (type === "subgraph") return "Subgraph";
   if (type === "analysis") return "Analysis";
+  if (type === "code") return "Execution";
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -212,7 +213,7 @@ function MagGraphNode({ data, selected }: NodeProps<RFNode<MagNodeData>>) {
     >
       <div className="mag-node-title">
         <span className="truncate">{node.title}</span>
-        <span className="mag-node-type">[{node.type}]{data.running ? " ●" : data.needsConfirmation ? " ?" : ""}</span>
+        <span className="mag-node-type">[{nodeTypeLabel(node.type)}]{data.running ? " ●" : data.needsConfirmation ? " ?" : ""}</span>
       </div>
       {node.purpose && node.purpose.trim() ? (
         <div className="mag-node-purpose" title={node.purpose}>
@@ -374,7 +375,7 @@ export default function Canvas() {
   const contextMenuCanExplain = contextMenuNode !== undefined;
   const contextMenuIsCodeAnalysis = contextMenuNode?.type === "analysis";
   const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" || contextMenuNode?.type === "subgraph";
-  const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code" || contextMenuNode?.type === "planning";
+  const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code" || contextMenuNode?.type === "planning" || contextMenuNode?.type === "analysis";
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
 
@@ -491,7 +492,7 @@ export default function Canvas() {
         onNodeClick={onNodeClick}
         onNodeDoubleClick={(_, node) => {
           const graphNode = storeNodes.find((item) => item.id === node.id);
-          if (graphNode?.type === "subgraph" || graphNode?.type === "code" || graphNode?.type === "planning") {
+          if (graphNode?.type === "subgraph" || graphNode?.type === "code" || graphNode?.type === "planning" || graphNode?.type === "analysis") {
             enterSubgraph(graphNode.id);
           }
         }}
@@ -581,18 +582,6 @@ export default function Canvas() {
               ✦ Generate Nodes
             </button>
           ) : null}
-          {contextMenuNode?.type === "planning" ? (
-            <button
-              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
-              onClick={() => {
-                expandPlanNodes(menu.nodeId, "execute");
-                closeMenu();
-              }}
-              disabled={runningId !== null}
-            >
-              ▶ 执行（生成执行节点）
-            </button>
-          ) : null}
           {contextMenuCanEnter ? (
             <button
               className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
@@ -602,7 +591,9 @@ export default function Canvas() {
               }}
             >
               {contextMenuNode?.type === "code"
-                ? "Enter Code"
+                ? "Enter Execution"
+                : contextMenuNode?.type === "analysis"
+                  ? "Enter Analysis"
                 : contextMenuNode?.type === "planning"
                   ? "Enter（进入设计）"
                   : "Enter Subgraph"}
@@ -642,7 +633,7 @@ export default function Canvas() {
               disabled={runningId !== null || !projectDir}
               title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : undefined}
             >
-              ⚡ Generate Code
+              ⚡ Run Execution
             </button>
           ) : null}
           {contextMenuOutput ? (
@@ -664,7 +655,7 @@ export default function Canvas() {
                 closeMenu();
               }}
             >
-              View Code Output
+              View Execution Output
             </button>
           ) : null}
           <hr className="border-zinc-700 my-1" />

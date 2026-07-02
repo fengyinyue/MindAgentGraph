@@ -18,6 +18,7 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "planning") return "Planning";
   if (type === "subgraph") return "Subgraph";
   if (type === "analysis") return "Analysis";
+  if (type === "code") return "Execution";
   return type;
 }
 
@@ -252,16 +253,6 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                     ✦ Generate Nodes
                   </button>
                 ) : null}
-                {isPlanningNode ? (
-                  <button
-                    className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
-                    onClick={() => expandPlanNodes(node.id, "execute")}
-                    disabled={runningId !== null}
-                    title="在外层分解出执行（code）节点"
-                  >
-                    ▶ 执行
-                  </button>
-                ) : null}
                 {canGenerateModuleGraph ? (
                   <button
                     className="px-3 py-1 bg-cyan-700 rounded text-xs disabled:opacity-50"
@@ -269,6 +260,15 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                     disabled={runningId !== null}
                   >
                     ⬡ Module Graph
+                  </button>
+                ) : null}
+                {isCodeAnalysisNode ? (
+                  <button
+                    className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => enterSubgraph(node.id)}
+                    disabled={runningId !== null}
+                  >
+                    Enter Analysis
                   </button>
                 ) : null}
                 {isGraphNode ? (
@@ -286,16 +286,16 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                       className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
                       onClick={() => runCode(node.id)}
                       disabled={runningId !== null || !projectDir}
-                      title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "MAG Native Code Runner"}
+                      title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "MAG Native Execution Runner"}
                     >
-                      ⚡ Code
+                      ⚡ Execution
                     </button>
                     <button
                       className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
                       onClick={() => enterSubgraph(node.id)}
                       disabled={runningId !== null}
                     >
-                      Enter Code
+                      Enter Execution
                     </button>
                   </>
                 ) : null}
@@ -431,11 +431,11 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   if (view === "output") {
     return (
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 h-full text-sm">
-        {/* Code output */}
+        {/* Execution output */}
         {codeOutput ? (
           <div>
             <div className="text-xs text-zinc-500 uppercase mb-1 flex items-center gap-2">
-              <span>Code Output</span>
+              <span>Execution Output</span>
               {isRunning && <span className="text-emerald-400 animate-pulse">generating…</span>}
               <button
                 className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:border-accent hover:text-accent"
@@ -471,7 +471,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
         {codeDiff?.diff ? (
           <details className="text-xs">
             <summary className="text-zinc-500 cursor-pointer select-none">
-              Code Diff{codeDiff.truncated ? " (truncated)" : ""}
+              Execution Diff{codeDiff.truncated ? " (truncated)" : ""}
             </summary>
             <pre className="mt-2 bg-canvas p-2 rounded whitespace-pre-wrap font-mono leading-relaxed max-h-96 overflow-y-auto text-[11px]">
 {codeDiff.diff}
@@ -613,7 +613,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             !codeOutput && (
               <div className="text-zinc-600 text-xs italic">
                 {isCodeNode
-                  ? "点 ▶ Explain 文本展开 或 ⚡ Code 生成代码"
+                  ? "点 ▶ Explain 文本展开 或 ⚡ Execution 运行执行器"
                   : isCodeAnalysisNode
                     ? "选择 Project Dir 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
                   : isGraphNode

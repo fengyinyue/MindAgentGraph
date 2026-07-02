@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { create } from "zustand";
-import { cancelCodeRun, expandModules, expandPlan, replayToolSequence, runDagStream, runNodeCode, runNodeCodeAnalysis, runNodeStream } from "@/api/backend";
+import { cancelCodeRun, expandModules, expandPlan, replayToolSequence, runDagStream, runNodeCode, runNodeStream } from "@/api/backend";
 import type { CodeDiffInfo, ExpandPlanResult } from "@/api/backend";
 import { collectToolSteps } from "@/utils/toolSteps";
 import { useSkillStore } from "@/store/skillStore";
@@ -32,7 +32,7 @@ interface RunOptions {
 
 function outputText(node: NodeBase | undefined): string {
   if (!node) return "";
-  // Code nodes keep their result in data.codeOutput (output stays the Explain
+  // Execution nodes keep their result in data.codeOutput (output stays the Explain
   // text). Prefer codeOutput for code nodes so downstream inherits the code result.
   const text = node.type === "code"
     ? (node.data?.codeOutput ?? node.output ?? node.data?.output)
@@ -271,7 +271,7 @@ export function useRunNode() {
           id: runRecordId,
           startedAt: new Date().toISOString(),
           status: "running",
-          provider: "claude-code-analysis",
+          provider,
           model,
         });
         state.patchNodeData(nodeId, { output: "", error: undefined, status: "running" });
@@ -282,7 +282,7 @@ export function useRunNode() {
           status: "START",
           nodeId,
           nodeTitle: node.title,
-          message: `Claude Code analysis started (${model || "default"}, read-only)`,
+          message: `Execution read-only analysis started (${model || "default"})`,
         });
         setRunning(nodeId);
 
@@ -292,7 +292,7 @@ export function useRunNode() {
         activeCodeRunId = runId;
         let acc = "";
         let ok = true;
-        await runNodeCodeAnalysis(
+        await runNodeCode(
           {
             node: toRunPayload(node),
             projectDir,
@@ -301,8 +301,11 @@ export function useRunNode() {
             fileScopeDeny: node.fileScope.deny,
             parentOutputs,
             userPrompt: opts.userPrompt,
+            provider,
             model,
+            apiKey: useKeyStore.getState().getKey(provider),
             runId,
+            readOnly: true,
           },
           {
             onText: (chunk) => {
@@ -313,12 +316,35 @@ export function useRunNode() {
                   status: "RUNNING",
                   nodeId,
                   nodeTitle: node.title,
-                  message: "Claude Code analysis receiving output",
+                  message: "Execution read-only analysis receiving output",
                 });
               }
               acc += chunk;
               useGraphStore.getState().patchNodeData(nodeId, { output: acc, status: "running" });
               useGraphStore.getState().updateNode(nodeId, { output: acc });
+            },
+            onFiles: () => { /* read-only analysis does not report changed files */ },
+            onToolStart: (trace) => {
+              upsertToolTrace(nodeId, runRecordId, trace);
+              useMonitorStore.getState().addLog({
+                level: "info",
+                source: "code",
+                status: "TOOL",
+                nodeId,
+                nodeTitle: node.title,
+                message: `${trace.step}. ${trace.tool}`,
+              });
+            },
+            onToolResult: (trace) => {
+              upsertToolTrace(nodeId, runRecordId, trace);
+              useMonitorStore.getState().addLog({
+                level: trace.status === "error" ? "error" : "info",
+                source: "code",
+                status: trace.status === "error" ? "TOOL_ERROR" : "TOOL_DONE",
+                nodeId,
+                nodeTitle: node.title,
+                message: trace.error ?? `${trace.step}. ${trace.tool} done`,
+              });
             },
             onDone: () => {
               finishRunRecord(nodeId, runRecordId, { status: "done", finishedAt: new Date().toISOString() });
@@ -329,7 +355,7 @@ export function useRunNode() {
                 status: "DONE",
                 nodeId,
                 nodeTitle: node.title,
-                message: "Claude Code analysis done",
+                message: "Execution read-only analysis done",
               });
               setRunning(null);
               if (activeAbort === ctrl) activeAbort = null;
@@ -515,7 +541,7 @@ export function useRunNode() {
           status: "SKIPPED",
           nodeId,
           nodeTitle: node.title,
-          message: "只有 Code 节点可以执行 Run Code。",
+          message: "只有 Execution 节点可以运行执行器。",
         });
         return false;
       }
@@ -541,7 +567,7 @@ export function useRunNode() {
           status: "WARN",
           nodeId,
           nodeTitle: node.title,
-          message: `${provider} API Key 未在前端配置；Code 节点会尝试使用后端环境变量。`,
+          message: `${provider} API Key 未在前端配置；Execution 节点会尝试使用后端环境变量。`,
         });
       }
 
@@ -565,7 +591,7 @@ export function useRunNode() {
         status: "START",
         nodeId,
         nodeTitle: node.title,
-        message: `Code run started (${model}, fileScope allow ${node.fileScope.allow.length} / deny ${node.fileScope.deny.length})`,
+        message: `Execution run started (${model}, fileScope allow ${node.fileScope.allow.length} / deny ${node.fileScope.deny.length})`,
       });
       setRunning(nodeId);
 
@@ -601,11 +627,11 @@ export function useRunNode() {
                 status: "RUNNING",
                 nodeId,
                 nodeTitle: node.title,
-                message: "Code stream receiving output",
+                message: "Execution stream receiving output",
               });
             }
             acc += chunk;
-            // Code result lives in codeOutput only; do not clobber the node's
+            // Execution result lives in codeOutput only; do not clobber the node's
             // Explain output. outputText() reads codeOutput for code nodes.
             useGraphStore.getState().patchNodeData(nodeId, { codeOutput: acc });
           },
@@ -672,7 +698,7 @@ export function useRunNode() {
               .find((n) => n.id === nodeId)?.runHistory
               ?.find((r) => r.id === runRecordId);
             materializeTraceNodes(nodeId, rec);
-            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", nodeId, nodeTitle: node.title, message: "Code run done" });
+            useMonitorStore.getState().addLog({ level: "info", source: "code", status: "DONE", nodeId, nodeTitle: node.title, message: "Execution run done" });
             setRunning(null);
             if (activeAbort === ctrl) activeAbort = null;
             if (activeCodeRunId === runId) activeCodeRunId = null;
@@ -858,12 +884,23 @@ export function useRunNode() {
   //  - "execute" → external execution nodes (workflow expansion, siblings outside)
   // subgraph nodes always expand as structure regardless of mode.
   const expandPlanNodes = useCallback(
-    async (planningNodeId: string, mode: "design" | "execute" = "execute"): Promise<boolean> => {
+    async (planningNodeId: string, mode: "design" | "execute" = "design"): Promise<boolean> => {
       const state = useGraphStore.getState();
       const planningNode = state.nodes.find((n) => n.id === planningNodeId);
       const baseKind = planningNode ? graphKindForNode(planningNode) : null;
       if (!planningNode || !baseKind) return false;
       const isSubgraphNode = planningNode.type === "subgraph";
+      if (planningNode.type === "planning" && mode === "execute") {
+        useMonitorStore.getState().addLog({
+          level: "warn",
+          source: "plan",
+          status: "SKIPPED",
+          nodeId: planningNodeId,
+          nodeTitle: planningNode.title,
+          message: "Planning execute expansion is disabled. Use Generate Nodes for the internal design graph.",
+        });
+        return false;
+      }
       // 后端展开族：subgraph 用 structure(扁平数据流)；planning 用 workflow(可含 subgraph)。
       const graphKind: "workflow" | "structure" = isSubgraphNode ? "structure" : "workflow";
       // intoParent: 产物挂进容器内部(设计层) vs 外层兄弟(执行层)。
@@ -1032,6 +1069,9 @@ export function useRunNode() {
           nodes: [...currentState.nodes, ...newNodes],
           links: [...currentState.links, ...newEdges],
         });
+        if (intoParent) {
+          useGraphStore.getState().enterSubgraph(planningNode.id);
+        }
 
         useMonitorStore.getState().addLog({
           level: "info",
@@ -1133,6 +1173,7 @@ export function useRunNode() {
           fileScope: { allow: [], deny: [] },
           toolPolicy: { tools: [], deny: [] },
           memoryRef: raw.type === "memory" ? `${idMap.get(raw.id)!}.md` : undefined,
+          parentId: codeAnalysisNodeId,
           purpose: raw.purpose ?? "",
           data: {
             purpose: raw.purpose ?? "",
@@ -1152,16 +1193,6 @@ export function useRunNode() {
           targetHandle: raw.targetHandle,
           label: raw.label,
         }));
-
-        const newTargets = new Set(newEdges.map((e) => e.target));
-        const roots = newNodes.filter((n) => !newTargets.has(n.id));
-        for (const root of roots) {
-          newEdges.push({
-            id: crypto.randomUUID(),
-            source: codeAnalysisNodeId,
-            target: root.id,
-          });
-        }
 
         const currentState = useGraphStore.getState();
         useGraphStore.getState().setGraph({

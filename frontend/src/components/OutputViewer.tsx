@@ -223,7 +223,7 @@ export default function OutputViewer() {
   if (!nodeId) return null;
 
   const title = node
-    ? `${node.title} / ${mode === "code" ? "Code Output" : "Explain Output"}`
+    ? `${node.title} / ${mode === "code" ? "Execution Output" : "Explain Output"}`
     : "Output";
 
   const onCopy = async () => {

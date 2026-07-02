@@ -171,6 +171,7 @@ export interface CodeRunInput {
   model?: string;
   apiKey?: string;
   runId?: string;
+  readOnly?: boolean;
 }
 
 export interface CodeDiffInfo {
@@ -219,6 +220,7 @@ export async function runNodeCode(
       provider: input.provider,
       model: input.model,
       runId: input.runId,
+      readOnly: input.readOnly,
     }),
     signal: cb.signal,
   });
