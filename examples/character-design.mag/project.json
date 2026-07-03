@@ -1,0 +1,8 @@
+{
+  "name": "character-design",
+  "version": "0.1.0",
+  "rootGraph": "graphs/main.json",
+  "description": "角色设计工作流：从创意到完整角色档案",
+  "createdAt": "2026-07-03T00:00:00.000Z",
+  "updatedAt": "2026-07-03T05:58:49.526Z"
+}

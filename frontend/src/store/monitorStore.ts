@@ -4,7 +4,7 @@ export interface MonitorLog {
   id: string;
   timestamp: number;
   level: "info" | "warn" | "error";
-  source: "plan" | "node" | "code" | "dag" | "provider" | "module-graph";
+  source: "plan" | "node" | "code" | "dag" | "provider" | "module-graph" | "test" | "review";
   status?: string;
   nodeId?: string;
   nodeTitle?: string;

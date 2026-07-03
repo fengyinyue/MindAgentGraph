@@ -21,6 +21,7 @@ interface GraphState {
   setProjectMeta: (meta: ProjectMeta | null) => void;
   addNode: (node: NodeBase) => void;
   addLink: (link: Edge) => void;
+  updateLinks: (updater: (links: Edge[]) => Edge[]) => void;
   updateNode: (id: string, patch: Partial<NodeBase>) => void;
   setNodePositions: (positions: Map<string, Position>) => void;
   patchNodeData: (id: string, dataPatch: Record<string, unknown>) => void;
@@ -63,6 +64,7 @@ export const useGraphStore = create<GraphState>((set) => ({
   setProjectMeta: (meta) => set({ projectMeta: meta }),
   addNode: (node) => set((s) => ({ nodes: [...s.nodes, node] })),
   addLink: (link) => set((s) => ({ links: [...s.links, link] })),
+  updateLinks: (updater) => set((s) => ({ links: updater(s.links) })),
   updateNode: (id, patch) =>
     set((s) => ({
       nodes: s.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),

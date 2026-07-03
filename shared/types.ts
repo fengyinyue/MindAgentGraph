@@ -18,10 +18,16 @@ export const NODE_TYPES: NodeType[] = [
   "analysis", "code", "api", "asset", "agent", "task", "tool", "semantic",
 ];
 
-// Layering (Phase 3): the execution layer (top level, or inside a code node)
-// only allows planner/executor/tool/analysis. Every other type is a design
-// vocabulary that may only be used INSIDE a plan node (design layer, drill-in).
-export const EXECUTION_LAYER_TYPES: NodeType[] = ["planning", "code", "tool", "analysis"];
+// Workflow layer: top-level nodes should be reusable AI engineering operators,
+// not only Agent calls. Keep the broader design vocabulary inside containers.
+export const EXECUTION_LAYER_TYPES: NodeType[] = [
+  "prompt",
+  "analysis",
+  "planning",
+  "filescope",
+  "code",
+  "task",
+];
 
 /** A node whose own type makes it a design container (drill-in = design layer). */
 export function isDesignContainer(type: NodeType | null | undefined): boolean {

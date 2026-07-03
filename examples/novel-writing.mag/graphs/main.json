@@ -1,0 +1,202 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "type": "prompt",
+      "title": "故事创意",
+      "position": { "x": -400, "y": 0 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {},
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "worldbuilding",
+      "type": "planning",
+      "title": "世界观设定",
+      "position": { "x": 0, "y": 0 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "构建故事发生的时代背景、地理环境、社会规则与世界运行逻辑",
+        "inputs": [
+          { "id": "idea", "name": "故事创意", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "world_doc", "name": "世界观文档", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "characters",
+      "type": "planning",
+      "title": "角色设计",
+      "position": { "x": 320, "y": -120 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "设计主要人物的背景、性格、动机与相互关系，确保与世界观一致",
+        "inputs": [
+          { "id": "world_doc", "name": "世界观文档", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "char_doc", "name": "角色档案", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "outline",
+      "type": "planning",
+      "title": "故事大纲",
+      "position": { "x": 640, "y": 0 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "按三幕结构拆分主要情节，标注转折点、冲突高潮与结局走向",
+        "inputs": [
+          { "id": "world_doc", "name": "世界观文档", "type": "unknown" },
+          { "id": "char_doc",  "name": "角色档案",   "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "outline_doc", "name": "故事大纲", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "chapters",
+      "type": "planning",
+      "title": "章节展开",
+      "position": { "x": 960, "y": 0 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "将大纲细化为每章的场景、视角、开头钩子与结尾悬念",
+        "inputs": [
+          { "id": "outline_doc", "name": "故事大纲", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "chapter_plan", "name": "章节计划", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "draft",
+      "type": "planning",
+      "title": "正文初稿",
+      "position": { "x": 1280, "y": 0 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "按章节计划逐章写出正文，保持人物声音与叙事节奏一致",
+        "inputs": [
+          { "id": "chapter_plan", "name": "章节计划", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "raw_draft", "name": "正文初稿", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "polish",
+      "type": "agent",
+      "title": "润色精修",
+      "position": { "x": 1600, "y": 0 },
+      "contextMode": "explicit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "修正逻辑漏洞、优化语言节奏、统一人物语气，输出终稿",
+        "inputs": [
+          { "id": "raw_draft", "name": "正文初稿", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "final", "name": "终稿", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    }
+  ],
+  "links": [
+    {
+      "id": "l1",
+      "source": "input",
+      "target": "worldbuilding",
+      "sourceHandle": "response",
+      "targetHandle": "idea",
+      "label": "故事创意"
+    },
+    {
+      "id": "l2",
+      "source": "worldbuilding",
+      "target": "characters",
+      "sourceHandle": "world_doc",
+      "targetHandle": "world_doc",
+      "label": "世界观文档"
+    },
+    {
+      "id": "l3",
+      "source": "worldbuilding",
+      "target": "outline",
+      "sourceHandle": "world_doc",
+      "targetHandle": "world_doc",
+      "label": "世界观文档"
+    },
+    {
+      "id": "l4",
+      "source": "characters",
+      "target": "outline",
+      "sourceHandle": "char_doc",
+      "targetHandle": "char_doc",
+      "label": "角色档案"
+    },
+    {
+      "id": "l5",
+      "source": "outline",
+      "target": "chapters",
+      "sourceHandle": "outline_doc",
+      "targetHandle": "outline_doc",
+      "label": "故事大纲"
+    },
+    {
+      "id": "l6",
+      "source": "chapters",
+      "target": "draft",
+      "sourceHandle": "chapter_plan",
+      "targetHandle": "chapter_plan",
+      "label": "章节计划"
+    },
+    {
+      "id": "l7",
+      "source": "draft",
+      "target": "polish",
+      "sourceHandle": "raw_draft",
+      "targetHandle": "raw_draft",
+      "label": "正文初稿"
+    }
+  ]
+}

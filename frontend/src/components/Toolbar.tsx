@@ -14,6 +14,13 @@ const buttonSuccess = `${buttonBase} border-emerald-700/70 bg-emerald-500/10 tex
 const buttonInfo = `${buttonBase} border-violet-700/70 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20`;
 const iconButton = "inline-flex h-7 w-7 items-center justify-center rounded border border-zinc-700 bg-panel text-xs transition-colors hover:border-accent/70 hover:text-accent";
 
+function nodeTypeTitle(type: NodeBase["type"]): string {
+  if (type === "prompt") return "Requirement";
+  if (type === "planning") return "Design";
+  if (type === "code") return "Execution";
+  return type.charAt(0).toUpperCase() + type.slice(1);
+}
+
 export default function Toolbar() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const setGraph = useGraphStore((s) => s.setGraph);
@@ -130,7 +137,7 @@ export default function Toolbar() {
             state.addNode({
               id: crypto.randomUUID(),
               type,
-              title: type.charAt(0).toUpperCase() + type.slice(1),
+              title: nodeTypeTitle(type),
               position: { x: 250, y: 250 },
               contextMode: "inherit",
               fileScope: { allow: [], deny: [] },

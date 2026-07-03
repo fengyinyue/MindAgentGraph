@@ -18,8 +18,8 @@ type GraphCommandResult = {
 };
 
 const typeAliases: Array<{ type: NodeType; words: string[]; label: string }> = [
-  { type: "prompt", words: ["prompt", "提示", "提示词"], label: "Prompt" },
-  { type: "planning", words: ["workflow", "planning", "规划", "流程", "工作流"], label: "Planning" },
+  { type: "prompt", words: ["requirement", "prompt", "需求", "输入", "提示", "提示词"], label: "Requirement" },
+  { type: "planning", words: ["design", "workflow", "planning", "规划", "设计", "流程", "工作流"], label: "Design" },
   { type: "subgraph", words: ["structure", "subgraph", "架构", "结构", "模块图"], label: "Subgraph" },
   { type: "memory", words: ["memory", "记忆", "知识"], label: "Memory" },
   { type: "filescope", words: ["filescope", "file scope", "文件范围"], label: "File Scope" },

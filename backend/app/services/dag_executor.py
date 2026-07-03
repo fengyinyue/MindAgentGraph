@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from collections import deque
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from app.schemas import Edge, Graph, Node
 from app.services.memory import read_memory, write_memory
@@ -54,6 +55,148 @@ def _output_key(node: Node) -> str:
     return f"{node.title} ({node.id})"
 
 
+def _stringify_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, indent=2)
+    except TypeError:
+        return str(value)
+
+
+def _node_output_text(node: Node, result_text: str | None = None) -> str:
+    if result_text:
+        return result_text
+    if node.type == "code":
+        text = node.data.get("codeOutput") or node.output or node.data.get("output")
+    else:
+        text = node.output or node.data.get("output") or node.data.get("codeOutput")
+    return text if isinstance(text, str) else ""
+
+
+def _node_purpose_text(node: Node) -> str:
+    return _node_purpose(node)
+
+
+def _port_name(node: Node, direction: str, handle: str | None) -> str | None:
+    if not handle:
+        return None
+    ports = node.data.get(direction)
+    if not isinstance(ports, list):
+        return None
+    for raw in ports:
+        if isinstance(raw, dict) and raw.get("id") == handle and isinstance(raw.get("name"), str):
+            return raw["name"]
+    return None
+
+
+def _json_field(text: str, handle: str) -> str:
+    stripped = text.strip()
+    if not stripped.startswith(("{", "[")):
+        return ""
+    try:
+        parsed = json.loads(stripped)
+    except json.JSONDecodeError:
+        return ""
+    if not isinstance(parsed, dict):
+        return ""
+    if handle in parsed:
+        return _stringify_value(parsed[handle])
+    outputs = parsed.get("outputs")
+    if isinstance(outputs, dict) and handle in outputs:
+        return _stringify_value(outputs[handle])
+    return ""
+
+
+def _normalize_binding_name(value: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[_-]+", " ", value.replace("`", ""))).strip().lower()
+
+
+def _markdown_section(text: str, names: list[str]) -> str:
+    wanted = {_normalize_binding_name(name) for name in names if name.strip()}
+    if not wanted:
+        return ""
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        match = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+        if not match:
+            continue
+        level = len(match.group(1))
+        heading = _normalize_binding_name(match.group(2))
+        if heading not in wanted:
+            continue
+        body: list[str] = []
+        for next_line in lines[index + 1:]:
+            next_match = re.match(r"^(#{1,6})\s+", next_line)
+            if next_match and len(next_match.group(1)) <= level:
+                break
+            body.append(next_line)
+        return "\n".join(body).strip()
+    return ""
+
+
+def _extract_output_for_handle(node: Node, source_handle: str | None, result_text: str | None = None) -> str:
+    full_text = _node_output_text(node, result_text).strip()
+    fallback = full_text or _node_purpose_text(node).strip()
+    if not source_handle:
+        return fallback
+
+    direct = _stringify_value(node.data.get(source_handle)).strip()
+    if direct:
+        return direct
+
+    if node.type == "code":
+        if source_handle in {"result", "codeOutput"}:
+            code_output = _stringify_value(node.data.get("codeOutput")).strip()
+            if code_output:
+                return code_output
+        if source_handle == "diff":
+            diff = node.data.get("codeDiff")
+            if isinstance(diff, dict):
+                diff_text = _stringify_value(diff.get("diff")).strip()
+                if diff_text:
+                    return diff_text
+        if source_handle in {"changedFiles", "files"}:
+            files = _stringify_value(node.data.get("generatedFiles")).strip()
+            if files:
+                return files
+
+    if full_text:
+        json_text = _json_field(full_text, source_handle).strip()
+        if json_text:
+            return json_text
+        section = _markdown_section(full_text, [
+            source_handle,
+            _port_name(node, "outputs", source_handle) or "",
+        ]).strip()
+        if section:
+            return section
+    return fallback
+
+
+def _binding_key(source: Node, target: Node, link: Edge) -> str:
+    if link.sourceHandle or link.targetHandle:
+        source_port = _port_name(source, "outputs", link.sourceHandle) or link.sourceHandle or "output"
+        target_port = _port_name(target, "inputs", link.targetHandle) or link.targetHandle or "input"
+        return f"{target.title}.{target_port} <= {source.title}.{source_port} ({source.id})"
+    return _output_key(source)
+
+
+def _put_unique(outputs: dict[str, str], key: str, value: str) -> None:
+    text = value.strip()
+    if not text:
+        return
+    if key not in outputs:
+        outputs[key] = text
+        return
+    suffix = 2
+    while f"{key} #{suffix}" in outputs:
+        suffix += 1
+    outputs[f"{key} #{suffix}"] = text
+
+
 def _has_confirmation_request(output: str) -> bool:
     return "```mag-confirmation" in output.lower()
 
@@ -84,11 +227,11 @@ async def run_dag_stream(
     root_node_id: str | None = None,
 ) -> AsyncIterator[str]:
     nodes_by_id = {node.id: node for node in graph.nodes}
-    parent_ids: dict[str, list[str]] = {node.id: [] for node in graph.nodes}
+    incoming_links: dict[str, list[Edge]] = {node.id: [] for node in graph.nodes}
     outgoing: dict[str, list[str]] = {node.id: [] for node in graph.nodes}
     for link in graph.links:
         if link.source in nodes_by_id and link.target in nodes_by_id:
-            parent_ids[link.target].append(link.source)
+            incoming_links[link.target].append(link)
             outgoing[link.source].append(link.target)
 
     if root_node_id is not None:
@@ -193,11 +336,14 @@ async def run_dag_stream(
             "message": "running",
         })
 
-        parent_outputs = {
-            _output_key(nodes_by_id[parent_id]): results[parent_id]
-            for parent_id in parent_ids[node.id]
-            if parent_id in results and results[parent_id].strip()
-        }
+        parent_outputs: dict[str, str] = {}
+        for link in incoming_links[node.id]:
+            parent = nodes_by_id[link.source]
+            result_text = results.get(parent.id)
+            if result_text is None and not _node_output_text(parent).strip() and not _node_purpose_text(parent).strip():
+                continue
+            value = _extract_output_for_handle(parent, link.sourceHandle, result_text)
+            _put_unique(parent_outputs, _binding_key(parent, node, link), value)
 
         memory_text = None
         if node.contextMode == "inherit":

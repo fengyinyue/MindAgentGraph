@@ -161,6 +161,9 @@ function nodePorts(node: NodeBase): { inputs: DataPort[]; outputs: DataPort[] } 
   }
   const inputs = normalizePorts(node.data?.inputs, "input");
   const outputs = normalizePorts(node.data?.outputs, "output");
+  if (node.data?.portsCustomized === true) {
+    return { inputs, outputs };
+  }
   if (inputs.length || outputs.length) {
     return { inputs, outputs };
   }
@@ -172,7 +175,8 @@ function isDataPortType(value: unknown): value is DataPortType {
 }
 
 function nodeTypeLabel(type: NodeType): string {
-  if (type === "planning") return "Planning";
+  if (type === "prompt") return "Requirement";
+  if (type === "planning") return "Design";
   if (type === "subgraph") return "Subgraph";
   if (type === "analysis") return "Analysis";
   if (type === "code") return "Execution";
@@ -358,7 +362,18 @@ export default function Canvas() {
   const [menu, setMenu] = useState<ContextMenu | null>(null);
   const [paneMenu, setPaneMenu] = useState<{ x: number; y: number } | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
-  const { run, runCode, replayTools, runDag, expandPlanNodes, expandModuleGraph, runningId } = useRunNode();
+  const {
+    run,
+    runCode,
+    generateDesign,
+    runTestNode,
+    runReviewNode,
+    replayTools,
+    runDag,
+    expandPlanNodes,
+    expandModuleGraph,
+    runningId,
+  } = useRunNode();
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const projectDir = useGraphStore((s) => s.projectDir);
   const { screenToFlowPosition } = useReactFlow();
@@ -374,10 +389,15 @@ export default function Canvas() {
     : "";
   const contextMenuCanExplain = contextMenuNode !== undefined;
   const contextMenuIsCodeAnalysis = contextMenuNode?.type === "analysis";
-  const contextMenuCanGenerateNodes = contextMenuNode?.type === "planning" || contextMenuNode?.type === "subgraph";
+  const contextMenuCanGenerateDesign = contextMenuNode?.type === "planning";
+  const contextMenuCanGenerateNodes = contextMenuNode?.type === "subgraph";
   const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code" || contextMenuNode?.type === "planning" || contextMenuNode?.type === "analysis";
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
+  const contextMenuTaskRole = String(contextMenuNode?.data?.workflowRole ?? "").toLowerCase();
+  const contextMenuTaskText = `${contextMenuNode?.title ?? ""} ${String(contextMenuNode?.purpose ?? contextMenuNode?.data?.purpose ?? "")}`.toLowerCase();
+  const contextMenuCanRunTest = contextMenuNode?.type === "task" && (contextMenuTaskRole === "test" || /\btest\b|verify|validation/.test(contextMenuTaskText));
+  const contextMenuCanRunReview = contextMenuNode?.type === "task" && (contextMenuTaskRole === "review" || /review|audit|check/.test(contextMenuTaskText));
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -570,6 +590,18 @@ export default function Canvas() {
               {contextMenuIsCodeAnalysis ? "◇ Analyze Code" : "▶ Explain (AI)"}
             </button>
           ) : null}
+          {contextMenuCanGenerateDesign ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                generateDesign(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              Generate Design
+            </button>
+          ) : null}
           {contextMenuCanGenerateNodes ? (
             <button
               className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
@@ -580,6 +612,30 @@ export default function Canvas() {
               disabled={runningId !== null}
             >
               ✦ Generate Nodes
+            </button>
+          ) : null}
+          {contextMenuCanRunTest ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                runTestNode(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null || !projectDir}
+            >
+              Run Test
+            </button>
+          ) : null}
+          {contextMenuCanRunReview ? (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
+              onClick={() => {
+                runReviewNode(menu.nodeId);
+                closeMenu();
+              }}
+              disabled={runningId !== null}
+            >
+              Review
             </button>
           ) : null}
           {contextMenuCanEnter ? (

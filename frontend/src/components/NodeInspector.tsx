@@ -8,18 +8,131 @@ import {
   type ConfirmationAnswers,
   type ConfirmationRequest,
 } from "@/utils/confirmation";
-import { allowedNodeTypes, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
+import { allowedNodeTypes, type DataPort, type DataPortType, type NodeBase, type NodeType, type ToolTraceItem } from "@shared/types";
 import { toolSpec, TOOL_REGISTRY } from "@/toolRegistry";
 import { useSkillStore } from "@/store/skillStore";
 import { collectToolSteps } from "@/utils/toolSteps";
 import { tracePurpose } from "@/utils/traceNodes";
 
 function nodeTypeLabel(type: NodeType): string {
-  if (type === "planning") return "Planning";
+  if (type === "prompt") return "Requirement";
+  if (type === "planning") return "Design";
   if (type === "subgraph") return "Subgraph";
   if (type === "analysis") return "Analysis";
   if (type === "code") return "Execution";
   return type;
+}
+
+const DATA_PORT_TYPES: DataPortType[] = [
+  "unknown",
+  "graph",
+  "asset",
+  "debug",
+  "spline",
+  "point",
+  "polygon",
+  "bounds",
+];
+
+const DEFAULT_PORTS_BY_TYPE: Record<NodeType, { inputs: DataPort[]; outputs: DataPort[] }> = {
+  prompt: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "response", name: "Response", type: "unknown" }],
+  },
+  planning: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "plan", name: "Plan", type: "unknown" }],
+  },
+  subgraph: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "structure", name: "Structure", type: "graph" }],
+  },
+  memory: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "memory", name: "Memory", type: "unknown" }],
+  },
+  filescope: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "file_scope", name: "File Scope", type: "unknown" }],
+  },
+  analysis: {
+    inputs: [{ id: "project", name: "Project", type: "unknown" }],
+    outputs: [{ id: "analysis", name: "Analysis", type: "unknown" }],
+  },
+  code: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  api: {
+    inputs: [{ id: "request", name: "Request", type: "unknown" }],
+    outputs: [{ id: "response", name: "Response", type: "unknown" }],
+  },
+  asset: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "asset", name: "Asset", type: "asset" }],
+  },
+  agent: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  task: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  tool: {
+    inputs: [{ id: "in", name: "In", type: "unknown" }],
+    outputs: [{ id: "out", name: "Out", type: "unknown" }],
+  },
+  semantic: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+};
+
+function isDataPortType(value: unknown): value is DataPortType {
+  return typeof value === "string" && DATA_PORT_TYPES.includes(value as DataPortType);
+}
+
+function portIdFromName(name: string, fallback: string): string {
+  const id = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_ -]/g, "")
+    .replace(/[\s-]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return id || fallback;
+}
+
+function normalizeInspectorPorts(value: unknown, fallbackPrefix: "input" | "output"): DataPort[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((raw, index): DataPort[] => {
+    if (typeof raw === "string") {
+      return [{ id: `${fallbackPrefix}_${index + 1}`, name: raw, type: "unknown" }];
+    }
+    if (!raw || typeof raw !== "object") return [];
+    const candidate = raw as Partial<DataPort>;
+    const name = typeof candidate.name === "string" && candidate.name.trim()
+      ? candidate.name
+      : typeof candidate.id === "string" && candidate.id.trim()
+        ? candidate.id
+        : `${fallbackPrefix} ${index + 1}`;
+    return [{
+      id: typeof candidate.id === "string" && candidate.id.trim()
+        ? candidate.id
+        : portIdFromName(name, `${fallbackPrefix}_${index + 1}`),
+      name,
+      type: isDataPortType(candidate.type) ? candidate.type : "unknown",
+    }];
+  });
+}
+
+function editablePorts(node: NodeBase): { inputs: DataPort[]; outputs: DataPort[] } {
+  const inputs = normalizeInspectorPorts(node.data?.inputs, "input");
+  const outputs = normalizeInspectorPorts(node.data?.outputs, "output");
+  if (node.data?.portsCustomized === true || inputs.length || outputs.length) {
+    return { inputs, outputs };
+  }
+  return DEFAULT_PORTS_BY_TYPE[node.type] ?? DEFAULT_PORTS_BY_TYPE.task;
 }
 
 export type InspectorView = "props" | "output" | "scope";
@@ -35,8 +148,21 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     if (!self?.parentId) return null;
     return s.nodes.find((n) => n.id === self.parentId)?.type ?? null;
   });
-  const { run, runCode, replayTools, runSkill, expandPlanNodes, expandModuleGraph, cancel, runningId } = useRunNode();
+  const {
+    run,
+    runCode,
+    generateDesign,
+    runTestNode,
+    runReviewNode,
+    replayTools,
+    runSkill,
+    expandPlanNodes,
+    expandModuleGraph,
+    cancel,
+    runningId,
+  } = useRunNode();
   const updateNode = useGraphStore((s) => s.updateNode);
+  const updateLinks = useGraphStore((s) => s.updateLinks);
   const projectDir = useGraphStore((s) => s.projectDir);
   const enterSubgraph = useGraphStore((s) => s.enterSubgraph);
   const openOutputPanel = useOutputPanelStore((s) => s.open);
@@ -67,11 +193,48 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const isGraphNode = node.type === "planning" || node.type === "subgraph";
   const isCodeAnalysisNode = node.type === "analysis";
   const isPlanningNode = node.type === "planning";
-  const canGenerateNodes = isGraphNode;
+  const isTaskNode = node.type === "task";
+  const taskRole = String(node.data?.workflowRole ?? "").toLowerCase();
+  const taskText = `${node.title} ${purpose}`.toLowerCase();
+  const isTestNode = isTaskNode && (taskRole === "test" || /\btest\b|verify|validation/.test(taskText));
+  const isReviewNode = isTaskNode && (taskRole === "review" || /review|audit|check/.test(taskText));
+  const canGenerateNodes = node.type === "subgraph";
   const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
   const needsConfirmation = node.data?.status === "needs_confirmation" && confirmation !== null;
+  const ports = editablePorts(node);
+
+  const commitPorts = (
+    direction: "inputs" | "outputs",
+    nextPorts: DataPort[],
+    changed?: { oldId: string; newId?: string },
+  ) => {
+    useGraphStore.getState().patchNodeData(node.id, {
+      inputs: direction === "inputs" ? nextPorts : ports.inputs,
+      outputs: direction === "outputs" ? nextPorts : ports.outputs,
+      portsCustomized: true,
+    });
+    if (!changed) return;
+    updateLinks((links) => {
+      if (!changed.newId) {
+        return links.filter((link) =>
+          direction === "inputs"
+            ? !(link.target === node.id && link.targetHandle === changed.oldId)
+            : !(link.source === node.id && link.sourceHandle === changed.oldId),
+        );
+      }
+      return links.map((link) => {
+        if (direction === "inputs" && link.target === node.id && link.targetHandle === changed.oldId) {
+          return { ...link, targetHandle: changed.newId };
+        }
+        if (direction === "outputs" && link.source === node.id && link.sourceHandle === changed.oldId) {
+          return { ...link, sourceHandle: changed.newId };
+        }
+        return link;
+      });
+    });
+  };
 
   // Save this code node's tool subgraph as a reusable, parameterized skill.
   const saveAsSkill = () => {
@@ -228,6 +391,29 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             />
           </div>
 
+          <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Ports</span>
+              <span className="text-[10px] text-zinc-600">
+                semantic labels and connection anchors
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <PortEditor
+                title="Inputs"
+                direction="inputs"
+                ports={ports.inputs}
+                onChange={(next, changed) => commitPorts("inputs", next, changed)}
+              />
+              <PortEditor
+                title="Outputs"
+                direction="outputs"
+                ports={ports.outputs}
+                onChange={(next, changed) => commitPorts("outputs", next, changed)}
+              />
+            </div>
+          </div>
+
           <div className="col-span-12 flex flex-wrap gap-2 pt-1 border-t border-zinc-800/60">
             {isRunning ? (
               <button className="px-3 py-1 bg-red-700 rounded text-xs" onClick={cancel}>
@@ -243,14 +429,44 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 >
                   {isCodeAnalysisNode ? "◇ Analyze Code" : "▶ Explain"}
                 </button>
+                {isPlanningNode ? (
+                  <button
+                    className="px-3 py-1 bg-purple-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => generateDesign(node.id)}
+                    disabled={runningId !== null}
+                    title="Generate a Markdown + Mermaid design spec for downstream Execution nodes."
+                  >
+                    Generate Design
+                  </button>
+                ) : null}
                 {canGenerateNodes ? (
                   <button
                     className="px-3 py-1 bg-purple-700 rounded text-xs disabled:opacity-50"
                     onClick={() => expandPlanNodes(node.id, "design")}
                     disabled={runningId !== null}
-                    title={isPlanningNode ? "在规划器内部生成数据流设计（drill-in）" : "生成内部数据流子节点"}
+                    title="Generate internal structure nodes for this Subgraph."
                   >
                     ✦ Generate Nodes
+                  </button>
+                ) : null}
+                {isTestNode ? (
+                  <button
+                    className="px-3 py-1 bg-blue-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => runTestNode(node.id)}
+                    disabled={runningId !== null || !projectDir}
+                    title={!projectDir ? "Select Project Dir before running tests." : "Run the configured whitelisted test command without LLM."}
+                  >
+                    Run Test
+                  </button>
+                ) : null}
+                {isReviewNode ? (
+                  <button
+                    className="px-3 py-1 bg-amber-700 rounded text-xs disabled:opacity-50"
+                    onClick={() => runReviewNode(node.id)}
+                    disabled={runningId !== null}
+                    title="Review upstream design, diff, and test results."
+                  >
+                    Review
                   </button>
                 ) : null}
                 {canGenerateModuleGraph ? (
@@ -368,21 +584,51 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             </div>
           ) : null}
 
+          {isTaskNode ? (
+            <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="min-w-56 flex-1">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Workflow Role</span>
+                  <select
+                    className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 text-xs outline-none focus:border-accent"
+                    value={String(node.data?.workflowRole ?? "")}
+                    onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { workflowRole: e.target.value || undefined })}
+                  >
+                    <option value="">auto</option>
+                    <option value="test">test</option>
+                    <option value="review">review</option>
+                  </select>
+                </label>
+                <label className="min-w-64 flex-[2]">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Test Command</span>
+                  <input
+                    className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 font-mono text-xs outline-none focus:border-accent"
+                    value={String(node.data?.testCommand ?? "npm test")}
+                    onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { testCommand: e.target.value })}
+                  />
+                </label>
+              </div>
+              <div className="text-[10px] text-zinc-600">
+                Test nodes run a whitelisted command without LLM. Review nodes read upstream outputs and produce a review report.
+              </div>
+            </div>
+          ) : null}
+
           {isCodeNode ? (
             <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Skills</span>
+                <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Advanced Automation</span>
                 <button
                   className="px-2 py-0.5 bg-purple-800 rounded text-[11px] disabled:opacity-50"
                   onClick={saveAsSkill}
                   disabled={runningId !== null}
                   title="把该执行器内部的 tool 子图存成可复用、可传参的技能"
                 >
-                  ★ Save as Skill
+                  Save Macro (Experimental)
                 </button>
               </div>
               {skills.length === 0 ? (
-                <div className="text-[10px] text-zinc-600 italic">还没有保存的技能。先在执行器内部搭好 tool 子图，再点 Save as Skill。</div>
+                <div className="text-[10px] text-zinc-600 italic">No saved macros yet. This records low-level Execution tool steps; workflow templates will replace this path later.</div>
               ) : (
                 <div className="space-y-1.5">
                   {skills.map((skill) => (
@@ -617,7 +863,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                   : isCodeAnalysisNode
                     ? "选择 Project Dir 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
                   : isGraphNode
-                    ? "填写 Purpose 后直接点 ✦ Generate Nodes 展开子节点；想先看/改规划可先点 ▶ Explain"
+                    ? "Design 节点用 Generate Design 生成 Markdown + Mermaid 设计产物；Subgraph 可用 Generate Nodes 展开内部结构。"
                     : "点 ▶ Explain 文本展开"}
               </div>
             )
@@ -687,6 +933,111 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   }
 
   return null;
+}
+
+function uniquePortId(ports: DataPort[], base: string): string {
+  let candidate = base;
+  let suffix = 2;
+  const existing = new Set(ports.map((port) => port.id));
+  while (existing.has(candidate)) {
+    candidate = `${base}_${suffix}`;
+    suffix += 1;
+  }
+  return candidate;
+}
+
+function PortEditor({
+  title,
+  direction,
+  ports,
+  onChange,
+}: {
+  title: string;
+  direction: "inputs" | "outputs";
+  ports: DataPort[];
+  onChange: (ports: DataPort[], changed?: { oldId: string; newId?: string }) => void;
+}) {
+  const fallbackPrefix = direction === "inputs" ? "input" : "output";
+  const addPort = () => {
+    const id = uniquePortId(ports, `${fallbackPrefix}_${ports.length + 1}`);
+    onChange([...ports, { id, name: direction === "inputs" ? "Input" : "Output", type: "unknown" }]);
+  };
+
+  return (
+    <div className="rounded border border-zinc-800 bg-canvas/40 p-2">
+      <div className="mb-1.5 flex items-center gap-2">
+        <span className="text-[10px] text-zinc-400 uppercase tracking-wide">{title}</span>
+        <button
+          type="button"
+          className="ml-auto rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-300 hover:border-accent hover:text-accent"
+          onClick={addPort}
+        >
+          + Port
+        </button>
+      </div>
+      {ports.length === 0 ? (
+        <div className="rounded border border-dashed border-zinc-800 px-2 py-3 text-center text-[11px] text-zinc-600">
+          No {title.toLowerCase()}
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {ports.map((port, index) => (
+            <div key={index} className="grid grid-cols-[1fr_1fr_112px_auto] gap-1.5">
+              <input
+                className="min-w-0 rounded border border-zinc-700 bg-canvas px-1.5 py-1 text-[11px] outline-none focus:border-accent"
+                value={port.name}
+                placeholder="Name"
+                title="Visible port label"
+                onChange={(e) => {
+                  const name = e.target.value;
+                  onChange(ports.map((item, i) => i === index ? { ...item, name } : item));
+                }}
+              />
+              <input
+                className="min-w-0 rounded border border-zinc-700 bg-canvas px-1.5 py-1 font-mono text-[11px] outline-none focus:border-accent"
+                value={port.id}
+                placeholder="id"
+                title="Stable handle id used by links"
+                onChange={(e) => {
+                  const oldId = port.id;
+                  const nextId = uniquePortId(
+                    ports.filter((_, i) => i !== index),
+                    portIdFromName(e.target.value, `${fallbackPrefix}_${index + 1}`),
+                  );
+                  onChange(
+                    ports.map((item, i) => i === index ? { ...item, id: nextId } : item),
+                    { oldId, newId: nextId },
+                  );
+                }}
+              />
+              <select
+                className="rounded border border-zinc-700 bg-canvas px-1.5 py-1 text-[11px] outline-none focus:border-accent"
+                value={port.type}
+                onChange={(e) => {
+                  const type = isDataPortType(e.target.value) ? e.target.value : "unknown";
+                  onChange(ports.map((item, i) => i === index ? { ...item, type } : item));
+                }}
+              >
+                {DATA_PORT_TYPES.map((type) => (
+                  <option key={type} value={type}>{type}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:border-red-500 hover:text-red-300"
+                title="Delete port and its connected links"
+                onClick={() => {
+                  onChange(ports.filter((_, i) => i !== index), { oldId: port.id });
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function getConfirmationRequest(value: unknown): ConfirmationRequest | null {
