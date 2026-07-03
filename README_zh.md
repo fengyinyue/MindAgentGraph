@@ -1,7 +1,7 @@
 # MindAgentGraph
 
 <p align="center">
-  <b>节点式 AI 创作规划工具</b>，面向需要长期规划、拆解和执行复杂项目的创作者与开发者。
+  <b>面向 AI 工程工作流的可视化节点编排工具</b>
 </p>
 
 <p align="center">
@@ -10,214 +10,229 @@
 
 ---
 
-## 这是什么？
+## 这是什么
 
-MindAgentGraph **不是聊天 AI**。它是一个用于组织 AI 工作上下文的可视化节点系统——你可以把它理解为一个控制面板，其中节点、连线、上下文、记忆和文件范围共同定义了 AI 的工作边界。
+MindAgentGraph 不是另一个聊天窗口，也不是把 Claude Code、Codex、Cursor 之类的工具简单包装成多个 Agent。
 
-你不用再和越来越长的聊天记录较劲，而是构建一个**可视化的思维节点 DAG**。每个节点都是一个独立工作单元，拥有自己的目标、Prompt、记忆引用、文件范围、依赖关系和执行输出。连线定义上下游关系与上下文继承。图结构既是你的**项目计划**，也是你的 **AI 执行仪表盘**。
+它的目标是把常见的 AI 工程流程沉淀成可视化、可复用、可审计的工作流：
 
-## 聊天式 AI 的问题
+```text
+Requirement -> Analysis -> Design -> File Scope -> Execution -> Test -> Review
+```
 
-聊天式 AI 在复杂项目中会逐渐失控：
+你可以像搭 ComfyUI 工作流一样，把一次软件开发任务拆成多个节点。每个节点都有明确的输入、输出、职责、系统提示词、文件作用域和运行结果。连线不是装饰，而是表示上游产物如何传递给下游节点。
 
-- **上下文混乱。** 长对话容易跑偏，几周后很难回过头来审视或调整某个计划。
-- **修改越界。** AI 看到太多项目内容，会修改不该动的文件。
-- **缺少全局视角。** 任务、依赖、记忆和结果散落在各轮对话中，没有鸟瞰图。
-- **多 Agent 协作混乱。** 多个 Agent 或子任务协作时，缺少明确的边界、通信记录和调度机制。
-- **资源分散。** 代码、设计、设定和计划分散在不同工具中，缺乏统一结构。
+核心价值不是“多开几个 AI”，而是让 AI 工作过程从一次性聊天变成稳定的工程流程。
 
-MindAgentGraph 的核心目标是把 AI 工作从"连续聊天"改造成**结构化节点规划与执行**。
+## 为什么需要它
+
+单纯用聊天式 AI 做复杂项目时，常见问题是：
+
+- 上下文越来越长，任务边界变模糊。
+- 分析、设计、实现、测试、Review 混在一起，难以复用。
+- 成功的一次经验很难沉淀成下次可运行的流程。
+- AI 容易读取或修改不该动的文件。
+- 中间产物散落在聊天记录里，后续节点无法稳定消费。
+
+MindAgentGraph 的做法是把这些过程拆成节点，让每一步都有可见产物，并且可以被下游节点继续使用。
 
 ## 核心理念
 
-- **节点**不是代码块，而是 AI 的思维结构：任务、模块、Agent、资源或系统组件。
-- AI 在 **当前节点的上下文范围内** 工作，不污染整个工程。
-- 节点负责管理自己的 **Prompt、Memory、目标、文件范围、依赖关系和输出**。
-- 连线表示 **上下游依赖、上下文继承或 Agent 通信关系**。
-- 图结构既是**持续演进的项目计划**，也是**可视化的执行控制面板**。
+- **节点是工作流算子，不是聊天 Agent。** 节点应该有清晰的输入和输出。
+- **连线表达数据流。** 上游节点的结构化输出可以绑定到下游节点的输入参数。
+- **中间产物可见、可编辑、可复用。** Analysis、Design、Execution、Test、Review 都应该留下清晰结果。
+- **执行节点保持少而准。** Execution 节点负责实际修改文件；设计图里的每个模块不应该自动变成一个执行器。
+- **工作流比工具轨迹更值得复用。** 未来更重要的是保存 Workflow Template，而不是只保存某一次工具调用轨迹。
 
-## 图类型设计
+## 推荐工作流
 
-MindAgentGraph 将高层工作流规划和细节结构设计拆成两种图：
-
-- **Planning**（`planning`）是高层执行计划。它负责把目标拆成粗粒度工作包，例如调研、架构、实现、验证和交付。Planning 展开使用普通规划逻辑，并刻意避免端口级数据流。
-- **Subgraph**（`subgraph`）是细节数据流或依赖图。它适合资源管线、模块结构、资产流、生成规则、节点蓝图等需要显式输入、输出和类型化连线的场景。
-- **轻量 subgraph** 会把 Subgraph 的内部节点收纳在 Subgraph 节点内部。双击或进入 Subgraph 可以查看内部细节，顶层 Planning 保持干净，只负责组织和调度。
-- 旧版 `workflow_graph`、`structure_graph`、`code_analysis` 节点会在读取时兼容为 `planning`、`subgraph`、`analysis`。
-
-典型协作方式是：先用 Planning 决定项目要做什么；遇到需要具体管线、依赖或数据结构的步骤时，放入 Subgraph；后续 code/task 节点再根据 Subgraph 的结构输出进行实现、验证或交付。
-
-### 设计层 / 执行层（两层模型）
-
-项目按"先设计、后执行"分成两层，落在每个 **Planning（规划器）** 节点上：
-
-- **设计层（drill-in 进入 Planning 内部）** — 双击进入规划器，用 **✦ Generate Nodes** 生成内部的数据流架构设计（带端口、连线）。它只表达架构、不执行。
-- **执行层（Planning 外层）** — 在规划器上点 **▶ 执行**，在外层分解出可执行的 **code 节点**兄弟，由"执行器"实际跑工具产出代码。
-
-数据流的端口连线是**设计期**的表达，不参与执行；真正干活靠 `Planning → code → tools`。配套有**分层约束**：执行层（顶层及非设计容器内部）只允许 `planning / code / tool / analysis`，其余类型只能作为 Planning 内部的设计节点使用。
-
-## 目标用户
-
-- 独立游戏开发者
-- 使用 Claude Code、Cursor、Codex 等工具进行 AI 辅助编程的开发者
-- 需要拆解复杂项目的产品/技术负责人
-- 使用 AI 进行长期工程迭代的开发者
-- 需要组织设定、资源、任务和 Agent 工作流的创作者
-
-第一阶段优先服务 **AI 辅助软件/游戏项目规划与执行** 场景。
-
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
-
-## 功能特性
-
-- **可视化 DAG 画布** — 基于 @xyflow/react 的无限画布。拖拽、连接、配置节点。内置小地图、背景网格和缩放控制。
-- **节点类型** — `planning`、`subgraph`、`prompt`、`memory`、`filescope`、`analysis`、`code`、`api`、`asset`、`agent`、`task`、`tool`、`semantic`。其中 `code` 是唯一会"执行"（调用文件工具改文件）的节点，`task` 仅作为人工检查点，`tool` 是物化的单个工具调用。
-- **AI 图生成** — 输入目标语句，AI 自动生成完整的 DAG 连接图
-- **两层执行模型** — Planning 节点可 drill-in 做数据流**设计**，并用 **▶ 执行** 在外层分解出可执行的 code 节点（详见上文"设计层 / 执行层"）
-- **图展开** — Planning 内部展开为带端口的数据流设计；外层 ▶ 执行 展开为粗粒度 code 工作包（默认深度展开 Subgraph）
-- **原生代码执行器** — code 节点由 DeepSeek 驱动，通过受 FileScope 约束的文件工具（`list_files` / `read_file` / `grep` / `apply_patch` / `write_file` / `delete_file` / `move_file` / `mkdir` / `inspect_project` / `run_command` / `get_diff`）在工程内自主读写代码、识别项目并运行白名单验证命令，同时捕获改动文件与 diff
-- **工具执行可视化与确定性重放** — 每次 code 运行的工具调用都被记录为 Tool Trace，可一键 **Render Subgraph** 物化成 code 节点内部的 `tool` 子图；编辑某步参数后可 **▶ Replay** 按图**脱离 LLM 确定性重跑**（含真实写文件）
-- **端口数据绑定 + 常量节点** — `tool` 节点的端口由工具注册表派生，把上游工具的输出端口连到下游的输入端口即完成数据绑定；`value` 常量节点可把字面值接到任意输入端口
-- **代码分析** — 只读项目扫描、Claude Code 驱动的只读代码分析（`analysis` 节点）
-- **模块图** — 代码分析结果可展开为可视化模块依赖图
-- **逐节点上下文控制** — 三种模式：`inherit`（继承上游 + 内存）、`explicit`（仅节点字段）、`isolated`（无上游、无内存）
-- **确认协议** — 节点在遇到阻塞时发出结构化 `mag-confirmation` 块，暂停 DAG 执行等待用户输入
-- **DAG 执行** — 基于拓扑排序的顺序执行，通过 SSE 流式传输实时进度、日志和 Token 用量
-- **多供应商支持** — Anthropic Claude、OpenAI、DeepSeek、本地 Claude CLI、本地 Codex CLI
-- **项目持久化** — `.mag` 项目文件夹，包含 JSON 图、Markdown 内存和资源存储，完全兼容 Git
-- **可调整面板** — 可折叠的左侧面板（项目浏览器）、底部面板（监视器）、右侧面板（节点检查器）
-- **Markdown 输出查看器** — 全屏面板，支持原始文本和渲染 Markdown 预览模式
-
-## 架构
-
+```text
+Requirement
+  -> Analysis
+  -> Design
+  -> File Scope
+  -> Execution
+  -> Test
+  -> Review
 ```
-┌─────────────────────────────────────────────────┐
-│                  Tauri 2.x (Rust)                │
-│              桌面壳 + sidecar 管理               │
-├─────────────────────────────────────────────────┤
-│   React 18 + TypeScript + @xyflow/react         │
-│   Zustand (状态管理) + Tailwind CSS              │
-│   react-resizable-panels                        │
-├─────────────────────────────────────────────────┤
-│   FastAPI (Python 3.11+)                        │
-│   SSE 流式端点                                   │
-│   AI 供应商: Anthropic / DeepSeek / CLI          │
-├─────────────────────────────────────────────────┤
-│   .mag 项目文件夹 (JSON + Markdown)              │
-│   本地存储，Git 友好                              │
-└─────────────────────────────────────────────────┘
+
+每个阶段的职责：
+
+| 节点 | 职责 | 典型输出 |
+| --- | --- | --- |
+| Requirement | 记录需求、目标、约束和验收标准 | 结构化需求说明 |
+| Analysis | 只读分析项目，不修改文件 | 相关文件、现状、风险、建议入口 |
+| Design | 生成设计方案或内容规划 | Markdown、Mermaid、实施步骤、验收标准 |
+| File Scope | 限定可读写文件范围 | allow / deny 路径规则 |
+| Execution | 执行代码或文件修改 | 修改摘要、changed files、diff、运行记录 |
+| Test | 运行确定性的测试命令 | test report、stdout、stderr、失败原因 |
+| Review | 审查结果、风险和遗漏 | 问题清单、修复建议、是否通过 |
+
+## 节点类型
+
+当前常用节点类型包括：
+
+- `planning`：高层规划节点，用于组织流程和拆解目标。
+- `subgraph`：内部子图，用于表达更细的依赖、管线或结构。
+- `prompt`：普通提示词节点，用于生成文本产物。
+- `memory`：长期上下文或知识记录。
+- `filescope`：文件作用域节点，约束 Execution 可触碰的路径。
+- `analysis`：只读分析节点，可以读取项目但不修改文件。
+- `design`：设计产物节点，适合生成方案、图表、文档和规格。
+- `code`：执行节点，界面中可显示为 Execution，负责真实读写文件和运行白名单命令。
+- `test`：测试节点，负责运行测试命令并输出测试报告。
+- `task`：普通任务节点，适合作为人工检查点、说明、总结或流程占位。
+- `tool`：工具节点，用于表达可物化的工具调用。
+- `asset` / `api` / `agent` / `semantic`：用于更具体的资源、接口、代理或语义组织场景。
+
+## 数据流和上下文
+
+MindAgentGraph 支持节点端口和上下文模式：
+
+- 节点可以手动编辑 `inputs` / `outputs`。
+- `sourceHandle` 对应上游结构化输出字段。
+- `targetHandle` 对应下游输入参数。
+- Runner 会按照端口绑定构造当前节点上下文。
+- 节点默认只读取直接输入的数据，避免递归读取造成重复上下文。
+
+这让工作流更接近真正的数据管线，而不是“把所有上游聊天记录都塞给模型”。
+
+## 执行模型
+
+Execution 节点使用原生代码 runner：
+
+- 根据 File Scope 限定文件读写范围。
+- 支持 `list_files`、`read_file`、`grep`、`apply_patch`、`write_file`、`move_file`、`delete_file`、`mkdir`、`inspect_project`、`run_command`、`get_diff` 等工具。
+- `run_command` 使用白名单，避免任意命令执行。
+- 每次运行都会记录工具调用、变更文件和 diff。
+- Analysis 节点使用只读模式，适合在执行前理解项目。
+
+Test 节点负责运行确定性的测试命令，例如：
+
+```bash
+uv run pytest
+python -m pytest
+npm test
 ```
+
+推荐做法是：Execution 负责实现，Test 负责验证，Review 负责判断风险和是否需要下一轮修复。
+
+## 示例项目
+
+仓库内包含 `.mag` 示例工作流：
+
+- `examples/python-dev.mag`：Python 开发流程示例。
+- `examples/character-design.mag`：角色设计流程示例。
+- `examples/novel-writing.mag`：小说写作流程示例。
+
+这些示例用于验证节点数据流、系统提示词、输入输出面板和 DAG 执行方式。
 
 ## 快速开始
 
 ### 环境要求
 
-- **Node.js** ≥ 18
-- **Python** ≥ 3.11
-- **uv**（Python 包管理器）— `pip install uv`
-- **Rust**（仅 Tauri 桌面模式需要）
+- Node.js 18+
+- Python 3.11+
+- uv
+- Rust，仅 Tauri 桌面模式需要
 
-### 浏览器开发模式（推荐首选）
-
-无需安装 Rust。一条命令同时启动前后端。
-
-**一次性准备：**
+### 安装依赖
 
 ```bash
-# 前端依赖
 cd frontend
 npm install
 
-# 后端依赖
 cd ../backend
 uv venv --python 3.13
 uv pip install -e .
 ```
 
-**启动：**
+### 浏览器开发模式
+
+在项目根目录执行：
 
 ```bash
-# 在项目根目录执行 — 同时启动后端 (端口 8765) 和前端 (端口 1420)
 npm run dev
 ```
 
-Windows 用户也可双击 `start-dev.bat`。
+它会同时启动：
 
-浏览器打开 `http://localhost:1420`。
+- 后端 FastAPI：`http://localhost:8765`
+- 前端 Vite：`http://localhost:1420`
 
-**快速验证：**
-1. 在顶部输入框中输入目标，例如"做一个 RPG 游戏的城市生成器"
-2. 点击 **Generate** — 画布出现 5 个节点的 DAG
-3. 点击任意节点，在右侧面板查看 type、contextMode、fileScope 等属性
+Windows 用户也可以双击：
 
-> **注意：** 未配置 API Key 时，planner 会自动回退到离线 demo 图，UI 流程仍可完整演示。
-
-### 配置 API Key
-
-点击工具栏右侧的 ⚙ 齿轮图标，在设置面板中配置供应商密钥。Key 仅保存在浏览器 localStorage 中，不会写入 `.mag` 项目文件。
-
-或通过环境变量配置：
-
-| 供应商 | 环境变量 | 默认模型 |
-|--------|---------|---------|
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
-| OpenAI | `OPENAI_API_KEY` | `gpt-4.1` |
-| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
+```text
+start-dev.bat
+```
 
 ### Tauri 桌面模式
-
-需要安装 Rust 和平台构建依赖（Windows 需要 Visual Studio Build Tools，macOS 需要 Xcode CLI tools）。
 
 ```bash
 cd src-tauri
 cargo tauri dev
 ```
 
-详见 [doc/quickstart.md](doc/quickstart.md) 中各平台的详细安装步骤。
+更详细的环境配置见 [doc/quickstart.md](doc/quickstart.md)。
+
+## API Key 配置
+
+可以在界面设置面板里配置模型供应商密钥。密钥保存在浏览器 `localStorage`，不会写入 `.mag` 项目文件。
+
+也可以通过环境变量配置：
+
+| 供应商 | 环境变量 |
+| --- | --- |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| DeepSeek | `DEEPSEEK_API_KEY` |
 
 ## 项目结构
 
-```
+```text
 MindAgentGraph/
-├── frontend/              # React 前端 (Vite + TypeScript + Tailwind)
-│   └── src/
-│       ├── api/           # API 客户端 + SSE 流式处理
-│       ├── components/    # Canvas、NodeInspector、Monitor、Settings 等
-│       ├── store/         # Zustand 状态 (graph、keys、monitor、panels)
-│       ├── hooks/         # useRunNode — 核心执行 hook（含 code 重放 replayTools）
-│       ├── toolRegistry.ts # 工具声明式注册表（名称/参数/端口）
-│       └── utils/         # 确认协议解析器
-├── backend/               # FastAPI Python 后端
-│   └── app/
-│       ├── main.py        # FastAPI 应用 + SSE 端点
-│       ├── services/      # Planner、Runner、DAG Executor、Code Runner
-│       │   └── providers/ # Anthropic、DeepSeek、Local CLI 供应商
-│       └── tests/
-├── src-tauri/             # Tauri Rust 桌面壳
-├── shared/                # 跨语言类型 + JSON Schema
-├── doc/                   # 设计文档 + 快速开始指南
-├── examples/              # Demo .mag 项目
-└── scripts/               # 开发启动脚本
+|-- frontend/      React + TypeScript + @xyflow/react 前端
+|-- backend/       FastAPI 后端和节点 runner
+|-- shared/        跨前后端共享类型和 JSON Schema
+|-- src-tauri/     Tauri 桌面壳
+|-- examples/      示例 .mag 项目
+|-- doc/           产品、设计和快速开始文档
+|-- scripts/       开发启动脚本
 ```
 
 ## 技术栈
 
 | 层级 | 技术 |
-|------|------|
-| 桌面壳 | Tauri 2.x (Rust) |
-| 前端 | React 18, TypeScript, @xyflow/react, Zustand, Tailwind CSS |
-| 后端 | FastAPI (Python 3.11+), PyInstaller sidecar |
-| AI 供应商 | Anthropic Claude SDK, OpenAI SDK, DeepSeek (兼容 OpenAI), 本地 CLI |
-| 存储 | `.mag` 项目文件夹 (JSON + Markdown)，Git 友好 |
-| 构建 | Vite, hatchling, Cargo, uv |
+| --- | --- |
+| 前端 | React 18、TypeScript、Vite、@xyflow/react、Zustand、Tailwind CSS |
+| 后端 | FastAPI、Python、Pydantic、SSE |
+| 桌面 | Tauri 2.x |
+| AI Provider | Anthropic、OpenAI、DeepSeek、本地 Claude CLI、本地 Codex CLI |
+| 存储 | `.mag` 项目文件夹，JSON + Markdown，Git 友好 |
+| 构建 | npm、uv、Cargo |
 
 ## 文档
 
-- [快速开始指南](doc/quickstart.md) — 浏览器开发模式和 Tauri 桌面模式的详细配置
-- [产品提案](doc/proposal.md) — 完整的产品愿景和设计理念
-- [概要设计](doc/high-level-design.md) — MVP 架构文档
-- [详细设计](doc/detailed-design.md) — 组件级设计规范
+- [快速开始](doc/quickstart.md)
+- [产品提案](doc/proposal.md)
+- [ComfyUI 风格 AI 工作流规划](doc/comfyui-style-ai-workflow-plan.md)
 
-## 开源协议
+## 当前阶段
+
+当前重点是打通一个可复用的 AI 工程闭环：
+
+```text
+Requirement -> Analysis -> Design -> Execution -> Test -> Review
+```
+
+短期目标：
+
+- 明确节点职责，减少 `task`、`test`、`code` 的语义混乱。
+- 让端口真正参与数据传递。
+- 改进输入面板、输出面板和系统提示词编辑体验。
+- 让示例工作流可以作为模板复用。
+- 逐步把 `Save as Skill` 升级为 `Save Workflow Template`。
+
+## License
 
 [GNU Affero General Public License v3.0](LICENSE)
