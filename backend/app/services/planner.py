@@ -105,7 +105,7 @@ EMIT_GRAPH_TOOL = {
                         "type": "string",
                         "enum": [
                             "prompt", "planning", "subgraph", "memory", "filescope",
-                            "analysis", "code", "api", "asset", "agent", "task",
+                            "analysis", "code", "api", "asset", "agent", "test", "task",
                         ],
                     },
                     "title": {"type": "string"},
@@ -396,7 +396,7 @@ Use emit_graph and return only structured nodes and links.
 Subgraph rules:
 1. Model concrete data, assets, processing steps, checks, previews, and outputs as explicit nodes.
 2. All processing or transformation nodes must use type="code". Never use type="semantic".
-3. Use type="asset" for explicit inputs, outputs, files, generated artifacts, or reusable resources; use type="task" for review, debug, validation, preview, or manual checkpoints.
+3. Use type="asset" for explicit inputs, outputs, files, generated artifacts, or reusable resources; use type="test" for automated test/validation execution; use type="task" for review, debug, preview, or manual checkpoints.
 4. Every node must include explicit inputs and outputs arrays. Each port must be {id, name, type}.
 5. Valid port types are: spline, point, polygon, bounds, graph, debug, asset, unknown.
 6. Every link must include sourceHandle, targetHandle, and label.
@@ -527,8 +527,8 @@ def _validate_structure_payload(payload: dict[str, Any]) -> dict[str, object]:
         node_type = str(raw.get("type") or "")
         if node_type == "semantic":
             raise ProviderError(f"Subgraph node {node_id} used forbidden type semantic")
-        if node_type not in {"asset", "code", "task"}:
-            raise ProviderError(f"Subgraph node {node_id} must use asset, code, or task type")
+        if node_type not in {"asset", "code", "test", "task"}:
+            raise ProviderError(f"Subgraph node {node_id} must use asset, code, test, or task type")
         if "inputs" not in raw or "outputs" not in raw:
             raise ProviderError(f"Subgraph node {node_id} must include inputs and outputs arrays")
         if not isinstance(raw.get("inputs"), list) or not isinstance(raw.get("outputs"), list):

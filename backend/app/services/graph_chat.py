@@ -65,7 +65,7 @@ GRAPH_EDIT_TOOL = {
                             "type": "string",
                             "enum": [
                                 "prompt", "planning", "subgraph", "memory", "filescope",
-                                "analysis", "code", "api", "asset", "agent", "task", "semantic",
+                                "analysis", "code", "api", "asset", "agent", "test", "task", "semantic",
                             ],
                         },
                         "title": {"type": "string"},

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 NodeType = Literal[
     "prompt", "planning", "subgraph", "memory", "filescope",
-    "analysis", "code", "api", "asset", "agent", "task", "tool", "semantic",
+    "analysis", "code", "api", "asset", "agent", "test", "task", "tool", "semantic",
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
 ProviderName = Literal["anthropic", "deepseek", "openai", "local-claude", "local-codex"]

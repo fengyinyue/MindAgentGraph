@@ -24,7 +24,7 @@ from app.services.providers.base import ProviderError
 
 CODE_DIFF_MAX_BYTES = 200_000
 SNAPSHOT_MAX_BYTES = 1_000_000
-NATIVE_MAX_TOOL_STEPS = 20
+NATIVE_MAX_TOOL_STEPS = 40
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 DEEPSEEK_DEFAULT_MODEL = "deepseek-v4-flash"
 RUN_COMMAND_MAX_OUTPUT = 30_000
@@ -36,7 +36,12 @@ RUN_COMMAND_ALLOWLIST: dict[tuple[str, ...], str] = {
     ("npm", "run", "test"): "Run npm test script",
     ("pytest",): "Run pytest",
     ("python", "-m", "pytest"): "Run pytest via python",
+    ("python", "-m", "compileall", "src"): "Compile Python source files",
     ("uv", "run", "pytest"): "Run pytest via uv",
+    ("uv", "run", "python", "-m", "pytest"): "Run pytest via uv python",
+    ("uv", "run", "python", "-m", "compileall", "src"): "Compile Python source files via uv",
+    ("uv", "run", "ruff", "check"): "Run ruff check via uv",
+    ("uv", "run", "ruff", "format", "--check"): "Check ruff formatting via uv",
     ("ruff", "check"): "Run ruff check",
     ("ruff", "format", "--check"): "Check ruff formatting",
     ("tsc", "--noEmit"): "Run TypeScript type check",
@@ -555,7 +560,13 @@ async def _capture_code_diff(
 
 def _matches_scope(rel_path: str, patterns: list[str]) -> bool:
     rel = rel_path.replace("\\", "/")
-    return any(fnmatch.fnmatch(rel, pattern.replace("\\", "/")) for pattern in patterns)
+    for raw_pattern in patterns:
+        pattern = raw_pattern.replace("\\", "/").rstrip("/")
+        if fnmatch.fnmatch(rel, pattern):
+            return True
+        if pattern.endswith("/**") and rel == pattern[:-3]:
+            return True
+    return False
 
 
 def _check_scope(rel_path: str, allow: list[str], deny: list[str]) -> None:

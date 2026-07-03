@@ -1,506 +1,341 @@
-# MindAgentGraph 产品提案
+# MindAgentGraph Proposal: ComfyUI-Style AI Engineering Workflow
 
-## 1. 产品定位
+## 1. 背景
 
-MindAgentGraph 是一个节点式 AI 创作规划工具，面向需要长期规划、拆解和执行复杂项目的创作者与开发者。
+MindAgentGraph 不应该只是把 Claude Code、Codex、Cursor 这类 AI 编程工具拆成多个聊天节点。  
+如果每个节点都只是一次独立的 Agent 调用，那么画布会变成“多个聊天框的可视化版本”，节点系统本身的价值会很弱。
 
-它不是传统聊天 AI，而是一个用于组织 AI 工作上下文的可视化节点系统。用户通过节点、连线、上下文、记忆和文件范围来约束 AI 的工作边界，让 AI 在明确的任务结构中协助规划、生成、解释和迭代项目。
-
-一句话定位：
-
-> AI 时代的 Unreal Blueprint + Notion + Agent OS。
-
-参考对象：
-
-- Unreal Blueprint：节点化结构和依赖关系
-- Houdini / ComfyUI：图式工作流和可组合流程
-- Notion：项目知识、任务和文档组织
-- Agent OS：多 Agent 协作、调度和执行记录
-
-## 2. 核心问题
-
-当前聊天式 AI 在复杂项目中有几个明显问题：
-
-- 上下文容易混乱，长期项目难以持续维护。
-- AI 对整个工程的理解范围过大，容易修改无关文件。
-- 任务拆分、执行、记忆和结果之间缺少可视化结构。
-- 多 Agent 协作缺少明确边界、通信记录和调度机制。
-- 创作型项目中的资源、设定、代码和计划分散在不同工具中。
-
-MindAgentGraph 的核心目标是把 AI 工作从“连续聊天”改造成“结构化节点规划与执行”。
-
-## 3. 核心理念
-
-- 节点不是简单的代码块，而是 AI 的思维结构。
-- 每个节点代表一个独立任务、模块、Agent、资源或系统。
-- AI 应该在当前节点的上下文范围内工作，而不是污染整个工程。
-- 节点负责管理 Prompt、Memory、目标、文件范围、依赖关系和执行输出。
-- 连线表示上下游依赖、上下文继承或 Agent 通信关系。
-- 图结构既是项目计划，也是 AI 执行的可视化控制面板。
-
-## 4. 目标用户
-
-优先面向以下用户：
-
-- 独立游戏开发者
-- AI 辅助编程用户
-- 需要拆解复杂项目的产品/技术负责人
-- 使用 Claude Code、Cursor、Codex 等工具进行长期工程迭代的开发者
-- 需要组织设定、资源、任务和 Agent 工作流的创作者
-
-第一阶段优先服务“AI 辅助软件/游戏项目规划与执行”场景。
-
-## 5. MVP 范围
-
-MVP 目标是验证“节点级上下文管理 + AI 规划执行”是否成立。
-
-MVP 必须包含：
-
-- 可视化 DAG 节点画布
-- 手动创建、编辑、拖拽、连接和删除节点
-- Planning 节点 Explain 生成规划文本
-- Planning 节点基于规划文本 Generate Nodes 展开子节点图
-- 节点级 Prompt、Memory、FileScope、ContextMode
-- 单节点 Explain 执行
-- Code 节点调用代码执行工具，并注入节点上下文和文件范围
-- DAG 按依赖顺序批量执行
-- 项目保存/加载
-- 基础 Provider 配置和模型切换
-- 右侧节点检查器
-- 基础执行日志和错误反馈
-
-MVP 暂不包含：
-
-- 完整多 Agent 运行时
-- 强制文件沙箱
-- 多用户协作
-- 实时云同步
-- 自动生成 Unreal Blueprint / PCG Graph / Behavior Tree
-- 完整多模态资源管理
-- 向量数据库级长期记忆
-- 插件市场或复杂权限系统
-
-## 6. 核心功能
-
-### 6.1 节点系统
-
-基础能力：
-
-- 创建节点
-- 编辑节点标题、类型、目标和 Prompt
-- 节点连接
-- 节点拖拽
-- 节点删除
-- 无限画布
-- DAG 拓扑执行
-
-后续能力：
-
-- 分组
-- 注释
-- 折叠
-- 子图 SubGraph
-- 节点模板
-- 节点版本历史
-
-### 6.2 节点类型
-
-| 类型 | 作用 | MVP 状态 |
-|------|------|----------|
-| Prompt | 承载普通 AI 任务，输出文本结果 | 必须 |
-| Planning | 根据目标生成规划文本，并可继续展开为子节点图 | 必须 |
-| Project Scan | 扫描已有工程结构，输出技术栈、关键文件、改动边界和风险 | MVP 增强 |
-| Code Analysis | 调用 Claude Code 只读分析已有代码，输出架构理解、实现入口和风险 | MVP 增强 |
-| Code | 生成或修改代码，受 FileScope 约束 | 必须 |
-| Memory | 读写长期记忆或项目知识 | 必须 |
-| File Scope | 定义允许/禁止访问的文件范围 | 必须 |
-| Task | 表示可执行任务及状态 | 后续 |
-| Agent | 表示独立 Agent 实例 | 后续 |
-| API | 调用外部服务或工具 | 后续 |
-| Asset | 绑定图片、视频、音频、3D 等资源 | 后续 |
-| Semantic | 表示概念、设定、语义地图或知识节点 | 后续 |
-
-### 6.3 AI Context System
-
-这是产品的核心。
-
-每个节点拥有独立上下文：
-
-- `purpose`：节点目标
-- `systemPrompt`：节点级系统提示
-- `memoryRef`：节点绑定的记忆文件或记忆键
-- `fileScope`：允许访问或建议处理的文件范围
-- `toolPolicy`：工具权限规则
-- `contextMode`：上下文继承模式
-- `inputs`：上游节点输出
-- `output`：当前节点执行结果
-- `runHistory`：执行历史和日志
-
-上下文模式：
-
-| 模式 | 行为 |
-|------|------|
-| `inherit` | 继承上游节点输出、读取 Memory，并拼入当前 Prompt |
-| `explicit` | 只使用当前节点显式字段和用户输入 |
-| `isolated` | 不继承上游，不读写 Memory，用于隔离任务 |
-
-执行时上下文拼装顺序：
-
-1. 全局系统规则
-2. 当前节点类型规则
-3. 当前节点 `systemPrompt`
-4. 当前节点 `purpose`
-5. 当前节点 `fileScope`
-6. 当前节点 `memoryRef` 内容
-7. 上游节点输出
-8. 用户本次执行输入
-
-FileScope 的语义需要明确区分两层：
-
-- MVP：作为提示约束注入给 AI 和代码工具。
-- 后续：升级为强制沙箱或文件访问拦截机制。
-
-### 6.4 Agent 系统
-
-Agent 是节点系统的高级形态。
-
-短期目标：
-
-- 每个节点具备独立 Prompt、Memory、ContextMode 和执行输出。
-- DAG 执行器可以按依赖顺序调度节点。
-
-中期目标：
-
-- 一个 Agent 节点对应一个独立运行时。
-- Agent 拥有生命周期：创建、运行、暂停、取消、完成、失败。
-- Agent 之间通过消息通道通信。
-- 总控 Agent 负责任务分发、结果汇总和冲突处理。
-
-后期目标：
-
-- 多 Agent 并行执行。
-- Agent 能订阅节点变化和项目事件。
-- Agent 可调用 MCP 工具和外部 API。
-
-### 6.5 AI 规划能力
-
-AI 不应该直接从一句话跳到生成代码，也不应该把“一句话生成整图”作为唯一入口。当前产品采用 Planning 节点驱动的两段式规划：先让 Planning 节点产出可读、可审查的规划文本，再基于这份文本展开节点图。
-
-推荐流程：
-
-1. 用户在画布中创建或选中一个 Planning 节点。
-2. 用户填写 Planning 节点的 `purpose`，描述项目目标或子系统目标。
-3. 用户执行 `Explain`，Planning 节点生成一份结构化规划文本。
-4. 用户审查、修改或补充这份规划文本。
-5. 用户执行 `Generate Nodes`，系统调用 `/plan/expand` 将规划文本展开为子节点和依赖连线。
-6. 新生成的根子节点自动连接到当前 Planning 节点下游，形成可继续执行的 DAG。
-7. 每个子节点携带 `title`、`type`、`purpose`、`contextMode`、`memoryRef` 等上下文字段。
-8. 用户审查和调整节点。
-9. 对关键节点继续执行 Explain，生成模块清单、状态设计、交互设计、文件改动范围和验收标准。
-10. AI 按 DAG 顺序执行非 Code 节点，先沉淀上游输出。
-11. Code 节点在继承上游输出后，再调用代码执行工具实现或修改工程。
-12. 执行输出回写到节点和 Memory。
-
-节点生成规则：
-
-- 小/中型项目应直接展开为可执行节点，例如 `prompt`、`task`、`code`、`asset`，避免为了层级感额外生成 Planning 子节点。
-- 大型项目可以为独立子系统生成 Planning 子节点，后续再分别 Explain 和 Generate Nodes。
-- 当目标明显基于已有项目，例如“当前项目”“已有代码”“修复”“改造”“接入”“重构”，Planning 节点在 Generate Nodes 时应优先生成 Project Scan 节点。
-- Project Scan 节点负责回答“这个项目现在是什么样”，后续 Planning、Prompt、Task、Code 节点继承它的输出。
-- Code Analysis 节点负责回答“基于真实代码应该怎么改”，默认接在 Project Scan 之后、Code 节点之前。
-- Code 节点不应在执行时偷偷创建 Project Scan 节点；图结构应由 Planning 或用户显式创建，保持用户对工作流的控制。
-- `Generate Nodes` 输入应优先使用 Planning 节点已有 `output`，而不是重新解释用户的一句话目标。
-- 展开结果应控制在 3-10 个节点，保证图可读、可审查、可继续细化。
-- 展开时需要重写 AI 返回的临时 ID，生成稳定的本地节点 ID，并将根子节点连回当前 Planning 节点。
-
-Project Scan 使用原则：
-
-- 当任务需要理解已有工程目录、技术栈、入口文件、路由、状态管理、API 层或测试方式时使用。
-- 当任务只是产品构思、文案、独立代码片段、全新项目规划，或用户已经明确指定极小改动文件时，可以不使用。
-- 用户可以手动创建 Project Scan 节点；默认路径是由 Planning 节点在 Generate Nodes 时自动创建。
-- Project Scan 的输出应写入节点 `output`，必要时也可写入 `memoryRef`，供后续节点复用。
-- Project Scan 只做只读扫描和摘要，不修改工程文件。
-
-Code Analysis 使用原则：
-
-- 当 Project Scan 只能提供粗结构，但任务需要理解真实代码、调用链、模块边界或实现入口时使用。
-- Code Analysis 默认调用 Claude Code 只读分析项目，允许读取/搜索文件，但不允许创建、修改、删除文件。
-- Code Analysis 的输出应包含相关模块、建议改动文件、风险、验收点和后续 Code 节点的执行建议。
-- 对已有项目的复杂改动，推荐链路是 `Project Scan -> Code Analysis -> Code`。
-- 简单、文件范围明确的小改动可以跳过 Code Analysis，直接让 Code 节点继承 Project Scan 或人工说明。
-
-规划应分为“粗规划”和“细化规划”两层：
-
-- 粗规划负责把 Planning 节点的目标拆成一份可读规划文本，例如需求、模块设计、UI 设计、数据模型、实现计划和风险点。
-- 细化规划负责把规划文本或关键 Planning 子节点展开成可执行节点，例如需要哪些模块、每个模块的职责、状态流转、文件范围、接口约定和验收条件。
-- Code 节点不应该只依赖用户的一句话目标，而应该继承上游细化节点的输出后再执行。
-- 如果上游节点尚未执行出 `output`，下游节点只能依据自身 `title`、`purpose`、Prompt 和 Memory 推断，结果不稳定。
-- 产品应提供“Generate Nodes / 展开节点”能力：用户可以选中一个已有输出的 Planning 节点，让 AI 基于规划文本生成更细的子节点、子图或详细任务清单。
-
-例如用户输入“生成一个番茄钟软件”时，推荐结构不是直接生成一个 Code 节点，而是先形成：
+更有价值的方向是参考 ComfyUI 的工作流模式：
 
 ```text
-Planning: 番茄钟软件
-└── Explain 输出：产品目标、核心模块、交互流程、实现顺序
-    └── Generate Nodes
-        ├── 产品需求
-        ├── UI / 交互设计
-        ├── 计时状态机
-        ├── 设置与持久化
-        ├── 测试验收
-        └── Code: 实现番茄钟
+节点不是一个个会聊天的 Agent，而是输入输出明确、可组合、可复用的工程算子。
 ```
 
-其中 Code 节点继承前面节点产出的模块职责、状态设计、界面行为和验收标准，再进入代码执行。
-
-当用户目标缺少影响节点图结构的关键约束时，Planner 不应直接猜测并生成最终 DAG，而应先进入澄清流程：
-
-1. Planner 判断目标是否缺少关键约束，例如目标平台、技术栈、生成范围、是否基于当前工程、是否允许创建或修改文件。
-2. 如果信息足够，直接生成节点图。
-3. 如果信息不足，返回 1-3 个关键澄清问题，并为每个问题提供推荐默认选项。
-4. 用户可以回答问题后生成，也可以选择使用默认假设生成。
-5. 澄清问题、默认假设和用户回答应写入图结构，例如生成 `Clarification` 或 `Planning` 节点，供后续节点继承。
-
-澄清问题应遵循以下原则：
-
-- 只询问会显著影响 DAG 结构、Code 节点范围或文件改动风险的问题。
-- 每次最多询问 3 个问题，避免退化成冗长表单。
-- 每个问题都应有默认建议，用户可以跳过。
-- 默认假设必须可见、可追踪，不能隐藏在模型内部。
-- 高风险选择，例如允许批量执行 Code 节点或修改当前工程，应要求用户显式确认。
-
-示例：
+MindAgentGraph 的目标应该是成为：
 
 ```text
-CityGenerator
-├── Terrain
-├── Road
-├── Plot
-├── Building
-├── NPC
-└── Traffic
+面向 AI 软件工程的可视化工作流编排工具。
 ```
 
-### 6.6 多模态资源管理
+它的核心价值不是单次生成更多代码，而是把常见 AI 工程过程沉淀成可复用、可检查、可组合的工作流。
 
-后续节点应支持绑定：
+## 2. 产品定位
 
-- 图片
-- 视频
-- 音频
-- 文档
-- Prompt
-- 参考资料
-- 3D 资源
+MindAgentGraph 应该帮助用户把一次软件工程任务拆成稳定流程：
 
-MVP 只需要预留数据结构和资源引用字段，不需要完整资源管理器。
+```text
+Requirement -> Analysis -> Design -> File Scope -> Execution -> Test -> Review
+```
 
-### 6.7 游戏开发支持
+每个阶段都有明确职责：
 
-游戏开发是重点方向，但不应挤压 MVP。
+- `Requirement`：保存任务描述、约束和验收目标。
+- `Analysis`：只读分析项目结构、关键文件、风险点和上下文。
+- `Design`：生成结构化设计说明，而不是直接生成执行节点。
+- `File Scope`：定义允许修改和禁止修改的文件范围。
+- `Execution`：在受控文件范围内执行真实代码修改。
+- `Test`：运行白名单测试或构建命令，产出可复查结果。
+- `Review`：读取上游设计、修改和测试结果，给出通过或修复建议。
 
-优先支持：
+这个流程可以保存成模板，在不同项目和任务中复用。
 
-- Unreal Engine 项目结构理解
-- Houdini / PCG 工作流规划
-- Blueprint 逻辑拆解
-- Behavior Tree 设计
-- State Machine 设计
+## 3. 与 Claude Code / Codex 的区别
 
-后续支持：
+Claude Code 和 Codex 擅长在一次上下文里完成复杂任务，但它们的流程通常存在于聊天记录中：
 
-- 自动生成 Blueprint 描述
-- 自动生成 PCG Graph 结构
-- 自动生成行为树结构
-- 与 Unreal Editor 插件联动
+- 分析、设计、执行、测试、Review 容易混在一起。
+- 中间产物不够结构化。
+- 成功经验不容易保存为可复用流程。
+- 每次任务都需要重新组织上下文。
+- 很难把“这个项目的稳定做法”沉淀成模板。
 
-第一阶段只做“规划和代码辅助”，不直接生成引擎原生资产。
+MindAgentGraph 不需要替代这些工具，而是应该把它们变成工作流中的执行引擎之一。
 
-## 7. UI 结构
+换句话说：
 
-### 7.1 主布局
+```text
+Claude Code / Codex 解决“这次怎么做”。
+MindAgentGraph 解决“这类任务以后都怎么做”。
+```
 
-左侧面板：
+## 4. 核心原则
 
-- 节点树
-- 项目结构
-- Agent 列表
+### 4.1 节点是算子，不是模块
 
-中间区域：
+Planning 或 Design 生成的“模块图”不应该直接等价于一组 Execution 节点。
 
-- 无限画布
-- 节点编辑
-- AI 工作流
-- Planning 节点右键菜单中的 Explain / Generate Nodes
+例如：
 
-右侧面板：
+```text
+UI 模块、状态模块、测试模块
+```
 
-- 当前节点上下文
-- Prompt
-- Memory
-- FileScope
-- 执行输出
-- Planning 节点在有输出后显示 Generate Nodes 动作
-- 资源引用
+这些更像设计图中的系统模块，而不是一个个可执行步骤。  
+Execution 节点应该代表一次可验证的修改批次，而不是一个抽象模块。
 
-底部面板：
+更合理的关系是：
 
-- AI 日志
-- Agent 通信
-- Token 使用情况
-- 执行队列
+```text
+模块图帮助理解系统结构。
+Execution 节点执行一个可验证的工程改动。
+```
 
-规划澄清交互：
+### 4.2 节点必须有明确输入输出
 
-- 当 Planner 需要用户补充关键信息时，优先使用内嵌的“规划澄清面板”，显示在画布顶部、右侧面板或规划输入区域下方，而不是默认弹出模态框。
-- 澄清面板应展示 1-3 个问题、推荐默认选项和用户回答入口。
-- 面板底部提供“根据回答生成”“使用默认假设生成”“取消”三个动作。
-- 使用默认假设生成时，应把默认假设写入节点图或项目 metadata，方便后续追踪。
-- 弹窗只用于阻塞性或高风险确认，例如覆盖当前节点图、批量执行 Code 节点、允许修改当前工程、跳过关键澄清并使用默认假设。
-- 普通澄清不应使用聊天气泡长对话，以免产品退化成传统 Chat UI。
+每个节点都应该回答：
 
-### 7.2 视觉风格
+- 它读取什么输入？
+- 它产出什么结果？
+- 下游节点如何消费它？
+- 它是否会修改项目文件？
+- 它的结果是否可以被缓存、编辑和复用？
 
-- 深色工作台风格
-- 类似 UE Blueprint + Figma + Notion 的组合
-- 强调信息密度和长期使用效率
-- 节点连接线可在后续加入流动效果
-- 避免过度装饰，优先保证复杂图的可读性
+节点输出不应该只是聊天文本，而应该逐步结构化。
 
-## 8. 技术方向
+### 4.3 工作流模板优先于 Tool Trace 复用
 
-前端：
+当前 `Replay` 和 `Save as Skill` 更像保存某次 Execution 的工具调用轨迹。  
+这对调试有价值，但层级太低，更像“录屏宏”。
 
-- React
-- TypeScript
-- Tailwind CSS
-- React Flow / @xyflow/react
-- Zustand
+真正应该优先复用的是完整工程流程：
 
-后端：
+```text
+Requirement -> Analysis -> Design -> File Scope -> Execution -> Test -> Review
+```
 
-- Python FastAPI
-- REST API + SSE
-- Provider 抽象层
-- Agent Runtime
-- Memory 服务
-- Task Queue
+未来应从 `Save as Skill` 演进为：
 
-桌面端：
+```text
+Save Workflow Template
+```
 
-- Tauri
-- 本地文件读写
-- 后端 sidecar 进程管理
+模板保存的是节点图、输入输出契约、默认参数和运行策略，而不是某一次具体工具调用序列。
 
-AI Provider：
+### 4.4 中间产物必须可见、可编辑、可传递
 
-- Claude
-- DeepSeek
-- OpenAI
-- Gemini
+每个阶段都应该留下清晰产物：
 
-存储：
+- Analysis 输出项目结构、关键文件、风险点。
+- Design 输出设计图、实施步骤、验收标准、文件范围建议。
+- File Scope 输出 allow / deny 路径。
+- Execution 输出修改摘要、changed files、diff、后续建议。
+- Test 输出命令、退出码、stdout、stderr。
+- Review 输出结论、问题列表、修复建议和证据。
 
-- `.mag/` 项目目录
-- JSON 存图结构
-- Markdown 存 Memory
-- assets 目录存资源
-- Git 友好格式
+用户可以编辑这些产物，再让下游节点继续执行。
 
-## 9. 阶段规划
+## 5. 推荐节点语义
 
-### Phase 1：节点规划与执行
+### 5.1 Requirement
 
-目标：验证核心闭环。
+Requirement 是任务源头。  
+它不应该要求用户必须先运行一次才对下游可见。
 
-- DAG 画布
-- 节点编辑
-- Planning 节点 Explain 生成规划文本
-- Planning 节点 Generate Nodes 展开子节点图
-- 节点级上下文
-- Explain / Code 执行
-- DAG 顺序执行
-- 项目保存加载
+后续实现应保证：
 
-### Phase 2：工作台布局与可观测性
+```text
+Requirement 的 title / purpose / output 都可以作为下游上下文。
+```
 
-目标：让工具可用于真实项目。
+这样用户只要在 Requirement 写任务描述，Analysis 和 Design 就能直接读取。
 
-- 左侧项目浏览器
-- 底部日志面板
-- 执行队列
-- Token 统计
-- 节点运行历史
-- 更完整的错误展示
+### 5.2 Analysis
 
-### Phase 3：Agent 编排
+Analysis 是只读代码分析节点。  
+它应该使用 Execution 节点的只读模式：
 
-目标：从节点执行升级为 Agent 协作。
+- 可以读取文件。
+- 可以 grep / inspect project。
+- 不允许写文件。
+- 不允许运行会修改项目的工具。
 
-- Agent 节点运行时
-- Agent 通信协议
-- Supervisor 调度
-- 多 Agent 任务分发
-- 并行执行和取消
+Analysis 的输出应该帮助后续 Design 和 Execution 理解项目，而不是直接修改代码。
 
-### Phase 4：资源与语义系统
+### 5.3 Design
 
-目标：支持复杂创作项目。
+Design 由原来的 Planning 节点演化而来。  
+它的核心动作是 `Generate Design`。
 
-- 多模态资源绑定
-- 资源管理器
-- Semantic Map
-- 长期记忆索引
-- 自动上下文压缩
+`Generate Design` 不生成单独文件，也不自动生成外部节点。  
+它生成的是 Design 节点自己的结构化输出，供下游读取。
 
-### Phase 5：游戏开发深度集成
+推荐输出结构：
 
-目标：服务 Unreal / Houdini / PCG 工作流。
+```text
+Goal
+Design Graph
+Implementation Steps
+Recommended File Scope
+Acceptance Criteria
+Execution Notes
+```
 
-- 游戏项目结构理解
-- Blueprint / Behavior Tree / State Machine 结构生成
-- PCG Graph 规划
-- 引擎插件或桥接工具
+Design 的目标是产出施工图，而不是替用户直接拆一堆执行器。
 
-## 10. 非目标
+### 5.4 File Scope
 
-以下内容不是 MVP 目标：
+File Scope 节点用于固化文件权限范围。
 
-- 替代完整 IDE
-- 替代 Unreal Editor 或 Houdini
-- 成为通用聊天机器人
-- 做复杂团队协作 SaaS
-- 直接执行不受控的任意代码
-- 承诺 AI 一次性完成大型项目
-- 在没有用户确认的情况下批量改动整个工程
+推荐连接：
 
-## 11. 验收标准
+```text
+Design -> File Scope -> Execution
+```
 
-MVP 达成标准：
+它应该产出：
 
-- 用户可以创建 Planning 节点，填写目标并通过 Explain 生成规划文本。
-- 用户可以基于 Planning 节点输出执行 Generate Nodes，并生成连接到该 Planning 节点下游的子节点图。
-- 用户可以手动调整节点和连线。
-- 每个节点可以配置 Prompt、Memory、FileScope 和 ContextMode。
-- 单个节点可以独立执行并保存输出。
-- DAG 可以按依赖顺序执行。
-- Code 节点执行时能注入当前节点上下文和文件范围。
-- 项目可以保存并重新打开。
-- 节点执行失败时有明确错误反馈。
-- 用户能看出 AI 当前在哪个节点工作、使用了什么上下文、产生了什么输出。
+```text
+allow:
+- src/**
+- backend/app/services/code_runner.py
 
-体验达成标准：
+deny:
+- .env
+- node_modules/**
+- dist/**
+```
 
-- 用户不是在和 AI 闲聊，而是在搭建 AI 工作结构。
-- 用户可以控制 AI 的工作边界。
-- 项目的规划、执行、记忆和输出都能回到节点图中。
-- 大型项目可以被拆成可理解、可执行、可追踪的局部任务。
+当前版本中，Execution 还不会自动读取上游 File Scope。  
+短期需要把 File Scope 内容手动填到 Execution 节点的 fileScope。  
+后续应支持 Execution 自动合并上游 File Scope。
 
-## 12. 与其他文档的分工
+### 5.5 Execution
 
-本文档负责定义产品愿景、范围边界和阶段目标。
+Execution 是真实代码执行节点。  
+它负责在项目目录和文件范围约束下修改代码。
 
-详细内容放在其他文档中维护：
+Execution 不应该对应“一个设计模块”，而应该对应“一次可验证的修改批次”。
 
-- [high-level-design.md](high-level-design.md)：系统概要架构
-- [detailed-design.md](detailed-design.md)：详细设计、数据结构和接口
+例如：
+
+```text
+Execution 1: 实现数据结构
+Execution 2: 接入 UI
+Execution 3: 补测试并修复失败
+```
+
+每个 Execution 都应该有清楚的输入、输出和验收方式。
+
+### 5.6 Task
+
+Task 是当前 Phase 1 的通用动作节点，用来承接 Test 和 Review。
+
+短期通过 `workflowRole` 区分：
+
+```text
+workflowRole = test
+workflowRole = review
+```
+
+Test Task 的原理是：
+
+```text
+读取 Test Command
+检查命令是否在白名单中
+调用 /run/tool-sequence
+在 Project Dir 下执行命令
+把 exit code / stdout / stderr 写回节点
+```
+
+Review Task 会读取上游 Design、Execution 和 Test 结果，生成：
+
+```text
+Verdict
+Findings
+Required Fixes
+Evidence
+```
+
+长期应考虑把 Task 拆成更明确的节点：
+
+```text
+Test
+Review
+Approval
+Report
+Publish
+```
+
+## 6. Run DAG 的目标形态
+
+当前 Run DAG 更接近“批量文本节点执行”。  
+它还没有真正支持任意节点的真实语义执行。
+
+理想的 Run DAG 应该是一个节点调度器：
+
+```text
+Requirement -> 普通文本输入或直接透传
+Analysis    -> 只读 Native Runner
+Design      -> Generate Design
+File Scope  -> 解析或生成 allow / deny
+Execution   -> Native Code Runner
+Test        -> Tool Sequence
+Review      -> Review Prompt
+```
+
+这意味着 Run DAG 不能再对所有节点使用同一个 runner。  
+它必须根据节点类型和 workflowRole 选择不同执行器。
+
+## 7. Phase 1 范围
+
+Phase 1 的目标是建立最小可用的工程工作流骨架。
+
+已完成或应完成的内容：
+
+- 顶层节点列表支持 `Requirement / Analysis / Design / File Scope / Execution / Task`。
+- UI 中把 Code 改名为 Execution。
+- Analysis 使用 Execution 的只读模式。
+- Design 提供 `Generate Design`。
+- Planning 的外部执行节点生成功能默认关闭。
+- Task 支持 `test` 和 `review` 角色。
+- Test Task 使用白名单命令运行。
+- Review Task 读取上游输出并生成评审结果。
+
+Phase 1 的成功标准：
+
+```text
+用户可以手动搭出 Requirement -> Analysis -> Design -> Execution -> Test -> Review，
+并且每个节点的产物能被下游节点读取。
+```
+
+## 8. Phase 1.1 建议
+
+Phase 1.1 应该补齐当前最影响体验的上下文传递问题。
+
+建议优先级：
+
+1. Requirement 的 purpose 自动传给下游。
+2. Execution 自动读取上游 File Scope。
+3. Run DAG 根据节点类型选择 runner。
+4. Test Task 支持节点级 working directory。
+5. File Scope 支持从 Design 输出中一键提取 allow / deny。
+6. Design 输出可以选择保存为项目文档。
+
+## 9. Phase 2 建议
+
+Phase 2 应该围绕工作流模板展开：
+
+- `Save Workflow Template`
+- `Load Workflow Template`
+- 模板参数化
+- 节点输入输出契约
+- 模板运行前检查
+- 工作流运行报告
+- 成功工作流版本管理
+
+模板不应该只是保存画布布局，而应该保存可复用工程方法。
+
+## 10. 关键设计判断
+
+MindAgentGraph 的长期价值不在于“比 Claude Code 更会写代码”。  
+它的价值在于把 AI 工程过程变成可见、可编辑、可复用、可运行的工作流。
+
+因此产品设计应该持续围绕这个判断收敛：
+
+```text
+不要把节点做成多个聊天 Agent。
+要把节点做成可组合的工程算子。
+```
+
+当一个功能无法提高工作流复用、上下文传递、产物可见性或执行可控性时，就应该谨慎加入。
+

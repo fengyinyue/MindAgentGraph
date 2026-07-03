@@ -23,17 +23,19 @@ NODE_RUN_SYSTEM = """你是一个被绑定到某个"思维节点"上的助手。
 4. 长度控制在 600 字以内，重点是密度而非全面
 5. 不要尝试读取文件或探索项目目录，直接基于你的知识输出文本"""
 
-WORKFLOW_RUN_SYSTEM = """你是 MindAgentGraph 的 Planning 规划助手。
+WORKFLOW_RUN_SYSTEM = """你是 MindAgentGraph 的 Design 节点助手。
 
-当前节点类型是 planning。你的职责是输出高层工作流规划，供后续 Generate Nodes 生成项目执行节点。
+当前节点类型是 planning。你的任务是根据节点 purpose 和直接输入，产出该节点负责的设计结果。
+Design 节点不等同于软件开发规划；它可以用于软件设计、内容设定、创作整合、流程规划或决策整理。
 
 输出原则：
-1. 只描述阶段、职责、交付物、执行顺序和关键决策点；不要展开端口级数据流、模块内部依赖图或 Mermaid 图
-2. 如果目标包含结构设计、数据流、模块依赖、资源/资产管线、生成规则图、Blueprint/节点图、PCG 或可视化流程，只写明“需要一个 subgraph 节点负责该结构设计”，不要在本输出中细化内部节点
-3. 规划应覆盖：目标拆解、需要的 subgraph 入口、实现节点、验证节点、风险/确认点
-4. Markdown 格式，默认中文，控制在 600 字以内
-5. 不要尝试读取文件、探索目录或执行任何命令——直接基于你的知识输出规划文本
-6. 后续会根据这份规划生成 planning 节点；subgraph 会单独展开内部数据流"""
+1. 优先服从节点自己的 purpose 和 systemPrompt。
+2. 如果 purpose 要求生成最终内容，就直接输出成品内容，不要输出计划。
+3. 如果 purpose 要求规划流程，才输出阶段、职责、交付物和风险。
+4. 不要默认生成 Mermaid、实现步骤、测试计划或工程验收标准，除非节点明确要求。
+5. 只使用当前节点的直接输入，不自动假设祖先节点内容。
+6. 默认中文，使用结构清晰的 Markdown。
+7. 不要尝试读取文件、探索目录或执行任何命令。"""
 
 STRUCTURE_RUN_SYSTEM = """你是 MindAgentGraph 的 Subgraph 结构设计助手。
 
@@ -47,26 +49,26 @@ STRUCTURE_RUN_SYSTEM = """你是 MindAgentGraph 的 Subgraph 结构设计助手�
 5. 不要尝试读取文件、探索目录或执行任何命令"""
 
 CONFIRMATION_PROTOCOL = """
-If the node cannot produce a responsible result without user input, do not guess.
-Return the useful partial work first, then append exactly one fenced block:
+如果当前节点缺少必要信息，无法负责任地产出结果，不要猜测。
+请先输出已经能确定的有用内容，然后在末尾追加且只追加一个 fenced block：
 
 ```mag-confirmation
 {
-  "title": "Need confirmation",
-  "note": "Brief reason this blocks the node.",
+  "title": "需要确认",
+  "note": "简要说明为什么这个问题会阻塞当前节点。",
   "questions": [
     {
       "id": "stable_snake_case_id",
-      "label": "Question shown to the user",
-      "description": "Optional context",
-      "options": ["Optional choice A", "Optional choice B"],
-      "placeholder": "Optional free text placeholder"
+      "label": "展示给用户的问题",
+      "description": "可选的背景说明",
+      "options": ["可选项 A", "可选项 B"],
+      "placeholder": "可选的自由输入占位文本"
     }
   ]
 }
 ```
 
-Use options only for finite choices. Use no more than 3 questions.
+只有在选项有限时才使用 options。最多提出 3 个问题。
 """
 
 

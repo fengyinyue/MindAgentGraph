@@ -4,10 +4,19 @@
       "id": "86aab747-1d28-4bb7-bbcc-e41b1e25e04f",
       "type": "prompt",
       "title": "输入需求",
-      "position": { "x": -513, "y": 41.3 },
+      "position": {
+        "x": -513,
+        "y": 41.3
+      },
       "contextMode": "inherit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {},
       "runHistory": [],
       "resourceRefs": [],
@@ -17,150 +26,366 @@
       "id": "requirements",
       "type": "planning",
       "title": "需求分析",
-      "position": { "x": -154.1, "y": 12.2 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": ["docs/**"], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": -154.1,
+        "y": 12.2
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [
+          "docs/**"
+        ],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "明确项目目标、功能清单与验收标准",
         "inputs": [
-          { "id": "requirement", "name": "需求输入", "type": "unknown" }
+          {
+            "id": "requirement",
+            "name": "需求输入",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "req_doc", "name": "需求文档", "type": "unknown" }
+          {
+            "id": "req_doc",
+            "name": "需求文档",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "明确项目目标、功能清单与验收标准"
     },
     {
       "id": "env_setup",
       "type": "code",
       "title": "环境初始化",
-      "position": { "x": 320, "y": -120 },
+      "position": {
+        "x": 320,
+        "y": -120
+      },
       "contextMode": "explicit",
-      "fileScope": { "allow": ["pyproject.toml", ".python-version", "src/**", "tests/**", ".gitignore"], "deny": [] },
-      "toolPolicy": { "tools": ["bash"], "deny": [] },
+      "fileScope": {
+        "allow": [
+          "pyproject.toml",
+          ".python-version",
+          "src/**",
+          "tests/**",
+          ".gitignore"
+        ],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [
+          "bash"
+        ],
+        "deny": []
+      },
       "data": {
         "purpose": "创建目录结构、pyproject.toml、虚拟环境",
         "inputs": [
-          { "id": "req_doc", "name": "需求文档", "type": "unknown" }
+          {
+            "id": "req_doc",
+            "name": "需求文档",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "skeleton", "name": "项目骨架", "type": "unknown" }
+          {
+            "id": "skeleton",
+            "name": "项目骨架",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "创建目录结构、pyproject.toml、虚拟环境"
     },
     {
       "id": "architecture",
       "type": "planning",
       "title": "架构设计",
-      "position": { "x": 320, "y": 120 },
+      "position": {
+        "x": 320,
+        "y": 120
+      },
       "contextMode": "explicit",
-      "fileScope": { "allow": ["docs/**", "src/**"], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "fileScope": {
+        "allow": [
+          "docs/**",
+          "src/**"
+        ],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "模块划分、接口定义、依赖关系设计",
         "inputs": [
-          { "id": "req_doc", "name": "需求文档", "type": "unknown" }
+          {
+            "id": "req_doc",
+            "name": "需求文档",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "arch_plan", "name": "架构方案", "type": "unknown" }
+          {
+            "id": "arch_plan",
+            "name": "架构方案",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "模块划分、接口定义、依赖关系设计"
     },
     {
       "id": "implement",
       "type": "code",
       "title": "功能实现",
-      "position": { "x": 680, "y": -120 },
+      "position": {
+        "x": 680,
+        "y": -120
+      },
       "contextMode": "explicit",
-      "fileScope": { "allow": ["src/**"], "deny": ["tests/**"] },
-      "toolPolicy": { "tools": ["bash", "read_file", "write_file"], "deny": [] },
+      "fileScope": {
+        "allow": [
+          "src/**"
+        ],
+        "deny": [
+          "tests/**"
+        ]
+      },
+      "toolPolicy": {
+        "tools": [
+          "bash",
+          "read_file",
+          "write_file"
+        ],
+        "deny": []
+      },
       "data": {
         "purpose": "按架构设计编写核心模块代码",
         "inputs": [
-          { "id": "skeleton", "name": "项目骨架", "type": "unknown" },
-          { "id": "arch_plan", "name": "架构方案", "type": "unknown" }
+          {
+            "id": "skeleton",
+            "name": "项目骨架",
+            "type": "unknown"
+          },
+          {
+            "id": "arch_plan",
+            "name": "架构方案",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "src_code", "name": "源代码", "type": "unknown" }
+          {
+            "id": "src_code",
+            "name": "源代码",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "按架构设计编写核心模块代码"
     },
     {
       "id": "tests",
       "type": "code",
       "title": "测试编写",
-      "position": { "x": 680, "y": 120 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": ["tests/**", "src/**"], "deny": [] },
-      "toolPolicy": { "tools": ["bash"], "deny": [] },
+      "position": {
+        "x": 952.2,
+        "y": 69.5
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [
+          "tests/**",
+          "src/**"
+        ],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [
+          "bash"
+        ],
+        "deny": []
+      },
       "data": {
-        "purpose": "编写单元测试与集成测试，运行 pytest",
+        "purpose": "根据架构方案编写单元测试与集成测试文件，不负责运行 pytest",
         "inputs": [
-          { "id": "arch_plan", "name": "架构方案", "type": "unknown" }
+          {
+            "id": "arch_plan",
+            "name": "架构方案",
+            "type": "unknown"
+          },
+          {
+            "id": "src_code",
+            "name": "源代码",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "test_report", "name": "测试报告", "type": "unknown" }
+          {
+            "id": "test_code",
+            "name": "测试代码",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "根据架构方案编写单元测试与集成测试文件，不负责运行 pytest"
+    },
+    {
+      "id": "test_run",
+      "type": "test",
+      "title": "测试运行",
+      "position": {
+        "x": 1385,
+        "y": 83.1
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "运行测试命令并输出测试报告",
+        "testCommand": "uv run pytest",
+        "inputs": [
+          {
+            "id": "test_code",
+            "name": "测试代码",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "test_report",
+            "name": "测试报告",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "运行测试命令并输出测试报告"
     },
     {
       "id": "review",
-      "type": "agent",
+      "type": "analysis",
       "title": "代码审查",
-      "position": { "x": 1040, "y": 0 },
+      "position": {
+        "x": 1668.8,
+        "y": -119.5
+      },
       "contextMode": "explicit",
-      "fileScope": { "allow": ["src/**", "tests/**", "pyproject.toml"], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "fileScope": {
+        "allow": [
+          "src/**",
+          "tests/**",
+          "pyproject.toml"
+        ],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "lint 检查、代码质量审查、重构建议",
         "inputs": [
-          { "id": "src_code", "name": "源代码", "type": "unknown" },
-          { "id": "test_report", "name": "测试报告", "type": "unknown" }
+          {
+            "id": "src_code",
+            "name": "源代码",
+            "type": "unknown"
+          },
+          {
+            "id": "test_report",
+            "name": "测试报告",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "review_report", "name": "审查报告", "type": "unknown" }
+          {
+            "id": "review_report",
+            "name": "审查报告",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "lint 检查、代码质量审查、重构建议"
     },
     {
       "id": "package",
       "type": "code",
       "title": "打包发布",
-      "position": { "x": 1532, "y": -1 },
+      "position": {
+        "x": 2028.8,
+        "y": -119.5
+      },
       "contextMode": "explicit",
-      "fileScope": { "allow": ["pyproject.toml", "Dockerfile", ".github/**", "dist/**"], "deny": [] },
-      "toolPolicy": { "tools": ["bash"], "deny": [] },
+      "fileScope": {
+        "allow": [
+          "pyproject.toml",
+          "Dockerfile",
+          ".github/**",
+          "dist/**"
+        ],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [
+          "bash"
+        ],
+        "deny": []
+      },
       "data": {
         "purpose": "构建 wheel / sdist，生成 Dockerfile 与 CI 配置",
         "inputs": [
-          { "id": "review_report", "name": "审查报告", "type": "unknown" }
+          {
+            "id": "review_report",
+            "name": "审查报告",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "artifacts", "name": "发布产物", "type": "unknown" }
+          {
+            "id": "artifacts",
+            "name": "发布产物",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "构建 wheel / sdist，生成 Dockerfile 与 CI 配置"
     }
   ],
   "links": [
@@ -221,8 +446,24 @@
       "label": "源代码"
     },
     {
-      "id": "e7",
+      "id": "e6a",
+      "source": "implement",
+      "target": "tests",
+      "sourceHandle": "src_code",
+      "targetHandle": "src_code",
+      "label": "源代码"
+    },
+    {
+      "id": "e6b",
       "source": "tests",
+      "target": "test_run",
+      "sourceHandle": "test_code",
+      "targetHandle": "test_code",
+      "label": "测试代码"
+    },
+    {
+      "id": "e7",
+      "source": "test_run",
       "target": "review",
       "sourceHandle": "test_report",
       "targetHandle": "test_report",

@@ -3,11 +3,14 @@ from pathlib import Path
 import pytest
 
 from app.services.code_runner import (
+    NATIVE_MAX_TOOL_STEPS,
     READ_ONLY_NATIVE_TOOLS,
+    RUN_COMMAND_ALLOWLIST,
     _execute_native_tool,
     _tool_apply_patch,
     _tool_delete_file,
     _tool_inspect_project,
+    _tool_list_files,
     _tool_mkdir,
     _tool_move_file,
     _tool_read_file,
@@ -39,6 +42,16 @@ def test_native_read_file_respects_deny_scope(tmp_path: Path) -> None:
             allow=[],
             deny=["secret.txt"],
         )
+
+
+def test_native_list_files_allows_directory_matched_by_glob_scope(tmp_path: Path) -> None:
+    source = tmp_path / "src" / "app.py"
+    source.parent.mkdir()
+    source.write_text("print('ok')\n", encoding="utf-8")
+
+    result = _tool_list_files(str(tmp_path), {"path": "src"}, allow=["src/**"], deny=[])
+
+    assert result["files"] == ["src/app.py"]
 
 
 def test_native_apply_patch_replaces_unique_text(tmp_path: Path) -> None:
@@ -163,6 +176,15 @@ async def test_native_run_command_allows_whitelisted_command(tmp_path: Path) -> 
     assert affected == []
     assert result["command"] == "python -m pytest"
     assert isinstance(result["exitCode"], int)
+
+
+def test_native_runner_defaults_allow_common_uv_validation_commands() -> None:
+    assert NATIVE_MAX_TOOL_STEPS == 40
+    assert ("uv", "run", "ruff", "check") in RUN_COMMAND_ALLOWLIST
+    assert ("uv", "run", "ruff", "format", "--check") in RUN_COMMAND_ALLOWLIST
+    assert ("uv", "run", "python", "-m", "pytest") in RUN_COMMAND_ALLOWLIST
+    assert ("python", "-m", "compileall", "src") in RUN_COMMAND_ALLOWLIST
+    assert ("uv", "run", "python", "-m", "compileall", "src") in RUN_COMMAND_ALLOWLIST
 
 
 @pytest.mark.asyncio

@@ -9,13 +9,14 @@ export type NodeType =
   | "api"
   | "asset"
   | "agent"
+  | "test"
   | "task"
   | "tool"
   | "semantic";
 
 export const NODE_TYPES: NodeType[] = [
   "prompt", "planning", "subgraph", "memory", "filescope",
-  "analysis", "code", "api", "asset", "agent", "task", "tool", "semantic",
+  "analysis", "code", "api", "asset", "agent", "test", "task", "tool", "semantic",
 ];
 
 // Workflow layer: top-level nodes should be reusable AI engineering operators,
@@ -26,6 +27,7 @@ export const EXECUTION_LAYER_TYPES: NodeType[] = [
   "planning",
   "filescope",
   "code",
+  "test",
   "task",
 ];
 

@@ -21,6 +21,7 @@ import "@xyflow/react/dist/style.css";
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
 import { useOutputPanelStore } from "@/store/outputPanelStore";
+import { defaultSystemPromptForNodeType } from "@/utils/defaultSystemPrompts";
 import { allowedNodeTypes, type DataPort, type DataPortType, type NodeBase, type NodeType, type Edge as EdgeT } from "@shared/types";
 import { toolPorts } from "@/toolRegistry";
 
@@ -35,6 +36,7 @@ const typeColor: Record<string, string> = {
   api: "#efef6c",
   asset: "#ef6cef",
   agent: "#6cefef",
+  test: "#60a5fa",
   task: "#bcef6c",
   tool: "#f0a868",
   semantic: "#a0a0a0",
@@ -140,6 +142,10 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "result", name: "Result", type: "unknown" }],
   },
+  test: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "test_report", name: "Test Report", type: "unknown" }],
+  },
   task: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "result", name: "Result", type: "unknown" }],
@@ -180,6 +186,7 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "subgraph") return "Subgraph";
   if (type === "analysis") return "Analysis";
   if (type === "code") return "Execution";
+  if (type === "test") return "Test";
   return type.charAt(0).toUpperCase() + type.slice(1);
 }
 
@@ -206,6 +213,9 @@ function MagGraphNode({ data, selected }: NodeProps<RFNode<MagNodeData>>) {
   const { inputs, outputs } = nodePorts(node);
   const minRows = Math.max(inputs.length, outputs.length, 1);
   const accent = data.needsConfirmation ? "#f59e0b" : typeColor[node.type] || "#9aa3b2";
+  const customSystemPrompt = node.systemPrompt ?? "";
+  const systemPrompt = customSystemPrompt.trim() ? customSystemPrompt : defaultSystemPromptForNodeType(node.type);
+  const showSystemPrompt = customSystemPrompt.trim().length > 0;
 
   return (
     <div
@@ -223,6 +233,28 @@ function MagGraphNode({ data, selected }: NodeProps<RFNode<MagNodeData>>) {
         <div className="mag-node-purpose" title={node.purpose}>
           {node.purpose}
         </div>
+      ) : null}
+      {showSystemPrompt ? (
+        <label className="mag-node-system nodrag nowheel" onPointerDown={(event) => event.stopPropagation()}>
+          <span className="mag-node-system-label">
+            System Prompt
+            <span className="mag-node-system-mode">{customSystemPrompt.trim() ? "custom" : "default"}</span>
+          </span>
+          <textarea
+            className="mag-node-system-input"
+            value={systemPrompt}
+            rows={selected ? 4 : 2}
+            onChange={(event) => {
+              const next = event.target.value;
+              useGraphStore.getState().updateNode(node.id, {
+                systemPrompt: next.trim() && next !== defaultSystemPromptForNodeType(node.type) ? next : undefined,
+              });
+            }}
+            onClick={(event) => event.stopPropagation()}
+            onDoubleClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          />
+        </label>
       ) : null}
       <div
         className="mag-node-ports"
@@ -365,9 +397,8 @@ export default function Canvas() {
   const {
     run,
     runCode,
-    generateDesign,
+    exportDesignDocument,
     runTestNode,
-    runReviewNode,
     replayTools,
     runDag,
     expandPlanNodes,
@@ -394,10 +425,7 @@ export default function Canvas() {
   const contextMenuCanEnter = contextMenuNode?.type === "subgraph" || contextMenuNode?.type === "code" || contextMenuNode?.type === "planning" || contextMenuNode?.type === "analysis";
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
-  const contextMenuTaskRole = String(contextMenuNode?.data?.workflowRole ?? "").toLowerCase();
-  const contextMenuTaskText = `${contextMenuNode?.title ?? ""} ${String(contextMenuNode?.purpose ?? contextMenuNode?.data?.purpose ?? "")}`.toLowerCase();
-  const contextMenuCanRunTest = contextMenuNode?.type === "task" && (contextMenuTaskRole === "test" || /\btest\b|verify|validation/.test(contextMenuTaskText));
-  const contextMenuCanRunReview = contextMenuNode?.type === "task" && (contextMenuTaskRole === "review" || /review|audit|check/.test(contextMenuTaskText));
+  const contextMenuCanRunTest = contextMenuNode?.type === "test";
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -594,12 +622,12 @@ export default function Canvas() {
             <button
               className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
               onClick={() => {
-                generateDesign(menu.nodeId);
+                exportDesignDocument(menu.nodeId);
                 closeMenu();
               }}
               disabled={runningId !== null}
             >
-              Generate Design
+              Export Document
             </button>
           ) : null}
           {contextMenuCanGenerateNodes ? (
@@ -624,18 +652,6 @@ export default function Canvas() {
               disabled={runningId !== null || !projectDir}
             >
               Run Test
-            </button>
-          ) : null}
-          {contextMenuCanRunReview ? (
-            <button
-              className="block w-full text-left px-3 py-1.5 hover:bg-canvas disabled:opacity-50"
-              onClick={() => {
-                runReviewNode(menu.nodeId);
-                closeMenu();
-              }}
-              disabled={runningId !== null}
-            >
-              Review
             </button>
           ) : null}
           {contextMenuCanEnter ? (

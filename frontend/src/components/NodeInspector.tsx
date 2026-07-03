@@ -13,6 +13,15 @@ import { toolSpec, TOOL_REGISTRY } from "@/toolRegistry";
 import { useSkillStore } from "@/store/skillStore";
 import { collectToolSteps } from "@/utils/toolSteps";
 import { tracePurpose } from "@/utils/traceNodes";
+import { defaultSystemPromptForNodeType } from "@/utils/defaultSystemPrompts";
+import {
+  collectResolvedInputs,
+  listJsonOutputFields,
+  listMarkdownSections,
+  resolveOutputPort,
+  type ResolvedInput,
+  type ResolvedOutput,
+} from "@/utils/resolvedInputs";
 
 function nodeTypeLabel(type: NodeType): string {
   if (type === "prompt") return "Requirement";
@@ -20,6 +29,7 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "subgraph") return "Subgraph";
   if (type === "analysis") return "Analysis";
   if (type === "code") return "Execution";
+  if (type === "test") return "Test";
   return type;
 }
 
@@ -74,6 +84,10 @@ const DEFAULT_PORTS_BY_TYPE: Record<NodeType, { inputs: DataPort[]; outputs: Dat
   agent: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "result", name: "Result", type: "unknown" }],
+  },
+  test: {
+    inputs: [{ id: "context", name: "Context", type: "unknown" }],
+    outputs: [{ id: "test_report", name: "Test Report", type: "unknown" }],
   },
   task: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
@@ -135,13 +149,15 @@ function editablePorts(node: NodeBase): { inputs: DataPort[]; outputs: DataPort[
   return DEFAULT_PORTS_BY_TYPE[node.type] ?? DEFAULT_PORTS_BY_TYPE.task;
 }
 
-export type InspectorView = "props" | "output" | "scope";
+export type InspectorView = "props" | "input" | "output" | "scope";
 
 export default function NodeInspector({ view = "props" }: { view?: InspectorView } = {}) {
   const selectedId = useGraphStore((s) => s.selectedNodeId);
   const node = useGraphStore((s) =>
     s.nodes.find((n) => n.id === selectedId),
   );
+  const nodes = useGraphStore((s) => s.nodes);
+  const links = useGraphStore((s) => s.links);
   // Layer of the selected node = type of its container (Phase 3 type vocabulary).
   const parentType = useGraphStore((s) => {
     const self = s.nodes.find((n) => n.id === selectedId);
@@ -151,9 +167,8 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const {
     run,
     runCode,
-    generateDesign,
+    exportDesignDocument,
     runTestNode,
-    runReviewNode,
     replayTools,
     runSkill,
     expandPlanNodes,
@@ -164,6 +179,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const updateNode = useGraphStore((s) => s.updateNode);
   const updateLinks = useGraphStore((s) => s.updateLinks);
   const projectDir = useGraphStore((s) => s.projectDir);
+  const projectPath = useGraphStore((s) => s.projectPath);
   const enterSubgraph = useGraphStore((s) => s.enterSubgraph);
   const openOutputPanel = useOutputPanelStore((s) => s.open);
   const skills = useSkillStore((s) => s.skills);
@@ -186,7 +202,8 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const codeDiff = node.data?.codeDiff as { diff?: string; truncated?: boolean; warnings?: string[] } | undefined;
   const latestRun = node.runHistory?.[node.runHistory.length - 1];
   const toolTrace = latestRun?.toolTrace ?? [];
-  const systemPrompt = node.systemPrompt ?? "";
+  const customSystemPrompt = node.systemPrompt ?? "";
+  const systemPrompt = customSystemPrompt.trim() ? customSystemPrompt : defaultSystemPromptForNodeType(node.type);
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
   const isToolNode = node.type === "tool";
@@ -194,16 +211,18 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const isCodeAnalysisNode = node.type === "analysis";
   const isPlanningNode = node.type === "planning";
   const isTaskNode = node.type === "task";
-  const taskRole = String(node.data?.workflowRole ?? "").toLowerCase();
-  const taskText = `${node.title} ${purpose}`.toLowerCase();
-  const isTestNode = isTaskNode && (taskRole === "test" || /\btest\b|verify|validation/.test(taskText));
-  const isReviewNode = isTaskNode && (taskRole === "review" || /review|audit|check/.test(taskText));
+  const isTestNode = node.type === "test";
   const canGenerateNodes = node.type === "subgraph";
   const canGenerateModuleGraph = isCodeAnalysisNode && output.trim().length > 0;
   const confirmation = getConfirmationRequest(node.data?.confirmation);
   const confirmationAnswers = getConfirmationAnswers(node.data?.confirmationAnswers);
   const needsConfirmation = node.data?.status === "needs_confirmation" && confirmation !== null;
   const ports = editablePorts(node);
+  const resolvedInputs = collectResolvedInputs(nodes, links, node.id);
+  const resolvedOutputs = ports.outputs.map((port) => resolveOutputPort(node, port));
+  const contractText = codeOutput || output;
+  const markdownSections = listMarkdownSections(contractText);
+  const jsonFields = listJsonOutputFields(contractText);
 
   const commitPorts = (
     direction: "inputs" | "outputs",
@@ -381,13 +400,20 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             />
           </div>
           <div className="col-span-6 min-w-0">
-            <div className="text-[10px] text-zinc-500 uppercase tracking-wide">System Prompt</div>
+            <div className="flex items-center gap-2">
+              <div className="text-[10px] text-zinc-500 uppercase tracking-wide">System Prompt</div>
+              <span className="text-[10px] text-zinc-600">{customSystemPrompt.trim() ? "custom" : "default"}</span>
+            </div>
             <textarea
               className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-14"
               rows={3}
               value={systemPrompt}
-              placeholder="留空则使用全局默认节点助手 prompt"
-              onChange={(e) => updateNode(node.id, { systemPrompt: e.target.value })}
+              onChange={(e) => {
+                const next = e.target.value;
+                updateNode(node.id, {
+                  systemPrompt: next.trim() && next !== defaultSystemPromptForNodeType(node.type) ? next : undefined,
+                });
+              }}
             />
           </div>
 
@@ -432,11 +458,11 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 {isPlanningNode ? (
                   <button
                     className="px-3 py-1 bg-purple-700 rounded text-xs disabled:opacity-50"
-                    onClick={() => generateDesign(node.id)}
+                    onClick={() => exportDesignDocument(node.id)}
                     disabled={runningId !== null}
-                    title="Generate a Markdown + Mermaid design spec for downstream Execution nodes."
+                    title="Export this Design node's current output as a Markdown document."
                   >
-                    Generate Design
+                    Export Document
                   </button>
                 ) : null}
                 {canGenerateNodes ? (
@@ -457,16 +483,6 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                     title={!projectDir ? "Select Project Dir before running tests." : "Run the configured whitelisted test command without LLM."}
                   >
                     Run Test
-                  </button>
-                ) : null}
-                {isReviewNode ? (
-                  <button
-                    className="px-3 py-1 bg-amber-700 rounded text-xs disabled:opacity-50"
-                    onClick={() => runReviewNode(node.id)}
-                    disabled={runningId !== null}
-                    title="Review upstream design, diff, and test results."
-                  >
-                    Review
                   </button>
                 ) : null}
                 {canGenerateModuleGraph ? (
@@ -585,31 +601,25 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
           ) : null}
 
           {isTaskNode ? (
+            <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 text-[10px] text-zinc-600">
+              Task is a normal AI node. Use Explain to summarize, inspect, or produce a manual checkpoint.
+            </div>
+          ) : null}
+
+          {isTestNode ? (
             <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
               <div className="flex flex-wrap items-end gap-3">
-                <label className="min-w-56 flex-1">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Workflow Role</span>
-                  <select
-                    className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 text-xs outline-none focus:border-accent"
-                    value={String(node.data?.workflowRole ?? "")}
-                    onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { workflowRole: e.target.value || undefined })}
-                  >
-                    <option value="">auto</option>
-                    <option value="test">test</option>
-                    <option value="review">review</option>
-                  </select>
-                </label>
-                <label className="min-w-64 flex-[2]">
+                <label className="min-w-64 flex-1">
                   <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Test Command</span>
                   <input
                     className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 font-mono text-xs outline-none focus:border-accent"
-                    value={String(node.data?.testCommand ?? "npm test")}
+                    value={String(node.data?.testCommand ?? "uv run pytest")}
                     onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { testCommand: e.target.value })}
                   />
                 </label>
               </div>
               <div className="text-[10px] text-zinc-600">
-                Test nodes run a whitelisted command without LLM. Review nodes read upstream outputs and produce a review report.
+                Test nodes run a whitelisted command without LLM and produce a test report for downstream nodes.
               </div>
             </div>
           ) : null}
@@ -674,9 +684,116 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
     );
   }
 
+  if (view === "input") {
+    return (
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0 h-full text-sm">
+        <div className="grid grid-cols-4 gap-2">
+          <InputStat label="Context" value={node.contextMode} tone={node.contextMode === "inherit" ? "ok" : "warn"} />
+          <InputStat label="Resolved" value={String(resolvedInputs.filter((item) => item.status === "resolved").length)} />
+          <InputStat label="Project Dir" value={projectDir ? "set" : "none"} tone={projectDir ? "ok" : "muted"} />
+          <InputStat label="Memory" value={memoryRef || "none"} tone={memoryRef ? "ok" : "muted"} />
+        </div>
+
+        {node.contextMode !== "inherit" ? (
+          <div className="rounded border border-amber-800/60 bg-amber-950/20 px-3 py-2 text-xs text-amber-200">
+            This node is set to <span className="font-mono">{node.contextMode}</span>, so upstream inputs are not injected when it runs.
+          </div>
+        ) : null}
+
+        <section className="rounded border border-zinc-800 bg-canvas/40">
+          <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
+            Node Prompt
+          </div>
+          <div className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1 p-3 text-xs">
+            <span className="text-zinc-600">Title</span>
+            <span className="text-zinc-300">{node.title}</span>
+            <span className="text-zinc-600">Type</span>
+            <span className="text-zinc-300">{nodeTypeLabel(node.type)}</span>
+            <span className="text-zinc-600">Purpose</span>
+            <span className="whitespace-pre-wrap text-zinc-300">{purpose || "(empty)"}</span>
+            <span className="text-zinc-600">System Prompt</span>
+            <span className="whitespace-pre-wrap text-zinc-400">{systemPrompt}</span>
+          </div>
+        </section>
+
+        <section className="rounded border border-zinc-800 bg-canvas/40">
+          <div className="flex items-center border-b border-zinc-800 px-3 py-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500">Resolved Direct Inputs</span>
+            <span className="ml-auto text-[10px] text-zinc-600">max 1200 chars per input block</span>
+          </div>
+          {resolvedInputs.length > 0 ? (
+            <div className="divide-y divide-zinc-900/80">
+              {resolvedInputs.map((item, index) => (
+                <ResolvedInputRow key={`${item.sourceNodeId}:${item.targetNodeId}:${item.sourceHandle ?? ""}:${index}`} item={item} />
+              ))}
+            </div>
+          ) : (
+            <div className="px-3 py-6 text-center text-xs text-zinc-600">
+              No direct input links for this node.
+            </div>
+          )}
+        </section>
+
+        <section className="rounded border border-zinc-800 bg-canvas/40">
+          <div className="border-b border-zinc-800 px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-500">
+            Runtime Environment
+          </div>
+          <div className="grid grid-cols-[120px_1fr] gap-x-3 gap-y-1 p-3 text-xs">
+            <span className="text-zinc-600">Project Path</span>
+            <span className="font-mono text-zinc-400">{projectPath || "(none)"}</span>
+            <span className="text-zinc-600">Project Dir</span>
+            <span className="font-mono text-zinc-400">{projectDir || "(none)"}</span>
+            <span className="text-zinc-600">File Scope</span>
+            <span className="font-mono text-zinc-400">
+              allow {(node.fileScope?.allow ?? []).length} / deny {(node.fileScope?.deny ?? []).length}
+            </span>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   if (view === "output") {
     return (
       <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 h-full text-sm">
+        <section className="rounded border border-zinc-800 bg-canvas/40">
+          <div className="flex items-center border-b border-zinc-800 px-3 py-1.5">
+            <span className="text-[10px] uppercase tracking-wide text-zinc-500">Output Contract</span>
+            <span className="ml-auto text-[10px] text-zinc-600">what downstream ports can bind to</span>
+          </div>
+          <div className="grid grid-cols-5 gap-2 p-3">
+            <OutputInventoryItem label="output" value={`${output.length} chars`} active={output.trim().length > 0} />
+            <OutputInventoryItem label="codeOutput" value={`${codeOutput.length} chars`} active={codeOutput.trim().length > 0} />
+            <OutputInventoryItem label="diff" value={`${codeDiff?.diff?.length ?? 0} chars`} active={Boolean(codeDiff?.diff?.trim())} />
+            <OutputInventoryItem label="files" value={`${generatedFiles.length} files`} active={generatedFiles.length > 0} />
+            <OutputInventoryItem label="confirm" value={needsConfirmation ? "yes" : "no"} active={needsConfirmation} />
+          </div>
+
+          <div className="border-t border-zinc-900/80">
+            <div className="px-3 py-1.5 text-[10px] uppercase tracking-wide text-zinc-600">
+              Declared Outputs
+            </div>
+            {resolvedOutputs.length > 0 ? (
+              <div className="divide-y divide-zinc-900/80">
+                {resolvedOutputs.map((item) => (
+                  <ResolvedOutputRow key={item.handle} item={item} />
+                ))}
+              </div>
+            ) : (
+              <div className="px-3 pb-3 text-xs text-zinc-600">
+                No output ports declared.
+              </div>
+            )}
+          </div>
+
+          {jsonFields.length > 0 || markdownSections.length > 0 ? (
+            <div className="grid grid-cols-2 gap-3 border-t border-zinc-900/80 p-3 text-xs">
+              <OutputFieldList title="JSON Fields" items={jsonFields} />
+              <OutputFieldList title="Markdown Sections" items={markdownSections} />
+            </div>
+          ) : null}
+        </section>
+
         {/* Execution output */}
         {codeOutput ? (
           <div>
@@ -863,7 +980,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                   : isCodeAnalysisNode
                     ? "选择 Project Dir 后点 ◇ Analyze Code 让 Claude Code 只读分析代码，完成后用 ⬡ Module Graph 生成模块图"
                   : isGraphNode
-                    ? "Design 节点用 Generate Design 生成 Markdown + Mermaid 设计产物；Subgraph 可用 Generate Nodes 展开内部结构。"
+                    ? "Design 节点可先用 Explain 生成内容，再用 Export Document 导出为 Markdown；Subgraph 可用 Generate Nodes 展开内部结构。"
                     : "点 ▶ Explain 文本展开"}
               </div>
             )
@@ -1037,6 +1154,147 @@ function PortEditor({
         </div>
       )}
     </div>
+  );
+}
+
+function InputStat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "ok" | "warn" | "muted";
+}) {
+  const valueClass =
+    tone === "ok"
+      ? "text-emerald-300"
+      : tone === "warn"
+        ? "text-amber-300"
+        : tone === "muted"
+          ? "text-zinc-600"
+          : "text-zinc-300";
+  return (
+    <div className="rounded border border-zinc-800 bg-canvas/40 px-3 py-2">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-600">{label}</div>
+      <div className={`mt-0.5 truncate font-mono text-xs ${valueClass}`} title={value}>{value}</div>
+    </div>
+  );
+}
+
+function OutputInventoryItem({
+  label,
+  value,
+  active,
+}: {
+  label: string;
+  value: string;
+  active: boolean;
+}) {
+  return (
+    <div className="rounded border border-zinc-800 bg-black/10 px-2 py-1.5">
+      <div className="text-[10px] uppercase tracking-wide text-zinc-600">{label}</div>
+      <div className={`mt-0.5 truncate font-mono text-xs ${active ? "text-emerald-300" : "text-zinc-600"}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
+function OutputFieldList({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="min-w-0">
+      <div className="mb-1 text-[10px] uppercase tracking-wide text-zinc-600">{title}</div>
+      {items.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {items.slice(0, 16).map((item) => (
+            <span key={item} className="max-w-full truncate rounded border border-zinc-800 bg-black/10 px-1.5 py-0.5 font-mono text-[11px] text-zinc-400" title={item}>
+              {item}
+            </span>
+          ))}
+          {items.length > 16 ? (
+            <span className="text-[11px] text-zinc-600">+{items.length - 16}</span>
+          ) : null}
+        </div>
+      ) : (
+        <div className="text-[11px] text-zinc-600">none</div>
+      )}
+    </div>
+  );
+}
+
+function ResolvedOutputRow({ item }: { item: ResolvedOutput }) {
+  const statusClass = item.status === "resolved" ? "text-emerald-300" : "text-zinc-500";
+  return (
+    <details className="group px-3 py-2 text-xs" open={item.status === "resolved"}>
+      <summary className="flex cursor-pointer list-none items-center gap-2">
+        <span className={statusClass}>{item.status}</span>
+        <span className="font-mono text-zinc-300">{item.name}</span>
+        <span className="font-mono text-zinc-600">({item.handle})</span>
+        <span className="rounded border border-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-500">{item.type}</span>
+        <span className="ml-auto text-[10px] text-zinc-600">{item.sourceKind}, {item.rawLength} chars</span>
+      </summary>
+      <div className="mt-2 grid grid-cols-[120px_1fr] gap-x-3 gap-y-1">
+        <span className="text-zinc-600">Binding Handle</span>
+        <span className="font-mono text-zinc-400">{item.handle}</span>
+        <span className="text-zinc-600">Resolution</span>
+        <span className={statusClass}>
+          {item.status === "resolved"
+            ? `Downstream sourceHandle=${item.handle} resolves from ${item.sourceKind}.`
+            : "No output currently resolves for this port."}
+        </span>
+      </div>
+      {item.content ? (
+        <pre className="mt-2 max-h-40 overflow-auto rounded bg-black/20 p-2 whitespace-pre-wrap text-[11px] leading-relaxed text-zinc-300">
+{item.content.slice(0, 1200)}
+{item.content.length > 1200 ? "\n..." : ""}
+        </pre>
+      ) : null}
+    </details>
+  );
+}
+
+function ResolvedInputRow({ item }: { item: ResolvedInput }) {
+  const statusClass =
+    item.status === "resolved"
+      ? "text-emerald-300"
+      : item.status === "disabled"
+        ? "text-amber-300"
+        : "text-zinc-500";
+  const source = `${item.sourceTitle}.${item.sourcePortName ?? item.sourceHandle ?? "output"}`;
+  const target = `${item.targetTitle}.${item.targetPortName ?? item.targetHandle ?? "input"}`;
+  return (
+    <details className="group px-3 py-2 text-xs" open={item.status !== "disabled"}>
+      <summary className="flex cursor-pointer list-none items-center gap-2">
+        <span className={statusClass}>{item.status}</span>
+        <span className="font-mono text-zinc-500">{source}</span>
+        <span className="text-zinc-700">-&gt;</span>
+        <span className="font-mono text-zinc-300">{target}</span>
+        <span className="ml-auto text-[10px] text-zinc-600">
+          {item.sourceKind}
+          {item.truncated ? `, ${item.rawLength} -> ${item.passedLength}` : `, ${item.passedLength}`}
+        </span>
+      </summary>
+      <div className="mt-2 grid grid-cols-[120px_1fr] gap-x-3 gap-y-1">
+        <span className="text-zinc-600">Binding Key</span>
+        <span className="font-mono text-zinc-400">{item.key}</span>
+        <span className="text-zinc-600">Source Node</span>
+        <span className="text-zinc-400">{item.sourceTitle} <span className="font-mono text-zinc-600">({item.sourceNodeId})</span></span>
+        <span className="text-zinc-600">Resolution</span>
+        <span className={statusClass}>
+          {item.status === "disabled"
+            ? "Not injected because contextMode is not inherit."
+            : item.status === "empty"
+              ? "No output or purpose was available."
+              : `Resolved from ${item.sourceKind}${item.truncated ? "; truncated for prompt context." : "."}`}
+        </span>
+      </div>
+      {item.content ? (
+        <pre className="mt-2 max-h-48 overflow-auto rounded bg-black/20 p-2 whitespace-pre-wrap text-[11px] leading-relaxed text-zinc-300">
+{item.content}
+        </pre>
+      ) : null}
+    </details>
   );
 }
 

@@ -8,6 +8,7 @@ type Tab = InspectorView | MonitorTab;
 
 const TABS: { key: Tab; label: string }[] = [
   { key: "props", label: "属性" },
+  { key: "input", label: "输入" },
   { key: "output", label: "输出" },
   { key: "scope", label: "作用域" },
   { key: "logs", label: "AI 日志" },
@@ -16,14 +17,13 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "progress", label: "进度" },
 ];
 
-const INSPECTOR_VIEWS: ReadonlySet<Tab> = new Set<Tab>(["props", "output", "scope"]);
+const INSPECTOR_VIEWS: ReadonlySet<Tab> = new Set<Tab>(["props", "input", "output", "scope"]);
 
 export default function BottomPanel() {
   const bottomOpen = usePanelStore((s) => s.bottomOpen);
   const selectedNodeId = useGraphStore((s) => s.selectedNodeId);
   const [activeTab, setActiveTab] = useState<Tab>("props");
 
-  // 选中节点时自动展开底部并切到属性 tab（除非已经在某个 inspector 子 tab 上）
   useEffect(() => {
     if (!selectedNodeId) return;
     setActiveTab((prev) => (INSPECTOR_VIEWS.has(prev) ? prev : "props"));
@@ -36,7 +36,7 @@ export default function BottomPanel() {
       <div className="flex items-center px-3 py-1 border-b border-zinc-800 text-xs gap-1 overflow-x-auto">
         {TABS.map((t, idx) => (
           <Fragment key={t.key}>
-            {idx === 3 && <span className="mx-1 h-3 w-px bg-zinc-700 shrink-0" />}
+            {idx === 4 && <span className="mx-1 h-3 w-px bg-zinc-700 shrink-0" />}
             <button
               className={`px-2 py-0.5 rounded shrink-0 ${
                 activeTab === t.key

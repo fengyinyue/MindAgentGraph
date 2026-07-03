@@ -4,10 +4,19 @@
       "id": "input",
       "type": "prompt",
       "title": "故事创意",
-      "position": { "x": -400, "y": 0 },
+      "position": {
+        "x": -421,
+        "y": 31
+      },
       "contextMode": "inherit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {},
       "runHistory": [],
       "resourceRefs": [],
@@ -17,125 +26,260 @@
       "id": "worldbuilding",
       "type": "planning",
       "title": "世界观设定",
-      "position": { "x": 0, "y": 0 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": -89,
+        "y": -11
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "构建故事发生的时代背景、地理环境、社会规则与世界运行逻辑",
         "inputs": [
-          { "id": "idea", "name": "故事创意", "type": "unknown" }
+          {
+            "id": "idea",
+            "name": "故事创意",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "world_doc", "name": "世界观文档", "type": "unknown" }
+          {
+            "id": "world_doc",
+            "name": "世界观文档",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "构建故事发生的时代背景、地理环境、社会规则与世界运行逻辑"
     },
     {
       "id": "characters",
       "type": "planning",
       "title": "角色设计",
-      "position": { "x": 320, "y": -120 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": 282,
+        "y": 189
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "设计主要人物的背景、性格、动机与相互关系，确保与世界观一致",
         "inputs": [
-          { "id": "world_doc", "name": "世界观文档", "type": "unknown" }
+          {
+            "id": "world_doc",
+            "name": "世界观文档",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "char_doc", "name": "角色档案", "type": "unknown" }
+          {
+            "id": "char_doc",
+            "name": "角色档案",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "设计主要人物的背景、性格、动机与相互关系，确保与世界观一致"
     },
     {
       "id": "outline",
       "type": "planning",
       "title": "故事大纲",
-      "position": { "x": 640, "y": 0 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": 640,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "按三幕结构拆分主要情节，标注转折点、冲突高潮与结局走向",
         "inputs": [
-          { "id": "world_doc", "name": "世界观文档", "type": "unknown" },
-          { "id": "char_doc",  "name": "角色档案",   "type": "unknown" }
+          {
+            "id": "world_doc",
+            "name": "世界观文档",
+            "type": "unknown"
+          },
+          {
+            "id": "char_doc",
+            "name": "角色档案",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "outline_doc", "name": "故事大纲", "type": "unknown" }
+          {
+            "id": "outline_doc",
+            "name": "故事大纲",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "按三幕结构拆分主要情节，标注转折点、冲突高潮与结局走向"
     },
     {
       "id": "chapters",
       "type": "planning",
       "title": "章节展开",
-      "position": { "x": 960, "y": 0 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": 1064.4,
+        "y": -0.4
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "将大纲细化为每章的场景、视角、开头钩子与结尾悬念",
         "inputs": [
-          { "id": "outline_doc", "name": "故事大纲", "type": "unknown" }
+          {
+            "id": "outline_doc",
+            "name": "故事大纲",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "chapter_plan", "name": "章节计划", "type": "unknown" }
+          {
+            "id": "chapter_plan",
+            "name": "章节计划",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "将大纲细化为每章的场景、视角、开头钩子与结尾悬念"
     },
     {
       "id": "draft",
       "type": "planning",
       "title": "正文初稿",
-      "position": { "x": 1280, "y": 0 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": 1412,
+        "y": 3
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "按章节计划逐章写出正文，保持人物声音与叙事节奏一致",
         "inputs": [
-          { "id": "chapter_plan", "name": "章节计划", "type": "unknown" }
+          {
+            "id": "chapter_plan",
+            "name": "章节计划",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "raw_draft", "name": "正文初稿", "type": "unknown" }
+          {
+            "id": "raw_draft",
+            "name": "正文初稿",
+            "type": "unknown"
+          }
         ]
       },
       "runHistory": [],
       "resourceRefs": [],
-      "metadata": {}
+      "metadata": {},
+      "purpose": "按章节计划逐章写出正文，保持人物声音与叙事节奏一致"
     },
     {
       "id": "polish",
-      "type": "agent",
+      "type": "planning",
       "title": "润色精修",
-      "position": { "x": 1600, "y": 0 },
-      "contextMode": "explicit",
-      "fileScope": { "allow": [], "deny": [] },
-      "toolPolicy": { "tools": [], "deny": [] },
+      "position": {
+        "x": 1732,
+        "y": 3
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
       "data": {
         "purpose": "修正逻辑漏洞、优化语言节奏、统一人物语气，输出终稿",
         "inputs": [
-          { "id": "raw_draft", "name": "正文初稿", "type": "unknown" }
+          {
+            "id": "raw_draft",
+            "name": "正文初稿",
+            "type": "unknown"
+          }
         ],
         "outputs": [
-          { "id": "final", "name": "终稿", "type": "unknown" }
+          {
+            "id": "final",
+            "name": "终稿",
+            "type": "unknown"
+          }
         ]
       },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "修正逻辑漏洞、优化语言节奏、统一人物语气，输出终稿"
+    },
+    {
+      "id": "b34a3c12-ef42-4a26-8f13-923c5d13f490",
+      "type": "planning",
+      "title": "Design",
+      "position": {
+        "x": -338.9087761154416,
+        "y": -31.443915957468768
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "parentId": "worldbuilding",
+      "data": {},
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {}

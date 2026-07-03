@@ -10,6 +10,7 @@ import { useMonitorStore } from "@/store/monitorStore";
 import { useProviderStore } from "@/store/providerStore";
 import { parseConfirmationRequest } from "@/utils/confirmation";
 import { materializeTraceNodes } from "@/utils/traceNodes";
+import { collectResolvedInputs, outputText, resolvedInputsToParentOutputs } from "@/utils/resolvedInputs";
 import type { Edge, NodeBase, ToolTraceItem } from "@shared/types";
 
 interface RunState {
@@ -30,244 +31,25 @@ interface RunOptions {
   userPrompt?: string;
 }
 
-const DESIGN_PROMPT = `Generate a reusable AI engineering design spec for this node.
-
-Return ONLY concise Markdown with this exact structure:
-
-## Goal
-
-Summarize the target outcome.
-
-## Design Graph
-
-\`\`\`mermaid
-flowchart LR
-  R[Requirement] --> A[Analysis]
-  A --> D[Design]
-  D --> E[Execution]
-  E --> T[Test]
-  T --> V[Review]
-\`\`\`
-
-## Implementation Steps
-
-1. List concrete, verifiable implementation batches.
-
-## Recommended File Scope
-
-- allow:
-- deny:
-
-## Acceptance Criteria
-
-- List measurable checks.
-
-## Execution Notes
-
-Give concrete guidance for downstream Execution nodes.`;
-
-const REVIEW_PROMPT = `Review the upstream Design, Execution result, diff, and Test output.
-
-Return ONLY Markdown with this structure:
-
-## Verdict
-
-Pass / Needs Fix
-
-## Findings
-
-- List bugs, risks, missing requirements, or test gaps.
-
-## Required Fixes
-
-- List concrete fixes for the next Execution node.
-
-## Evidence
-
-- Reference the relevant upstream outputs.`;
-
 const TEST_COMMANDS = [
   "npm test",
   "npm run test",
   "npm run build",
   "pytest",
   "python -m pytest",
+  "python -m compileall src",
   "uv run pytest",
+  "uv run python -m pytest",
+  "uv run python -m compileall src",
+  "uv run ruff check",
+  "uv run ruff format --check",
   "ruff check",
   "ruff format --check",
   "tsc --noEmit",
 ];
 
-function outputText(node: NodeBase | undefined): string {
-  if (!node) return "";
-  // Execution nodes keep their result in data.codeOutput (output stays the Explain
-  // text). Prefer codeOutput for code nodes so downstream inherits the code result.
-  const text = node.type === "code"
-    ? (node.data?.codeOutput ?? node.output ?? node.data?.output)
-    : (node.output ?? node.data?.output ?? node.data?.codeOutput);
-  return typeof text === "string" ? text : "";
-}
-
-function stringifyBindingValue(value: unknown): string {
-  if (value === undefined || value === null) return "";
-  if (typeof value === "string") return value;
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-}
-
-function nodePurposeText(node: NodeBase): string {
-  const text = node.purpose ?? (node.data?.purpose as string | undefined) ?? "";
-  return typeof text === "string" ? text : "";
-}
-
-function portName(node: NodeBase, direction: "inputs" | "outputs", handle?: string | null): string | undefined {
-  if (!handle) return undefined;
-  const ports = node.data?.[direction];
-  if (!Array.isArray(ports)) return undefined;
-  for (const raw of ports) {
-    if (!raw || typeof raw !== "object") continue;
-    const port = raw as { id?: unknown; name?: unknown };
-    if (port.id === handle && typeof port.name === "string") return port.name;
-  }
-  return undefined;
-}
-
-function tryJsonField(text: string, handle: string): string {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) return "";
-  try {
-    const parsed = JSON.parse(trimmed) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return "";
-    const record = parsed as Record<string, unknown>;
-    const direct = record[handle];
-    if (direct !== undefined) return stringifyBindingValue(direct);
-    const outputs = record.outputs;
-    if (outputs && typeof outputs === "object" && !Array.isArray(outputs)) {
-      const nested = (outputs as Record<string, unknown>)[handle];
-      if (nested !== undefined) return stringifyBindingValue(nested);
-    }
-  } catch {
-    return "";
-  }
-  return "";
-}
-
-function normalizeBindingName(value: string): string {
-  return value.replace(/`/g, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim().toLowerCase();
-}
-
-function markdownSection(text: string, names: string[]): string {
-  const lines = text.split(/\r?\n/);
-  const normalized = new Set(names.map(normalizeBindingName).filter(Boolean));
-  for (let i = 0; i < lines.length; i += 1) {
-    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(lines[i]);
-    if (!match) continue;
-    const level = match[1].length;
-    const heading = normalizeBindingName(match[2]);
-    if (!normalized.has(heading)) continue;
-    const body: string[] = [];
-    for (let j = i + 1; j < lines.length; j += 1) {
-      const next = /^(#{1,6})\s+/.exec(lines[j]);
-      if (next && next[1].length <= level) break;
-      body.push(lines[j]);
-    }
-    return body.join("\n").trim();
-  }
-  return "";
-}
-
-function extractOutputForHandle(node: NodeBase, sourceHandle?: string | null): string {
-  const fullText = outputText(node).trim();
-  const fallbackText = fullText || nodePurposeText(node).trim();
-  if (!sourceHandle) return fallbackText;
-
-  const dataValue = node.data?.[sourceHandle];
-  const direct = stringifyBindingValue(dataValue).trim();
-  if (direct) return direct;
-
-  if (node.type === "code") {
-    if (sourceHandle === "result" || sourceHandle === "codeOutput") {
-      const codeOutput = stringifyBindingValue(node.data?.codeOutput).trim();
-      if (codeOutput) return codeOutput;
-    }
-    if (sourceHandle === "diff") {
-      const diff = node.data?.codeDiff as { diff?: unknown } | undefined;
-      const diffText = stringifyBindingValue(diff?.diff).trim();
-      if (diffText) return diffText;
-    }
-    if (sourceHandle === "changedFiles" || sourceHandle === "files") {
-      const files = stringifyBindingValue(node.data?.generatedFiles).trim();
-      if (files) return files;
-    }
-  }
-
-  if (fullText) {
-    const jsonField = tryJsonField(fullText, sourceHandle).trim();
-    if (jsonField) return jsonField;
-    const section = markdownSection(fullText, [
-      sourceHandle,
-      portName(node, "outputs", sourceHandle) ?? "",
-    ]).trim();
-    if (section) return section;
-  }
-  return fallbackText;
-}
-
-function bindingKey(source: NodeBase, target: NodeBase, link: Edge): string {
-  if (link.sourceHandle || link.targetHandle) {
-    const sourcePort = portName(source, "outputs", link.sourceHandle) ?? link.sourceHandle ?? "output";
-    const targetPort = portName(target, "inputs", link.targetHandle) ?? link.targetHandle ?? "input";
-    return `${target.title}.${targetPort} <= ${source.title}.${sourcePort} (${source.id})`;
-  }
-  return `${source.title} (${source.id})`;
-}
-
-function putUnique(outputs: Record<string, string>, key: string, value: string): void {
-  const text = value.trim();
-  if (!text) return;
-  if (!outputs[key]) {
-    outputs[key] = text;
-    return;
-  }
-  let i = 2;
-  while (outputs[`${key} #${i}`]) i += 1;
-  outputs[`${key} #${i}`] = text;
-}
-
 function collectUpstreamOutputs(nodes: NodeBase[], links: Edge[], nodeId: string): Record<string, string> | undefined {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const targetNode = byId.get(nodeId);
-  const visiting = new Set<string>();
-  const visitedEdges = new Set<string>();
-  const ordered: Edge[] = [];
-
-  const visitParents = (id: string) => {
-    if (visiting.has(id)) return;
-    visiting.add(id);
-    for (const link of links.filter((l) => l.target === id)) {
-      visitParents(link.source);
-      if (!visitedEdges.has(link.id)) {
-        visitedEdges.add(link.id);
-        ordered.push(link);
-      }
-    }
-    visiting.delete(id);
-  };
-
-  visitParents(nodeId);
-
-  const outputs: Record<string, string> = {};
-  for (const link of ordered) {
-    const source = byId.get(link.source);
-    const target = byId.get(link.target) ?? targetNode;
-    if (!source || !target) continue;
-    const text = extractOutputForHandle(source, link.sourceHandle);
-    putUnique(outputs, bindingKey(source, target, link), text);
-  }
-  return Object.keys(outputs).length ? outputs : undefined;
+  return resolvedInputsToParentOutputs(collectResolvedInputs(nodes, links, nodeId));
 }
 
 function collectUpstreamNodeIds(links: Edge[], nodeId: string): Set<string> {
@@ -398,6 +180,27 @@ function toRunPayload(node: NodeBase) {
     memoryRef: node.memoryRef,
     systemPrompt: node.systemPrompt,
   };
+}
+
+function documentFileName(title: string): string {
+  const cleaned = title
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return `${cleaned || "design-output"}.md`;
+}
+
+function downloadMarkdown(filename: string, content: string): void {
+  const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function appendRunRecord(node: NodeBase, record: NonNullable<NodeBase["runHistory"]>[number]): void {
@@ -928,29 +731,46 @@ export function useRunNode() {
     [setRunning],
   );
 
-  const generateDesign = useCallback(
+  const exportDesignDocument = useCallback(
     async (nodeId: string): Promise<boolean> => {
       const node = useGraphStore.getState().nodes.find((n) => n.id === nodeId);
       if (!node || node.type !== "planning") return false;
-      return run(nodeId, { userPrompt: DESIGN_PROMPT });
+      const content = outputText(node).trim();
+      if (!content) {
+        useMonitorStore.getState().addLog({
+          level: "warn",
+          source: "node",
+          status: "SKIPPED",
+          nodeId,
+          nodeTitle: node.title,
+          message: "Design node has no output to export. Run the node first.",
+        });
+        return false;
+      }
+      const filename = documentFileName(node.title);
+      downloadMarkdown(filename, content.endsWith("\n") ? content : `${content}\n`);
+      useGraphStore.getState().patchNodeData(nodeId, {
+        exportedDocument: filename,
+        exportedAt: new Date().toISOString(),
+      });
+      useMonitorStore.getState().addLog({
+        level: "info",
+        source: "node",
+        status: "DONE",
+        nodeId,
+        nodeTitle: node.title,
+        message: `Exported document: ${filename}`,
+      });
+      return true;
     },
-    [run],
-  );
-
-  const runReviewNode = useCallback(
-    async (nodeId: string): Promise<boolean> => {
-      const node = useGraphStore.getState().nodes.find((n) => n.id === nodeId);
-      if (!node || node.type !== "task") return false;
-      return run(nodeId, { userPrompt: REVIEW_PROMPT });
-    },
-    [run],
+    [],
   );
 
   const runTestNode = useCallback(
     async (nodeId: string): Promise<boolean> => {
       const state = useGraphStore.getState();
       const node = state.nodes.find((n) => n.id === nodeId);
-      if (!node || node.type !== "task") return false;
+      if (!node || node.type !== "test") return false;
       if (useRunState.getState().runningId) return false;
 
       const projectDir = state.projectDir;
@@ -962,7 +782,7 @@ export function useRunNode() {
       }
 
       const configured = String(node.data?.testCommand ?? "").trim();
-      const command = configured || "npm test";
+      const command = configured || "uv run pytest";
       if (!TEST_COMMANDS.includes(command)) {
         const message = `Test command is not allowed: ${command}. Allowed: ${TEST_COMMANDS.join(", ")}`;
         state.patchNodeData(nodeId, { error: message, status: "error" });
@@ -1679,9 +1499,8 @@ export function useRunNode() {
   return {
     run,
     runCode,
-    generateDesign,
+    exportDesignDocument,
     runTestNode,
-    runReviewNode,
     replayTools,
     runSkill,
     expandPlanNodes,
