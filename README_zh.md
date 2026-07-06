@@ -64,7 +64,7 @@ Requirement
 | Analysis | 只读分析项目，不修改文件 | 相关文件、现状、风险、建议入口 |
 | Design | 生成设计方案或内容规划 | Markdown、Mermaid、实施步骤、验收标准 |
 | File Scope | 限定可读写文件范围 | allow / deny 路径规则 |
-| Execution | 执行代码或文件修改 | 修改摘要、changed files、diff、运行记录 |
+| Execution | 执行代码或文件修改，可选择 Native Tools 或 Claude Code | 修改摘要、changed files、diff、工具轨迹、运行记录 |
 | Test | 运行确定性的测试命令 | test report、stdout、stderr、失败原因 |
 | Review | 审查结果、风险和遗漏 | 问题清单、修复建议、是否通过 |
 
@@ -79,7 +79,7 @@ Requirement
 - `filescope`：文件作用域节点，约束 Execution 可触碰的路径。
 - `analysis`：只读分析节点，可以读取项目但不修改文件。
 - `design`：设计产物节点，适合生成方案、图表、文档和规格。
-- `code`：执行节点，界面中可显示为 Execution，负责真实读写文件和运行白名单命令。
+- `code`：执行节点，界面中可显示为 Execution，负责真实读写文件和运行验证命令。当前支持 `Native Tools` 和 `Claude Code` 两种执行引擎。
 - `test`：测试节点，负责运行测试命令并输出测试报告。
 - `task`：普通任务节点，适合作为人工检查点、说明、总结或流程占位。
 - `tool`：工具节点，用于表达可物化的工具调用。
@@ -99,13 +99,30 @@ MindAgentGraph 支持节点端口和上下文模式：
 
 ## 执行模型
 
-Execution 节点使用原生代码 runner：
+Execution 节点可以在界面中选择执行引擎。
 
-- 根据 File Scope 限定文件读写范围。
+### Native Tools
+
+`Native Tools` 是 MindAgentGraph 内置的受控执行器：
+
+- 根据 File Scope 强制限定文件读写范围。
 - 支持 `list_files`、`read_file`、`grep`、`apply_patch`、`write_file`、`move_file`、`delete_file`、`mkdir`、`inspect_project`、`run_command`、`get_diff` 等工具。
 - `run_command` 使用白名单，避免任意命令执行。
 - 每次运行都会记录工具调用、变更文件和 diff。
-- Analysis 节点使用只读模式，适合在执行前理解项目。
+- 适合需要严格文件作用域和可重放工具轨迹的场景。
+
+### Claude Code
+
+`Claude Code` 引擎会直接调用本机已登录或已配置的 Claude Code CLI：
+
+- 默认使用 `claude --print --no-session-persistence --output-format stream-json --verbose`。
+- 通过结构化事件实时显示 Claude Code 的执行进度，例如 `Read`、`Edit`、`Bash`、`Grep` 等工具调用。
+- 工具事件会转换为 MindAgentGraph 的 Tool Trace，并在 Execution 节点内部物化为可查看的工具子节点。
+- 运行结束后仍会捕获 changed files 和 diff。
+- File Scope 会写入提示词，并在运行结束后检查是否修改了 allow / deny 之外的文件。需要注意，它不像 Native Tools 一样在工具层强制拦截。
+- 可通过 `MAG_CLAUDE_CODE_CMD` 覆盖 Claude Code 命令，例如指定自定义参数或可执行文件路径。
+
+Analysis 节点目前使用只读模式，适合在执行前理解项目；后续可以扩展为只读 Claude Code 分析引擎。
 
 Test 节点负责运行确定性的测试命令，例如：
 
@@ -135,6 +152,7 @@ npm test
 - Python 3.11+
 - uv
 - Rust，仅 Tauri 桌面模式需要
+- 可选：Claude Code CLI（当 Execution 节点选择 `Claude Code` 引擎时需要）
 
 ### 安装依赖
 
@@ -186,6 +204,13 @@ cargo tauri dev
 | Anthropic | `ANTHROPIC_API_KEY` |
 | OpenAI | `OPENAI_API_KEY` |
 | DeepSeek | `DEEPSEEK_API_KEY` |
+
+本地 Claude Code 不需要在 MindAgentGraph 中配置 API Key，但需要系统中可以执行 `claude` / `claude.cmd`。如果 Claude Code 不在 PATH 中，可以通过环境变量覆盖命令：
+
+| 用途 | 环境变量 |
+| --- | --- |
+| Claude Code 执行引擎命令 | `MAG_CLAUDE_CODE_CMD` |
+| 本地 Claude CLI 通用命令 | `MAG_LOCAL_CLAUDE_CMD` |
 
 ## 项目结构
 

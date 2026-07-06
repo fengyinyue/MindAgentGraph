@@ -77,20 +77,7 @@ export interface ToolPolicy {
 export interface ToolTraceItem {
   id: string;
   step: number;
-  tool:
-    | "list_files"
-    | "read_file"
-    | "grep"
-    | "apply_patch"
-    | "write_file"
-    | "delete_file"
-    | "move_file"
-    | "mkdir"
-    | "run_command"
-    | "inspect_project"
-    | "get_diff"
-    | "finish"
-    | "value";
+  tool: string;
   status: "running" | "done" | "error";
   startedAt: string;
   finishedAt?: string;

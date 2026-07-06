@@ -12,7 +12,9 @@ import os
 import json
 import re
 import shlex
+import shutil
 import signal
+import subprocess
 import sys
 import uuid
 from datetime import datetime, timezone
@@ -1047,6 +1049,422 @@ def _build_native_user_message(
         "Memory:",
         memory_context or "(none)",
     ])
+
+
+def _changed_scope_warnings(
+    changed_files: list[str],
+    allow: list[str],
+    deny: list[str],
+) -> list[str]:
+    warnings: list[str] = []
+    for rel in _extract_changed_rel_paths(changed_files):
+        if deny and _matches_scope(rel, deny):
+            warnings.append(f"Claude Code changed a denied file: {rel}")
+        if allow and not _matches_scope(rel, allow):
+            warnings.append(f"Claude Code changed a file outside the allow list: {rel}")
+    return warnings
+
+
+def _find_claude_code_executable() -> str:
+    override = os.environ.get("MAG_CLAUDE_CODE_CMD") or os.environ.get("MAG_LOCAL_CLAUDE_CMD")
+    if override:
+        return shlex.split(override)[0]
+    for candidate in ("claude.cmd", "claude"):
+        found = shutil.which(candidate)
+        if found:
+            return found
+    raise ProviderError("Claude Code CLI not found in PATH")
+
+
+def _claude_code_base_args(model: str | None) -> list[str]:
+    override = os.environ.get("MAG_CLAUDE_CODE_CMD") or os.environ.get("MAG_LOCAL_CLAUDE_CMD")
+    if override:
+        args = shlex.split(override)
+    else:
+        args = [
+            _find_claude_code_executable(),
+            "--print",
+            "--dangerously-skip-permissions",
+            "--no-session-persistence",
+            "--output-format",
+            "stream-json",
+            "--verbose",
+            "--tools",
+            "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash",
+        ]
+    if model and "--model" not in args:
+        args += ["--model", model]
+    return args
+
+
+def _build_claude_code_prompt(
+    *,
+    node_title: str,
+    node_type: str,
+    node_purpose: str,
+    project_dir: str,
+    file_scope_allow: list[str],
+    file_scope_deny: list[str],
+    parent_outputs: dict[str, str] | None,
+    user_prompt: str | None,
+    context_mode: str,
+    memory_text: str | None,
+    system_prompt: str | None,
+) -> str:
+    base = _build_native_user_message(
+        node_title=node_title,
+        node_type=node_type,
+        node_purpose=node_purpose,
+        project_dir=project_dir,
+        file_scope_allow=file_scope_allow,
+        file_scope_deny=file_scope_deny,
+        parent_outputs=parent_outputs,
+        user_prompt=user_prompt,
+        context_mode=context_mode,
+        memory_text=memory_text,
+        system_prompt=system_prompt,
+        read_only=False,
+    )
+    return "\n".join([
+        "You are running inside Claude Code CLI for a MindAgentGraph Execution node.",
+        "Complete the requested implementation directly in the working tree.",
+        "",
+        "Important constraints:",
+        "- Treat File scope allow/deny below as hard project boundaries.",
+        "- Prefer minimal, targeted edits.",
+        "- Do not install dependencies unless the task explicitly requires it.",
+        "- When useful, run validation with the project's existing commands.",
+        "- Finish with a concise Chinese Markdown summary of changed files, validation, and risks.",
+        "",
+        base,
+    ])
+
+
+def _stringify_claude_content(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        if parts:
+            return "\n".join(parts)
+    if value is None:
+        return ""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _iter_claude_content_blocks(event: dict[str, Any]) -> list[dict[str, Any]]:
+    message = event.get("message")
+    if not isinstance(message, dict):
+        return []
+    content = message.get("content")
+    if not isinstance(content, list):
+        return []
+    return [item for item in content if isinstance(item, dict)]
+
+
+def _claude_usage_payload(event: dict[str, Any]) -> dict[str, Any] | None:
+    usage = event.get("usage")
+    if not isinstance(usage, dict):
+        message = event.get("message")
+        if isinstance(message, dict) and isinstance(message.get("usage"), dict):
+            usage = message["usage"]
+        else:
+            return None
+    input_tokens = usage.get("input_tokens") or usage.get("prompt_tokens")
+    output_tokens = usage.get("output_tokens") or usage.get("completion_tokens")
+    if input_tokens is None and output_tokens is None:
+        return None
+    return {
+        "inputTokens": input_tokens,
+        "outputTokens": output_tokens,
+    }
+
+
+def _claude_tool_trace(
+    *,
+    tool_call_id: str,
+    step: int,
+    tool_name: str,
+    status: str,
+    input_args: dict[str, Any],
+    started_at: str,
+    output: object | None = None,
+    error: str | None = None,
+) -> dict[str, Any]:
+    trace: dict[str, Any] = {
+        "id": tool_call_id,
+        "step": step,
+        "tool": tool_name,
+        "status": status,
+        "startedAt": started_at,
+        "input": input_args,
+    }
+    if output is not None:
+        trace["finishedAt"] = _utc_now()
+        trace["output"] = output
+        trace["outputSummary"] = _safe_summary(output)
+    if error:
+        trace["finishedAt"] = _utc_now()
+        trace["error"] = error
+    return trace
+
+
+async def run_node_claude_code(
+    *,
+    node_title: str,
+    node_type: str,
+    node_purpose: str,
+    project_dir: str,
+    file_scope_allow: list[str] | None = None,
+    file_scope_deny: list[str] | None = None,
+    parent_outputs: dict[str, str] | None = None,
+    user_prompt: str | None = None,
+    context_mode: str = "inherit",
+    memory_text: str | None = None,
+    system_prompt: str | None = None,
+    model: str | None = None,
+    run_id: str | None = None,
+) -> AsyncIterator[str]:
+    effective_run_id = run_id or f"claude-code-{uuid.uuid4().hex[:8]}"
+    if not os.path.isdir(project_dir):
+        yield f"[error] project directory not found: {project_dir}\n"
+        return
+
+    allow = file_scope_allow or []
+    deny = file_scope_deny or []
+    before_status = await _git_status_map(project_dir) if await _is_git_repo(project_dir) else {}
+    before_snapshots = await _snapshot_dirty_files(project_dir, before_status) if before_status else {}
+    marker = os.path.join(project_dir, ".mag_code_run_marker")
+    try:
+        with open(marker, "w", encoding="utf-8") as f:
+            f.write("marker")
+    except OSError:
+        marker = None
+
+    changed: list[str] = []
+    diff_info: dict[str, Any] = {
+        "available": False,
+        "isGitRepo": False,
+        "changedFiles": [],
+        "diff": "",
+        "truncated": False,
+        "warnings": [],
+    }
+    proc: asyncio.subprocess.Process | None = None
+    try:
+        args = _claude_code_base_args(model)
+        prompt = _build_claude_code_prompt(
+            node_title=node_title,
+            node_type=node_type,
+            node_purpose=node_purpose,
+            project_dir=project_dir,
+            file_scope_allow=allow,
+            file_scope_deny=deny,
+            parent_outputs=parent_outputs,
+            user_prompt=user_prompt,
+            context_mode=context_mode,
+            memory_text=memory_text,
+            system_prompt=system_prompt,
+        )
+        yield _marker("log", {
+            "level": "info",
+            "source": "code",
+            "status": "START",
+            "message": "Claude Code execution started.",
+        })
+
+        spawn_kwargs: dict[str, Any] = {
+            "stdin": asyncio.subprocess.PIPE,
+            "stdout": asyncio.subprocess.PIPE,
+            "stderr": asyncio.subprocess.PIPE,
+            "cwd": project_dir,
+            "env": {**os.environ, "NO_COLOR": "1", "CLAUDE_CODE_SIMPLE": "1"},
+        }
+        if os.name == "nt":
+            spawn_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            spawn_kwargs["start_new_session"] = True
+
+        proc = await asyncio.create_subprocess_exec(*args, **spawn_kwargs)
+        _ACTIVE_CLAUDE_RUNS[effective_run_id] = proc
+        _log_claude(effective_run_id, "RUNNING", f"pid={proc.pid}")
+        if proc.stdin:
+            proc.stdin.write(prompt.encode("utf-8"))
+            await proc.stdin.drain()
+            proc.stdin.close()
+
+        queue: asyncio.Queue[tuple[str, str | None]] = asyncio.Queue()
+
+        async def pipe_stream(name: str, stream: asyncio.StreamReader | None) -> None:
+            if stream is None:
+                await queue.put((name, None))
+                return
+            async for line in stream:
+                await queue.put((name, line.decode("utf-8", "replace")))
+            await queue.put((name, None))
+
+        stdout_task = asyncio.create_task(pipe_stream("stdout", proc.stdout))
+        stderr_task = asyncio.create_task(pipe_stream("stderr", proc.stderr))
+        open_streams = {"stdout", "stderr"}
+        claude_tool_steps: dict[str, dict[str, Any]] = {}
+        claude_step = 0
+        while open_streams:
+            if effective_run_id in _CANCELLED_NATIVE_RUNS:
+                raise asyncio.CancelledError()
+            name, text = await queue.get()
+            if text is None:
+                open_streams.discard(name)
+                continue
+            if name == "stderr":
+                yield _marker("log", {
+                    "level": "warn",
+                    "source": "code",
+                    "status": "STDERR",
+                    "message": text.strip(),
+                })
+                yield f"[stderr] {text}"
+                continue
+
+            try:
+                event = json.loads(text)
+            except json.JSONDecodeError:
+                yield text
+                continue
+            if not isinstance(event, dict):
+                yield text
+                continue
+
+            usage = _claude_usage_payload(event)
+            if usage:
+                yield _marker("usage", usage)
+
+            event_type = str(event.get("type") or "")
+            if event_type == "assistant":
+                for block in _iter_claude_content_blocks(event):
+                    block_type = str(block.get("type") or "")
+                    if block_type == "text":
+                        chunk = str(block.get("text") or "")
+                        if chunk:
+                            yield chunk
+                    elif block_type == "tool_use":
+                        claude_step += 1
+                        tool_call_id = str(block.get("id") or f"claude-tool-{claude_step}")
+                        tool_name = str(block.get("name") or "claude_tool")
+                        raw_input = block.get("input")
+                        input_args = raw_input if isinstance(raw_input, dict) else {}
+                        started_at = _utc_now()
+                        claude_tool_steps[tool_call_id] = {
+                            "step": claude_step,
+                            "tool": tool_name,
+                            "input": input_args,
+                            "startedAt": started_at,
+                        }
+                        trace = _claude_tool_trace(
+                            tool_call_id=tool_call_id,
+                            step=claude_step,
+                            tool_name=tool_name,
+                            status="running",
+                            input_args=input_args,
+                            started_at=started_at,
+                        )
+                        yield _marker("tool_start", trace)
+                        yield _marker("log", {
+                            "level": "info",
+                            "source": "code",
+                            "status": "TOOL",
+                            "message": f"{claude_step}. Claude Code {tool_name}",
+                        })
+                continue
+
+            if event_type == "user":
+                for block in _iter_claude_content_blocks(event):
+                    if str(block.get("type") or "") != "tool_result":
+                        continue
+                    tool_call_id = str(block.get("tool_use_id") or block.get("id") or "")
+                    state = claude_tool_steps.get(tool_call_id, {})
+                    output = block.get("content")
+                    is_error = bool(block.get("is_error"))
+                    trace = _claude_tool_trace(
+                        tool_call_id=tool_call_id or f"claude-tool-result-{len(claude_tool_steps) + 1}",
+                        step=int(state.get("step") or 0),
+                        tool_name=str(state.get("tool") or "claude_tool"),
+                        status="error" if is_error else "done",
+                        input_args=dict(state.get("input") or {}),
+                        started_at=str(state.get("startedAt") or _utc_now()),
+                        output={"content": _stringify_claude_content(output)} if not is_error else None,
+                        error=_stringify_claude_content(output) if is_error else None,
+                    )
+                    yield _marker("tool_result", trace)
+                    yield _marker("log", {
+                        "level": "error" if is_error else "info",
+                        "source": "code",
+                        "status": "TOOL_ERROR" if is_error else "TOOL_DONE",
+                        "message": trace.get("error") or f"{trace['step']}. Claude Code {trace['tool']} done",
+                    })
+                continue
+
+            if event_type == "result":
+                result_text = event.get("result")
+                if isinstance(result_text, str) and result_text.strip():
+                    yield result_text
+                subtype = str(event.get("subtype") or "")
+                yield _marker("log", {
+                    "level": "error" if subtype and subtype != "success" else "info",
+                    "source": "code",
+                    "status": "RESULT",
+                    "message": f"Claude Code result: {subtype or 'done'}",
+                })
+                continue
+
+            if event_type:
+                yield _marker("log", {
+                    "level": "info",
+                    "source": "code",
+                    "status": event_type.upper(),
+                    "message": f"Claude Code event: {event_type}",
+                })
+
+        await stdout_task
+        await stderr_task
+        await proc.wait()
+        _log_claude(effective_run_id, "EXIT", f"pid={proc.pid} code={proc.returncode}")
+        if proc.returncode != 0:
+            raise ProviderError(f"Claude Code exited with code {proc.returncode}")
+
+        changed = await _detect_changed_files(project_dir, marker, before_status)
+        diff_info = await _capture_code_diff(project_dir, changed, before_status, before_snapshots)
+        scope_warnings = _changed_scope_warnings(changed, allow, deny)
+        if scope_warnings:
+            diff_info["warnings"] = [*list(diff_info.get("warnings", [])), *scope_warnings]
+            yield _marker("log", {
+                "level": "warn",
+                "source": "code",
+                "status": "SCOPE",
+                "message": "; ".join(scope_warnings),
+            })
+    except asyncio.CancelledError:
+        if proc is not None:
+            await _kill_process_tree(proc, effective_run_id)
+        yield "\n[cancelled] Claude Code run cancelled.\n"
+        raise
+    finally:
+        _CANCELLED_NATIVE_RUNS.discard(effective_run_id)
+        _ACTIVE_CLAUDE_RUNS.pop(effective_run_id, None)
+        if marker:
+            try:
+                os.remove(marker)
+            except OSError:
+                pass
+
+    yield _marker("files", changed)
+    yield _marker("diff", diff_info)
 
 
 def _compact_tool_result(result: dict[str, Any]) -> str:

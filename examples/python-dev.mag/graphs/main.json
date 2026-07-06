@@ -1,12 +1,12 @@
 {
   "nodes": [
     {
-      "id": "86aab747-1d28-4bb7-bbcc-e41b1e25e04f",
+      "id": "input",
       "type": "prompt",
       "title": "输入需求",
       "position": {
-        "x": -513,
-        "y": 41.3
+        "x": -355.6,
+        "y": 19.2
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -27,8 +27,8 @@
       "type": "planning",
       "title": "需求分析",
       "position": {
-        "x": -154.1,
-        "y": 12.2
+        "x": -45.3,
+        "y": -8.7
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -42,7 +42,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "明确项目目标、功能清单与验收标准",
+        "purpose": "明确项目目标、功能清单与验收标准，输出需求文档",
         "inputs": [
           {
             "id": "requirement",
@@ -61,7 +61,7 @@
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "明确项目目标、功能清单与验收标准"
+      "purpose": "明确项目目标、功能清单与验收标准，输出需求文档"
     },
     {
       "id": "env_setup",
@@ -69,9 +69,9 @@
       "title": "环境初始化",
       "position": {
         "x": 320,
-        "y": -120
+        "y": -160
       },
-      "contextMode": "explicit",
+      "contextMode": "inherit",
       "fileScope": {
         "allow": [
           "pyproject.toml",
@@ -89,7 +89,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "创建目录结构、pyproject.toml、虚拟环境",
+        "purpose": "创建目录结构、pyproject.toml、uv 虚拟环境，生成项目骨架",
         "inputs": [
           {
             "id": "req_doc",
@@ -103,12 +103,13 @@
             "name": "项目骨架",
             "type": "unknown"
           }
-        ]
+        ],
+        "executionEngine": "claude-code"
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "创建目录结构、pyproject.toml、虚拟环境"
+      "purpose": "创建目录结构、pyproject.toml、uv 虚拟环境，生成项目骨架"
     },
     {
       "id": "architecture",
@@ -116,9 +117,9 @@
       "title": "架构设计",
       "position": {
         "x": 320,
-        "y": 120
+        "y": 160
       },
-      "contextMode": "explicit",
+      "contextMode": "inherit",
       "fileScope": {
         "allow": [
           "docs/**",
@@ -131,7 +132,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "模块划分、接口定义、依赖关系设计",
+        "purpose": "模块划分、接口定义、依赖关系设计，输出架构方案",
         "inputs": [
           {
             "id": "req_doc",
@@ -150,17 +151,17 @@
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "模块划分、接口定义、依赖关系设计"
+      "purpose": "模块划分、接口定义、依赖关系设计，输出架构方案"
     },
     {
       "id": "implement",
       "type": "code",
       "title": "功能实现",
       "position": {
-        "x": 680,
-        "y": -120
+        "x": 777.5,
+        "y": -44.3
       },
-      "contextMode": "explicit",
+      "contextMode": "inherit",
       "fileScope": {
         "allow": [
           "src/**"
@@ -178,7 +179,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "按架构设计编写核心模块代码",
+        "purpose": "按架构方案编写 src/ 下各模块代码",
         "inputs": [
           {
             "id": "skeleton",
@@ -197,20 +198,21 @@
             "name": "源代码",
             "type": "unknown"
           }
-        ]
+        ],
+        "executionEngine": "claude-code"
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "按架构设计编写核心模块代码"
+      "purpose": "按架构方案编写 src/ 下各模块代码"
     },
     {
       "id": "tests",
       "type": "code",
       "title": "测试编写",
       "position": {
-        "x": 952.2,
-        "y": 69.5
+        "x": 1159.4,
+        "y": 143.5
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -222,12 +224,13 @@
       },
       "toolPolicy": {
         "tools": [
-          "bash"
+          "read_file",
+          "write_file"
         ],
         "deny": []
       },
       "data": {
-        "purpose": "根据架构方案编写单元测试与集成测试文件，不负责运行 pytest",
+        "purpose": "根据架构方案与源代码编写 tests/ 下单元测试与集成测试文件，不负责运行",
         "inputs": [
           {
             "id": "arch_plan",
@@ -246,32 +249,38 @@
             "name": "测试代码",
             "type": "unknown"
           }
-        ]
+        ],
+        "executionEngine": "claude-code"
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "根据架构方案编写单元测试与集成测试文件，不负责运行 pytest"
+      "purpose": "根据架构方案与源代码编写 tests/ 下单元测试与集成测试文件，不负责运行"
     },
     {
       "id": "test_run",
-      "type": "test",
+      "type": "code",
       "title": "测试运行",
       "position": {
-        "x": 1385,
-        "y": 83.1
+        "x": 1564.4,
+        "y": 156.7
       },
       "contextMode": "inherit",
       "fileScope": {
-        "allow": [],
+        "allow": [
+          "tests/**",
+          "src/**"
+        ],
         "deny": []
       },
       "toolPolicy": {
-        "tools": [],
+        "tools": [
+          "bash"
+        ],
         "deny": []
       },
       "data": {
-        "purpose": "运行测试命令并输出测试报告",
+        "purpose": "运行 uv run pytest，收集通过/失败结果，输出测试报告",
         "testCommand": "uv run pytest",
         "inputs": [
           {
@@ -286,22 +295,23 @@
             "name": "测试报告",
             "type": "unknown"
           }
-        ]
+        ],
+        "executionEngine": "claude-code"
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "运行测试命令并输出测试报告"
+      "purpose": "运行 uv run pytest，收集通过/失败结果，输出测试报告"
     },
     {
       "id": "review",
-      "type": "analysis",
+      "type": "code",
       "title": "代码审查",
       "position": {
-        "x": 1668.8,
-        "y": -119.5
+        "x": 2037.9,
+        "y": -53
       },
-      "contextMode": "explicit",
+      "contextMode": "inherit",
       "fileScope": {
         "allow": [
           "src/**",
@@ -311,11 +321,14 @@
         "deny": []
       },
       "toolPolicy": {
-        "tools": [],
+        "tools": [
+          "bash",
+          "read_file"
+        ],
         "deny": []
       },
       "data": {
-        "purpose": "lint 检查、代码质量审查、重构建议",
+        "purpose": "运行 ruff check 和 mypy，读取源代码做质量审查，结合测试报告输出问题清单与重构建议",
         "inputs": [
           {
             "id": "src_code",
@@ -339,17 +352,17 @@
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "lint 检查、代码质量审查、重构建议"
+      "purpose": "运行 ruff check 和 mypy，读取源代码做质量审查，结合测试报告输出问题清单与重构建议"
     },
     {
       "id": "package",
       "type": "code",
       "title": "打包发布",
       "position": {
-        "x": 2028.8,
-        "y": -119.5
+        "x": 2484.1,
+        "y": -36.6
       },
-      "contextMode": "explicit",
+      "contextMode": "inherit",
       "fileScope": {
         "allow": [
           "pyproject.toml",
@@ -366,7 +379,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "构建 wheel / sdist，生成 Dockerfile 与 CI 配置",
+        "purpose": "构建 wheel/sdist，生成 Dockerfile 与 GitHub Actions CI 配置",
         "inputs": [
           {
             "id": "review_report",
@@ -380,25 +393,26 @@
             "name": "发布产物",
             "type": "unknown"
           }
-        ]
+        ],
+        "executionEngine": "claude-code"
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "构建 wheel / sdist，生成 Dockerfile 与 CI 配置"
+      "purpose": "构建 wheel/sdist，生成 Dockerfile 与 GitHub Actions CI 配置"
     }
   ],
   "links": [
     {
-      "id": "8b74b53f-dcd4-4e9e-92a1-ae748b94b75a",
-      "source": "86aab747-1d28-4bb7-bbcc-e41b1e25e04f",
+      "id": "l1",
+      "source": "input",
       "target": "requirements",
       "sourceHandle": "response",
       "targetHandle": "requirement",
       "label": "需求输入"
     },
     {
-      "id": "e1",
+      "id": "l2",
       "source": "requirements",
       "target": "env_setup",
       "sourceHandle": "req_doc",
@@ -406,7 +420,7 @@
       "label": "需求文档"
     },
     {
-      "id": "e2",
+      "id": "l3",
       "source": "requirements",
       "target": "architecture",
       "sourceHandle": "req_doc",
@@ -414,7 +428,7 @@
       "label": "需求文档"
     },
     {
-      "id": "e3",
+      "id": "l4",
       "source": "env_setup",
       "target": "implement",
       "sourceHandle": "skeleton",
@@ -422,7 +436,7 @@
       "label": "项目骨架"
     },
     {
-      "id": "e4",
+      "id": "l5",
       "source": "architecture",
       "target": "implement",
       "sourceHandle": "arch_plan",
@@ -430,7 +444,7 @@
       "label": "架构方案"
     },
     {
-      "id": "e5",
+      "id": "l6",
       "source": "architecture",
       "target": "tests",
       "sourceHandle": "arch_plan",
@@ -438,15 +452,7 @@
       "label": "架构方案"
     },
     {
-      "id": "e6",
-      "source": "implement",
-      "target": "review",
-      "sourceHandle": "src_code",
-      "targetHandle": "src_code",
-      "label": "源代码"
-    },
-    {
-      "id": "e6a",
+      "id": "l7",
       "source": "implement",
       "target": "tests",
       "sourceHandle": "src_code",
@@ -454,7 +460,15 @@
       "label": "源代码"
     },
     {
-      "id": "e6b",
+      "id": "l8",
+      "source": "implement",
+      "target": "review",
+      "sourceHandle": "src_code",
+      "targetHandle": "src_code",
+      "label": "源代码"
+    },
+    {
+      "id": "l9",
       "source": "tests",
       "target": "test_run",
       "sourceHandle": "test_code",
@@ -462,7 +476,7 @@
       "label": "测试代码"
     },
     {
-      "id": "e7",
+      "id": "l10",
       "source": "test_run",
       "target": "review",
       "sourceHandle": "test_report",
@@ -470,7 +484,7 @@
       "label": "测试报告"
     },
     {
-      "id": "e8",
+      "id": "l11",
       "source": "review",
       "target": "package",
       "sourceHandle": "review_report",

@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { create } from "zustand";
 import { cancelCodeRun, expandModules, expandPlan, replayToolSequence, runDagStream, runNodeCode, runNodeStream } from "@/api/backend";
-import type { CodeDiffInfo, ExpandPlanResult, ToolStep } from "@/api/backend";
+import type { CodeDiffInfo, CodeExecutionEngine, ExpandPlanResult, Provider, ToolStep } from "@/api/backend";
 import { collectToolSteps } from "@/utils/toolSteps";
 import { useSkillStore } from "@/store/skillStore";
 import { useGraphStore } from "@/store/graphStore";
@@ -47,6 +47,10 @@ const TEST_COMMANDS = [
   "ruff format --check",
   "tsc --noEmit",
 ];
+
+function codeExecutionEngine(value: unknown): CodeExecutionEngine {
+  return value === "native-tools" ? "native-tools" : "claude-code";
+}
 
 function collectUpstreamOutputs(nodes: NodeBase[], links: Edge[], nodeId: string): Record<string, string> | undefined {
   return resolvedInputsToParentOutputs(collectResolvedInputs(nodes, links, nodeId));
@@ -560,9 +564,11 @@ export function useRunNode() {
       const parentOutputs = node.contextMode === "inherit"
         ? collectUpstreamOutputs(state.nodes, state.links, node.id)
         : undefined;
-      const provider = useProviderStore.getState().provider;
+      const engine = codeExecutionEngine(node.data?.executionEngine);
+      const selectedProvider = useProviderStore.getState().provider;
+      const provider: Provider = engine === "claude-code" ? "local-claude" : selectedProvider;
       const model = useProviderStore.getState().getModel(provider);
-      if (!provider.startsWith("local-") && !useKeyStore.getState().keys[provider]) {
+      if (engine === "native-tools" && !provider.startsWith("local-") && !useKeyStore.getState().keys[provider]) {
         useMonitorStore.getState().addLog({
           level: "warn",
           source: "provider",
@@ -584,7 +590,7 @@ export function useRunNode() {
         id: runRecordId,
         startedAt: new Date().toISOString(),
         status: "running",
-        provider,
+        provider: engine,
         model,
       });
       useMonitorStore.getState().addLog({
@@ -593,7 +599,7 @@ export function useRunNode() {
         status: "START",
         nodeId,
         nodeTitle: node.title,
-        message: `Execution run started (${model}, fileScope allow ${node.fileScope.allow.length} / deny ${node.fileScope.deny.length})`,
+        message: `Execution run started (${engine}, ${model}, fileScope allow ${node.fileScope.allow.length} / deny ${node.fileScope.deny.length})`,
       });
       setRunning(nodeId);
 
@@ -617,8 +623,9 @@ export function useRunNode() {
           userPrompt: opts.userPrompt,
           provider,
           model,
-          apiKey: useKeyStore.getState().getKey(provider),
+          apiKey: engine === "native-tools" ? useKeyStore.getState().getKey(provider) : undefined,
           runId,
+          executionEngine: engine,
         },
         {
           onText: (chunk) => {

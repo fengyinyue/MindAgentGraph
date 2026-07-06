@@ -7,6 +7,7 @@ NodeType = Literal[
 ]
 ContextMode = Literal["inherit", "explicit", "isolated"]
 ProviderName = Literal["anthropic", "deepseek", "openai", "local-claude", "local-codex"]
+CodeExecutionEngine = Literal["native-tools", "claude-code"]
 
 
 class Position(BaseModel):
@@ -130,6 +131,7 @@ class CodeRunRequest(BaseModel):
     model: Optional[str] = None
     runId: Optional[str] = None
     readOnly: bool = False
+    executionEngine: CodeExecutionEngine = "claude-code"
 
 
 class CodeAnalysisRequest(BaseModel):

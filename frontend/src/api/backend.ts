@@ -29,6 +29,7 @@ export async function checkHealth(): Promise<boolean> {
 }
 
 export type Provider = "anthropic" | "deepseek" | "openai" | "local-claude" | "local-codex";
+export type CodeExecutionEngine = "native-tools" | "claude-code";
 
 export async function planGraph(
   goal: string,
@@ -172,6 +173,7 @@ export interface CodeRunInput {
   apiKey?: string;
   runId?: string;
   readOnly?: boolean;
+  executionEngine?: CodeExecutionEngine;
 }
 
 export interface CodeDiffInfo {
@@ -221,6 +223,7 @@ export async function runNodeCode(
       model: input.model,
       runId: input.runId,
       readOnly: input.readOnly,
+      executionEngine: input.executionEngine,
     }),
     signal: cb.signal,
   });

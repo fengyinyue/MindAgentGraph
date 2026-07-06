@@ -38,7 +38,7 @@ from app.services.planner import expand_plan, expand_modules, plan_graph
 from app.services.graph_chat import edit_graph_with_chat, stream_graph_chat_reply
 from app.services.project_scanner import scan_project
 from app.services.runner import run_node_stream
-from app.services.code_runner import cancel_code_run, run_node_native_code, replay_tool_sequence
+from app.services.code_runner import cancel_code_run, run_node_claude_code, run_node_native_code, replay_tool_sequence
 from app.services.memory import read_memory, write_memory
 from app.services.dag_executor import run_dag_stream
 
@@ -365,24 +365,43 @@ async def run_node_code(
                 memory_text = read_memory(req.projectPath, req.node.memoryRef)
 
             output_parts: list[str] = []
-            async for chunk in run_node_native_code(
-                node_title=req.node.title,
-                node_type=req.node.type,
-                node_purpose=req.node.purpose or "",
-                project_dir=req.projectDir,
-                file_scope_allow=req.fileScopeAllow,
-                file_scope_deny=req.fileScopeDeny,
-                parent_outputs=req.parentOutputs,
-                user_prompt=req.userPrompt,
-                context_mode=req.node.contextMode,
-                memory_text=memory_text,
-                system_prompt=req.node.systemPrompt,
-                provider=req.provider,
-                model=req.model,
-                api_key=x_provider_key,
-                run_id=req.runId,
-                read_only=req.readOnly,
-            ):
+            runner = (
+                run_node_claude_code(
+                    node_title=req.node.title,
+                    node_type=req.node.type,
+                    node_purpose=req.node.purpose or "",
+                    project_dir=req.projectDir,
+                    file_scope_allow=req.fileScopeAllow,
+                    file_scope_deny=req.fileScopeDeny,
+                    parent_outputs=req.parentOutputs,
+                    user_prompt=req.userPrompt,
+                    context_mode=req.node.contextMode,
+                    memory_text=memory_text,
+                    system_prompt=req.node.systemPrompt,
+                    model=req.model,
+                    run_id=req.runId,
+                )
+                if req.executionEngine == "claude-code" and not req.readOnly
+                else run_node_native_code(
+                    node_title=req.node.title,
+                    node_type=req.node.type,
+                    node_purpose=req.node.purpose or "",
+                    project_dir=req.projectDir,
+                    file_scope_allow=req.fileScopeAllow,
+                    file_scope_deny=req.fileScopeDeny,
+                    parent_outputs=req.parentOutputs,
+                    user_prompt=req.userPrompt,
+                    context_mode=req.node.contextMode,
+                    memory_text=memory_text,
+                    system_prompt=req.node.systemPrompt,
+                    provider=req.provider,
+                    model=req.model,
+                    api_key=x_provider_key,
+                    run_id=req.runId,
+                    read_only=req.readOnly,
+                )
+            )
+            async for chunk in runner:
                 sse = _marker_to_sse(chunk)
                 if sse is not None:
                     yield sse

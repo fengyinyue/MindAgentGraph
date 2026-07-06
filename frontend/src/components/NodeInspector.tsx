@@ -1,5 +1,6 @@
 import { useGraphStore } from "@/store/graphStore";
 import { useRunNode } from "@/hooks/useRunNode";
+import type { CodeExecutionEngine } from "@/api/backend";
 import { useOutputPanelStore } from "@/store/outputPanelStore";
 import { useMonitorStore } from "@/store/monitorStore";
 import { MarkdownPreview } from "@/components/OutputViewer";
@@ -206,6 +207,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   const systemPrompt = customSystemPrompt.trim() ? customSystemPrompt : defaultSystemPromptForNodeType(node.type);
   const memoryRef = node.memoryRef ?? "";
   const isCodeNode = node.type === "code";
+  const executionEngine: CodeExecutionEngine = node.data?.executionEngine === "native-tools" ? "native-tools" : "claude-code";
   const isToolNode = node.type === "tool";
   const isGraphNode = node.type === "planning" || node.type === "subgraph";
   const isCodeAnalysisNode = node.type === "analysis";
@@ -518,7 +520,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                       className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
                       onClick={() => runCode(node.id)}
                       disabled={runningId !== null || !projectDir}
-                      title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : "MAG Native Execution Runner"}
+                      title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : executionEngine === "claude-code" ? "Claude Code Execution Runner" : "MAG Native Execution Runner"}
                     >
                       ⚡ Execution
                     </button>
@@ -626,6 +628,25 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
 
           {isCodeNode ? (
             <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2 space-y-2">
+              <div className="flex flex-wrap items-end gap-3">
+                <label className="min-w-56">
+                  <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Execution Engine</span>
+                  <select
+                    className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 text-xs outline-none focus:border-accent"
+                    value={executionEngine}
+                    onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { executionEngine: e.target.value as CodeExecutionEngine })}
+                    disabled={runningId !== null}
+                  >
+                    <option value="native-tools">Native Tools</option>
+                    <option value="claude-code">Claude Code</option>
+                  </select>
+                </label>
+                <span className="pb-1 text-[10px] text-zinc-600">
+                  {executionEngine === "claude-code"
+                    ? "Calls local Claude Code CLI directly; file scope is checked after the run."
+                    : "Uses MAG controlled tools with enforced file scope."}
+                </span>
+              </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Advanced Automation</span>
                 <button
