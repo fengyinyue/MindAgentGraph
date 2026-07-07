@@ -1,7 +1,7 @@
 # MindAgentGraph
 
 <p align="center">
-  <b>A node-based AI creation planning tool</b> for creators and developers who need to plan, decompose, and execute complex long-term projects.
+  <b>A visual node orchestration tool for AI engineering workflows</b>
 </p>
 
 <p align="center">
@@ -10,200 +10,253 @@
 
 ---
 
-## What is MindAgentGraph?
+## What is This
 
-MindAgentGraph is **not a chat AI**. It is a visual node system for organizing AI work context — think of it as a control panel where nodes, edges, context, memory, and file scope define the boundaries within which AI operates.
+MindAgentGraph is not another chat window, nor a simple wrapper that spawns multiple agents from tools like Claude Code, Codex, or Cursor.
 
-Instead of wrestling with a growing chat history, you build a **visual DAG of thinking nodes**. Each node is an independent unit of work with its own purpose, prompt, memory reference, file scope, dependencies, and execution output. Edges define upstream/downstream relationships and context inheritance. The graph is both your **project plan** and your **AI execution dashboard**.
+Its goal is to crystallize common AI engineering processes into visual, reusable, and auditable workflows:
 
-## Why Not Just Chat?
+```text
+Requirement -> Analysis -> Design -> File Scope -> Execution -> Test -> Review
+```
 
-Chat-based AI breaks down in complex projects:
+You can break down a software development task into multiple nodes — just like building a ComfyUI workflow. Each node has a clear input, output, responsibility, system prompt, file scope, and execution result. Edges are not decoration; they define how upstream artifacts are passed to downstream nodes.
 
-- **Context gets messy.** Long conversations drift. There's no durable structure to revisit or refine a plan weeks later.
-- **Scope bleeds.** AI sees too much of your project and touches files it shouldn't.
-- **No visual overview.** Tasks, dependencies, memory, and results are scattered across chat turns with no bird's-eye view.
-- **Multi-agent chaos.** When multiple agents or subtasks collaborate, there's no clear boundary, communication record, or scheduling mechanism.
-- **Assets everywhere.** Code, designs, settings, and plans live in different tools with no unified structure.
+The core value is not "running more AIs in parallel" — it's turning AI work from one-off chats into stable engineering processes.
 
-MindAgentGraph replaces the "endless chat thread" with **structured node-based planning and execution**.
+## Why You Need It
+
+Common problems when using chat-based AI for complex projects:
+
+- Context grows endlessly and task boundaries become fuzzy.
+- Analysis, design, implementation, testing, and review are all mixed together and hard to reuse.
+- A successful run is hard to crystallize into a replayable process for next time.
+- AI easily reads or modifies files it shouldn't touch.
+- Intermediate artifacts are scattered across chat history and can't be reliably consumed by downstream steps.
+
+MindAgentGraph breaks these processes into nodes, gives every step a visible artifact, and lets downstream nodes consume it.
 
 ## Core Ideas
 
-- A **node** is not a code block — it's an AI thinking structure: a task, module, agent, resource, or system component.
-- AI works **within the current node's context** — it does not pollute the entire project.
-- Nodes manage their own **prompt, memory, goal, file scope, dependencies, and output**.
-- Edges represent **upstream dependency, context inheritance, or inter-agent communication**.
-- The graph is both a **living project plan** and a **visual execution dashboard**.
+- **Nodes are workflow operators, not chat agents.** Nodes should have clear inputs and outputs.
+- **Edges express data flow.** Structured output from an upstream node can be bound to input parameters of a downstream node.
+- **Intermediate artifacts are visible, editable, and reusable.** Analysis, Design, Execution, Test, and Review should all leave clear results.
+- **Keep execution nodes few and precise.** Execution nodes are responsible for actually modifying files; every module in a design diagram should not automatically become an executor.
+- **Workflows are more worth reusing than tool traces.** What matters most going forward is saving Workflow Templates, not just saving a single tool call trace.
 
-## Graph Types
+## Recommended Workflow
 
-MindAgentGraph separates high-level workflow planning from detailed structural design:
-
-- **Planning** (`planning`) is the high-level execution plan. It decomposes a goal into coarse work packages such as research, architecture, implementation, validation, and delivery. Planning expansion uses normal planning logic and intentionally avoids port-level dataflow.
-- **Subgraph** (`subgraph`) is a detailed dataflow or dependency graph. It is used for pipelines, module structures, asset flows, generation rules, and other cases where explicit inputs, outputs, and typed connections matter.
-- **Lightweight subgraphs** keep Subgraph internals inside the Subgraph node. Double-click or enter a Subgraph to inspect its internal nodes; the parent Planning graph stays clean and focused on orchestration.
-- Legacy `workflow_graph`, `structure_graph`, and `code_analysis` nodes are loaded as `planning`, `subgraph`, and `analysis` for compatibility.
-
-A typical collaboration pattern is: use Planning to decide what must happen, add a Subgraph where a step needs a concrete pipeline or dependency model, then let downstream code/task nodes implement or validate that structure.
-
-## Target Users
-
-- Indie game developers
-- AI-assisted programmers using Claude Code, Cursor, Codex, or similar tools
-- Tech leads and product owners decomposing complex projects
-- Developers iterating on long-term engineering projects with AI
-- Creators organizing settings, assets, tasks, and agent workflows
-
-The first phase focuses on **AI-assisted software and game project planning and execution**.
-
-![License](https://img.shields.io/badge/license-AGPL--3.0-blue)
-
-## Features
-
-- **Visual DAG Canvas** — infinite canvas with @xyflow/react. Drag, connect, and configure nodes. MiniMap, background grid, and zoom controls included.
-- **Node Types** - `planning`, `subgraph`, `prompt`, `memory`, `filescope`, `analysis`, `code`, `api`, `asset`, `agent`, `task`, `semantic`
-- **AI Graph Generation** — input a goal sentence; AI generates a full DAG of connected nodes automatically
-- **Graph Expansion** - Planning nodes expand into high-level work packages; Subgraph nodes expand into port-based dataflow subgraphs
-- **Subgraph Navigation** - Subgraph nodes can contain internal child nodes, keeping detailed pipelines separate from the top-level workflow
-- **Analysis & Code Generation** — Claude Code-powered analysis and diff-tracked code generation with FileScope constraints
-- **Module Graph** — code analysis results expand into a visual module dependency graph
-- **Per-Node Context Control** — three modes: `inherit` (upstream + memory), `explicit` (node fields only), `isolated` (no upstream, no memory)
-- **Confirmation Protocol** — nodes emit structured `mag-confirmation` blocks when blocked, pausing DAG execution for user input
-- **DAG Execution** — sequential topological execution via SSE streaming with real-time progress, logs, and token usage
-- **Multi-Provider Support** — Anthropic Claude, OpenAI, DeepSeek, local Claude CLI, and local Codex CLI
-- **Project Persistence** — `.mag` project folders with JSON graphs, Markdown memory, and asset storage — fully Git-friendly
-- **Resizable Panels** — collapsible left panel (project explorer), bottom panel (monitor), and right panel (node inspector)
-- **Markdown Output Viewer** — full-screen panel with raw text and rendered Markdown preview modes
-
-## Architecture
-
+```text
+Requirement
+  -> Analysis
+  -> Design
+  -> File Scope
+  -> Execution
+  -> Test
+  -> Review
 ```
-┌─────────────────────────────────────────────────┐
-│                  Tauri 2.x (Rust)                │
-│              Desktop shell + sidecar             │
-├─────────────────────────────────────────────────┤
-│   React 18 + TypeScript + @xyflow/react         │
-│   Zustand (state) + Tailwind CSS                │
-│   react-resizable-panels                        │
-├─────────────────────────────────────────────────┤
-│   FastAPI (Python 3.11+)                        │
-│   SSE streaming endpoints                       │
-│   AI providers: Anthropic / DeepSeek / CLI      │
-├─────────────────────────────────────────────────┤
-│   .mag project folders (JSON + Markdown)        │
-│   Local storage, Git-friendly                   │
-└─────────────────────────────────────────────────┘
+
+Responsibilities at each stage:
+
+| Node | Responsibility | Typical Output |
+| --- | --- | --- |
+| Requirement | Record requirements, goals, constraints, and acceptance criteria | Structured requirement spec |
+| Analysis | Read-only analysis of the project, no file modifications | Relevant files, current state, risks, suggested entry points |
+| Design | Generate design plans or content outlines | Markdown, Mermaid, implementation steps, acceptance criteria |
+| File Scope | Limit the set of readable/writable files | allow / deny path rules |
+| Execution | Execute code or file modifications, choose Native Tools or Claude Code | Modification summary, changed files, diff, tool trace, run record |
+| Test | Run deterministic test commands | test report, stdout, stderr, failure reasons |
+| Review | Audit results, risks, and omissions | Issue list, fix suggestions, pass/fail verdict |
+
+## Node Types
+
+Commonly used node types:
+
+- `planning`: High-level planning node for organizing processes and decomposing goals.
+- `subgraph`: Internal subgraph for expressing finer dependencies, pipelines, or structures.
+- `prompt`: Plain prompt node for generating text artifacts.
+- `memory`: Long-term context or knowledge records.
+- `filescope`: File scope node that constrains the paths an Execution node can touch.
+- `analysis`: Read-only analysis node that can read the project but not modify files.
+- `design`: Design artifact node, suited for generating plans, diagrams, documents, and specs.
+- `code`: Execution node (displayed as Execution in the UI), responsible for actually reading/writing files and running verification commands. Currently supports `Native Tools` and `Claude Code` execution engines.
+- `test`: Test node that runs test commands and outputs a test report.
+- `task`: General task node, suitable as a manual checkpoint, note, summary, or process placeholder.
+- `tool`: Tool node for expressing materializable tool calls.
+- `asset` / `api` / `agent` / `semantic`: For more specific resource, interface, agent, or semantic organization scenarios.
+
+## Data Flow and Context
+
+MindAgentGraph supports node ports and context modes:
+
+- Nodes can manually edit `inputs` / `outputs`.
+- `sourceHandle` corresponds to structured output fields of the upstream node.
+- `targetHandle` corresponds to input parameters of the downstream node.
+- The runner builds the current node's context according to port bindings.
+- Nodes only read directly bound input data by default, avoiding duplicate context from recursive upstream reads.
+
+This makes workflows behave more like a real data pipeline, rather than "stuffing all upstream chat history into the model."
+
+## Execution Model
+
+Execution nodes can select an execution engine in the UI.
+
+### Native Tools
+
+`Native Tools` is MindAgentGraph's built-in controlled executor:
+
+- Enforces file read/write boundaries according to File Scope.
+- Supports tools: `list_files`, `read_file`, `grep`, `apply_patch`, `write_file`, `move_file`, `delete_file`, `mkdir`, `inspect_project`, `run_command`, `get_diff`, and more.
+- `run_command` uses an allowlist to prevent arbitrary command execution.
+- Every run records tool calls, changed files, and diffs.
+- Best suited for scenarios requiring strict file scoping and replayable tool traces.
+
+### Claude Code
+
+The `Claude Code` engine calls the Claude Code CLI installed and logged in on the local machine:
+
+- Uses `claude --print --no-session-persistence --output-format stream-json --verbose` by default.
+- Displays Claude Code's execution progress in real time via structured events — e.g., `Read`, `Edit`, `Bash`, `Grep` tool calls.
+- Tool events are converted into MindAgentGraph Tool Traces and materialized as viewable tool sub-nodes inside the Execution node.
+- Changed files and diffs are still captured after the run ends.
+- File Scope is written into the prompt, and the run checks afterward whether any files outside allow / deny were modified. Note: unlike Native Tools, it does not intercept at the tool layer.
+- Override the Claude Code command via `MAG_CLAUDE_CODE_CMD`, for example to specify custom arguments or an executable path.
+
+Analysis nodes currently use read-only mode, suited for understanding the project before execution; they can be extended to a read-only Claude Code analysis engine later.
+
+Test nodes run deterministic test commands, for example:
+
+```bash
+uv run pytest
+python -m pytest
+npm test
 ```
+
+The recommended pattern: Execution handles implementation, Test handles verification, Review judges risk and whether another round of fixes is needed.
+
+## Example Projects
+
+The repository includes `.mag` example workflows:
+
+- `examples/python-dev.mag`: Python development workflow example.
+- `examples/character-design.mag`: Character design workflow example.
+- `examples/novel-writing.mag`: Novel writing workflow example.
+
+These examples are used to verify node data flow, system prompts, input/output panels, and DAG execution.
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Node.js** ≥ 18
-- **Python** ≥ 3.11
-- **uv** (Python package manager) — `pip install uv`
-- **Rust** (Tauri desktop mode only)
+- Node.js 18+
+- Python 3.11+
+- uv
+- Rust — required only for Tauri desktop mode
+- Optional: Claude Code CLI (required when an Execution node selects the `Claude Code` engine)
 
-### Browser Dev Mode (Recommended First)
-
-No Rust required. Runs backend + frontend with a single command.
-
-**One-time setup:**
+### Install Dependencies
 
 ```bash
-# Frontend dependencies
 cd frontend
 npm install
 
-# Backend dependencies
 cd ../backend
 uv venv --python 3.13
 uv pip install -e .
 ```
 
-**Start:**
+### Browser Dev Mode
+
+From the project root:
 
 ```bash
-# From project root — starts both backend (port 8765) and frontend (port 1420)
 npm run dev
 ```
 
-Or double-click `start-dev.bat` on Windows.
+This starts both:
 
-Open `http://localhost:1420` in your browser.
+- Backend FastAPI: `http://localhost:8765`
+- Frontend Vite: `http://localhost:1420`
 
-**Quick test:**
-1. Type a goal in the top input bar, e.g. "Design a city generator for an RPG game"
-2. Click **Generate** — a 5-node DAG appears on the canvas
-3. Click any node to inspect its type, context mode, file scope, and data in the right panel
+Windows users can also double-click:
 
-> **Note:** Without an API key, the planner falls back to an offline demo graph. The full UI flow still works.
-
-### Configure API Keys
-
-Click the ⚙ gear icon in the toolbar to configure provider keys via the settings panel. Keys are stored in browser localStorage only — never in `.mag` project files.
-
-Or set environment variables:
-
-| Provider | Environment Variable | Default Model |
-|----------|---------------------|---------------|
-| Anthropic | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` |
-| OpenAI | `OPENAI_API_KEY` | `gpt-4.1` |
-| DeepSeek | `DEEPSEEK_API_KEY` | `deepseek-v4-flash` |
+```text
+start-dev.bat
+```
 
 ### Tauri Desktop Mode
-
-Requires Rust + platform build dependencies (Visual Studio Build Tools on Windows, Xcode CLI tools on macOS).
 
 ```bash
 cd src-tauri
 cargo tauri dev
 ```
 
-See [doc/quickstart.md](doc/quickstart.md) for detailed platform-specific setup instructions.
+For detailed environment setup see [doc/quickstart.md](doc/quickstart.md).
+
+## API Key Configuration
+
+Configure model provider keys in the settings panel in the UI. Keys are saved in browser `localStorage` and are never written to `.mag` project files.
+
+You can also configure via environment variables:
+
+| Provider | Environment Variable |
+| --- | --- |
+| Anthropic | `ANTHROPIC_API_KEY` |
+| OpenAI | `OPENAI_API_KEY` |
+| DeepSeek | `DEEPSEEK_API_KEY` |
+
+Local Claude Code does not need an API key configured in MindAgentGraph, but `claude` / `claude.cmd` must be executable on the system. If Claude Code is not in PATH, override the command via environment variable:
+
+| Purpose | Environment Variable |
+| --- | --- |
+| Claude Code execution engine command | `MAG_CLAUDE_CODE_CMD` |
+| Local Claude CLI general command | `MAG_LOCAL_CLAUDE_CMD` |
 
 ## Project Structure
 
-```
+```text
 MindAgentGraph/
-├── frontend/              # React frontend (Vite + TypeScript + Tailwind)
-│   └── src/
-│       ├── api/           # API client + SSE streaming
-│       ├── components/    # Canvas, NodeInspector, Monitor, Settings, etc.
-│       ├── store/         # Zustand stores (graph, keys, monitor, panels)
-│       ├── hooks/         # useRunNode — core execution hook
-│       └── utils/         # Confirmation protocol parser
-├── backend/               # FastAPI Python backend
-│   └── app/
-│       ├── main.py        # FastAPI app + SSE endpoints
-│       ├── services/      # Planner, Runner, DAG Executor, Code Runner
-│       │   └── providers/ # Anthropic, DeepSeek, Local CLI providers
-│       └── tests/
-├── src-tauri/             # Tauri Rust desktop shell
-├── shared/                # Cross-language types + JSON Schema
-├── doc/                   # Design documents + quickstart guide
-├── examples/              # Demo .mag project
-└── scripts/               # Dev launcher scripts
+|-- frontend/      React + TypeScript + @xyflow/react frontend
+|-- backend/       FastAPI backend and node runner
+|-- shared/        Cross-language types and JSON Schema
+|-- src-tauri/     Tauri desktop shell
+|-- examples/      Sample .mag projects
+|-- doc/           Product, design, and quickstart docs
+|-- scripts/       Dev launcher scripts
 ```
 
 ## Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| Desktop Shell | Tauri 2.x (Rust) |
-| Frontend | React 18, TypeScript, @xyflow/react, Zustand, Tailwind CSS |
-| Backend | FastAPI (Python 3.11+), PyInstaller sidecar |
-| AI Providers | Anthropic Claude SDK, OpenAI SDK, DeepSeek (OpenAI-compatible), local CLI |
-| Storage | `.mag` project folders (JSON + Markdown), Git-friendly |
-| Build | Vite, hatchling, Cargo, uv |
+| --- | --- |
+| Frontend | React 18, TypeScript, Vite, @xyflow/react, Zustand, Tailwind CSS |
+| Backend | FastAPI, Python, Pydantic, SSE |
+| Desktop | Tauri 2.x |
+| AI Provider | Anthropic, OpenAI, DeepSeek, local Claude CLI, local Codex CLI |
+| Storage | `.mag` project folders, JSON + Markdown, Git-friendly |
+| Build | npm, uv, Cargo |
 
 ## Documentation
 
-- [Quickstart Guide](doc/quickstart.md) — detailed setup for browser dev mode and Tauri desktop mode
-- [Product Proposal](doc/proposal.md) — full product vision and design rationale
-- [High-Level Design](doc/high-level-design.md) — MVP architecture document
-- [Detailed Design](doc/detailed-design.md) — component-level design specifications
+- [Quickstart](doc/quickstart.md)
+- [Product Proposal](doc/proposal.md)
+- [ComfyUI-style AI Workflow Plan](doc/comfyui-style-ai-workflow-plan.md)
+
+## Current Phase
+
+The current focus is completing a reusable AI engineering loop:
+
+```text
+Requirement -> Analysis -> Design -> Execution -> Test -> Review
+```
+
+Near-term goals:
+
+- Clarify node responsibilities and reduce semantic confusion among `task`, `test`, and `code`.
+- Make ports actually participate in data passing.
+- Improve the input panel, output panel, and system prompt editing experience.
+- Make example workflows reusable as templates.
+- Gradually upgrade `Save as Skill` to `Save Workflow Template`.
 
 ## License
 
