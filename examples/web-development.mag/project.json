@@ -1,0 +1,8 @@
+{
+  "name": "web-development",
+  "version": "0.1.0",
+  "rootGraph": "graphs/main.json",
+  "description": "网页开发工作流：需求分析 → 架构设计 & UI设计 → 前后端实现 → 联调部署",
+  "createdAt": "2026-07-07T00:00:00.000Z",
+  "updatedAt": "2026-07-07T00:00:00.000Z"
+}

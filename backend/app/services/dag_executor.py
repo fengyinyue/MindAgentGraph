@@ -270,7 +270,7 @@ async def run_dag_stream(
 
     for node_id in order:
         node = nodes_by_id[node_id]
-        if node.type in {"planning", "subgraph"}:
+        if node.type == "planning":
             yield sse("log", {
                 "level": "warn",
                 "source": "dag",
@@ -284,6 +284,269 @@ async def run_dag_stream(
                 "nodeTitle": node.title,
                 "status": "skipped",
                 "message": "Planning 节点不执行 Explain。",
+            })
+            continue
+
+        if node.type == "subgraph":
+            children_data = node.data.get("children") or {}
+            inner_nodes_raw = children_data.get("nodes") or []
+            inner_links_raw = children_data.get("links") or []
+
+            if not inner_nodes_raw:
+                yield sse("log", {
+                    "level": "warn",
+                    "source": "dag",
+                    "status": "SKIPPED",
+                    "nodeId": node.id,
+                    "nodeTitle": node.title,
+                    "message": "子图无内部节点，跳过。",
+                })
+                yield sse("progress", {
+                    "nodeId": node.id,
+                    "nodeTitle": node.title,
+                    "status": "skipped",
+                    "message": "子图无内部节点。",
+                })
+                continue
+
+            # Collect outer parent_outputs (same as regular nodes)
+            outer_parent_outputs: dict[str, str] = {}
+            for link in incoming_links[node.id]:
+                parent = nodes_by_id[link.source]
+                result_text = results.get(parent.id)
+                if result_text is None and not _node_output_text(parent).strip() and not _node_purpose_text(parent).strip():
+                    continue
+                value = _extract_output_for_handle(parent, link.sourceHandle, result_text)
+                _put_unique(outer_parent_outputs, _binding_key(parent, node, link), value)
+
+            yield sse("log", {
+                "level": "info",
+                "source": "dag",
+                "status": "RUNNING",
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "message": f"展开子图 {node.title}，共 {len(inner_nodes_raw)} 个内部节点。",
+            })
+            yield sse("progress", {
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "status": "running",
+                "message": "running",
+            })
+
+            # Parse inner graph (add default position if missing)
+            try:
+                inner_nodes = [
+                    Node.model_validate(n if "position" in n else {**n, "position": {"x": 0, "y": 0}})
+                    for n in inner_nodes_raw
+                ]
+                inner_links = [Edge.model_validate(l) for l in inner_links_raw]
+            except Exception as exc:
+                yield sse("progress", {
+                    "nodeId": node.id,
+                    "nodeTitle": node.title,
+                    "status": "error",
+                    "message": f"子图解析失败: {exc}",
+                })
+                yield sse("error", {"message": f"子图解析失败: {exc}", "nodeId": node.id})
+                return
+
+            inner_node_ids = {n.id for n in inner_nodes}
+            inner_incoming: dict[str, list[Edge]] = {n.id: [] for n in inner_nodes}
+            inner_outgoing_map: dict[str, list[str]] = {n.id: [] for n in inner_nodes}
+            for lnk in inner_links:
+                if lnk.source in inner_node_ids and lnk.target in inner_node_ids:
+                    inner_incoming[lnk.target].append(lnk)
+                    inner_outgoing_map[lnk.source].append(lnk.target)
+
+            # Prefer explicit boundary nodes; fall back to topology-based detection.
+            sg_input_node = next((n for n in inner_nodes if n.type == "subgraph_input"), None)
+            sg_output_node = next((n for n in inner_nodes if n.type == "subgraph_output"), None)
+            entry_node_ids = (
+                {sg_input_node.id} if sg_input_node
+                else {nid for nid in inner_node_ids if not inner_incoming[nid]}
+            )
+            exit_node_ids = (
+                {sg_output_node.id} if sg_output_node
+                else {nid for nid in inner_node_ids if not inner_outgoing_map[nid]}
+            )
+
+            try:
+                inner_order = topological_sort(inner_nodes, inner_links)
+            except ValueError as exc:
+                yield sse("progress", {"nodeId": node.id, "nodeTitle": node.title, "status": "error", "message": str(exc)})
+                yield sse("error", {"message": str(exc), "nodeId": node.id})
+                return
+
+            inner_nodes_by_id = {n.id: n for n in inner_nodes}
+            inner_results: dict[str, str] = {}
+            subgraph_error = False
+
+            for inner_id in inner_order:
+                inner_node = inner_nodes_by_id[inner_id]
+
+                if inner_node.type == "code" and not allow_code:
+                    yield sse("log", {
+                        "level": "warn",
+                        "source": "dag",
+                        "status": "SKIPPED",
+                        "nodeId": inner_node.id,
+                        "nodeTitle": inner_node.title,
+                        "message": "跳过子图内 Code 节点。",
+                    })
+                    yield sse("progress", {
+                        "nodeId": inner_node.id,
+                        "nodeTitle": inner_node.title,
+                        "status": "skipped",
+                        "message": "MVP 默认跳过 Code 节点。",
+                    })
+                    continue
+
+                inner_parent_outputs: dict[str, str] = {}
+                if inner_id in entry_node_ids:
+                    inner_parent_outputs.update(outer_parent_outputs)
+                for lnk in inner_incoming[inner_id]:
+                    src = inner_nodes_by_id[lnk.source]
+                    result_text = inner_results.get(src.id)
+                    if result_text is None and not _node_output_text(src).strip() and not _node_purpose_text(src).strip():
+                        continue
+                    value = _extract_output_for_handle(src, lnk.sourceHandle, result_text)
+                    _put_unique(inner_parent_outputs, _binding_key(src, inner_node, lnk), value)
+
+                # subgraph_input: pass outer inputs through without calling LLM.
+                if inner_node.type == "subgraph_input":
+                    parts = [f"## {k}\n\n{v}" for k, v in outer_parent_outputs.items() if v]
+                    inner_results[inner_id] = "\n\n---\n\n".join(parts) if parts else ""
+                    yield sse("progress", {
+                        "nodeId": inner_id,
+                        "nodeTitle": inner_node.title,
+                        "status": "done",
+                        "message": "done",
+                        "output": inner_results[inner_id],
+                    })
+                    continue
+
+                # subgraph_output: collect from incoming nodes without calling LLM.
+                if inner_node.type == "subgraph_output":
+                    parts = [f"## {k}\n\n{v}" for k, v in inner_parent_outputs.items() if v]
+                    inner_results[inner_id] = "\n\n---\n\n".join(parts) if parts else ""
+                    yield sse("progress", {
+                        "nodeId": inner_id,
+                        "nodeTitle": inner_node.title,
+                        "status": "done",
+                        "message": "done",
+                        "output": inner_results[inner_id],
+                    })
+                    continue
+
+                yield sse("log", {
+                    "level": "info",
+                    "source": "dag",
+                    "status": "RUNNING",
+                    "nodeId": inner_node.id,
+                    "nodeTitle": inner_node.title,
+                    "message": f"[子图 {node.title}] 执行内部节点: {inner_node.title}",
+                })
+                yield sse("progress", {
+                    "nodeId": inner_node.id,
+                    "nodeTitle": inner_node.title,
+                    "status": "running",
+                    "message": "running",
+                })
+
+                inner_output_parts: list[str] = []
+                try:
+                    async for chunk in run_node_stream(
+                        node_title=inner_node.title,
+                        node_type=inner_node.type,
+                        node_purpose=_node_purpose(inner_node),
+                        user_prompt=None,
+                        context_mode=inner_node.contextMode,
+                        parent_outputs=inner_parent_outputs or None,
+                        memory_text=None,
+                        system_prompt=inner_node.systemPrompt,
+                        provider=provider,
+                        model=model,
+                        api_key=api_key,
+                    ):
+                        inner_output_parts.append(chunk)
+                        yield sse("text", {"nodeId": inner_node.id, "chunk": chunk})
+
+                    inner_output = "".join(inner_output_parts)
+                    inner_results[inner_node.id] = inner_output
+
+                    if _has_confirmation_request(inner_output):
+                        yield sse("progress", {
+                            "nodeId": inner_node.id,
+                            "nodeTitle": inner_node.title,
+                            "status": "needs_confirmation",
+                            "message": "子图内节点需要用户确认，DAG 已暂停。",
+                            "output": inner_output,
+                        })
+                        yield sse("done", {"results": results, "pausedAt": inner_node.id})
+                        return
+
+                    yield sse("progress", {
+                        "nodeId": inner_node.id,
+                        "nodeTitle": inner_node.title,
+                        "status": "done",
+                        "message": "done",
+                        "output": inner_output,
+                    })
+                    yield sse("log", {
+                        "level": "info",
+                        "source": "dag",
+                        "status": "DONE",
+                        "nodeId": inner_node.id,
+                        "nodeTitle": inner_node.title,
+                        "message": f"子图节点完成，输出 {len(inner_output)} 字符。",
+                    })
+                except Exception as exc:  # noqa: BLE001
+                    yield sse("progress", {
+                        "nodeId": inner_node.id,
+                        "nodeTitle": inner_node.title,
+                        "status": "error",
+                        "message": str(exc),
+                    })
+                    yield sse("log", {
+                        "level": "error",
+                        "source": "dag",
+                        "status": "ERROR",
+                        "nodeId": inner_node.id,
+                        "nodeTitle": inner_node.title,
+                        "message": str(exc),
+                    })
+                    yield sse("error", {"message": str(exc), "nodeId": inner_node.id})
+                    subgraph_error = True
+                    break
+
+            if subgraph_error:
+                return
+
+            # Merge exit node results as the subgraph's output.
+            exit_parts: list[str] = []
+            for nid in inner_order:
+                if nid in exit_node_ids and inner_results.get(nid):
+                    inner_n = inner_nodes_by_id[nid]
+                    exit_parts.append(f"## {inner_n.title}\n\n{inner_results[nid]}")
+
+            subgraph_result = "\n\n---\n\n".join(exit_parts) if exit_parts else ""
+            results[node.id] = subgraph_result
+
+            yield sse("progress", {
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "status": "done",
+                "message": "done",
+                "output": subgraph_result,
+            })
+            yield sse("log", {
+                "level": "info",
+                "source": "dag",
+                "status": "DONE",
+                "nodeId": node.id,
+                "nodeTitle": node.title,
+                "message": f"子图执行完成，{len(exit_parts)} 个出口节点。",
             })
             continue
 

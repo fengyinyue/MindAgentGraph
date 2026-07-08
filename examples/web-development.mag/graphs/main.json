@@ -1,0 +1,211 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "type": "prompt",
+      "title": "需求输入",
+      "position": { "x": -400, "y": 0 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {},
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "requirements",
+      "type": "planning",
+      "title": "需求分析",
+      "position": { "x": 0, "y": 0 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "分析用户提供的原始需求，拆解功能列表，明确项目边界、核心用户场景和非功能性要求，输出结构化需求文档。",
+        "inputs": [
+          { "id": "raw_requirement", "name": "原始需求", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "requirements_doc", "name": "需求文档", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "tech_stack",
+      "type": "planning",
+      "title": "技术选型与架构设计",
+      "position": { "x": 320, "y": -140 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "根据需求文档选择合适的前后端技术栈（框架、数据库、部署方案等），设计系统整体架构，明确模块划分和接口规范，输出技术方案文档。",
+        "inputs": [
+          { "id": "requirements_doc", "name": "需求文档", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "tech_plan", "name": "技术方案", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "ui_design",
+      "type": "planning",
+      "title": "UI/UX 设计方案",
+      "position": { "x": 320, "y": 140 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "根据需求文档设计页面结构、核心组件布局、用户交互流程和视觉规范，产出包含页面草图、组件树和交互说明的 UI 设计方案。",
+        "inputs": [
+          { "id": "requirements_doc", "name": "需求文档", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "ui_spec", "name": "UI 设计方案", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "frontend_impl",
+      "type": "code",
+      "title": "前端实现",
+      "position": { "x": 640, "y": 140 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "根据 UI 设计方案和技术方案，实现前端页面、组件和交互逻辑，包括路由配置、状态管理和 API 调用层。",
+        "inputs": [
+          { "id": "ui_spec", "name": "UI 设计方案", "type": "unknown" },
+          { "id": "tech_plan", "name": "技术方案", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "frontend_code", "name": "前端代码", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "backend_impl",
+      "type": "code",
+      "title": "后端实现",
+      "position": { "x": 640, "y": -140 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "根据技术方案实现后端 API 接口、数据模型、业务逻辑和数据库操作，提供完整的服务端代码和接口文档。",
+        "inputs": [
+          { "id": "tech_plan", "name": "技术方案", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "backend_code", "name": "后端代码", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "integration",
+      "type": "planning",
+      "title": "联调测试与部署",
+      "position": { "x": 960, "y": 0 },
+      "contextMode": "inherit",
+      "fileScope": { "allow": [], "deny": [] },
+      "toolPolicy": { "tools": [], "deny": [] },
+      "data": {
+        "purpose": "整合前后端代码，制定接口联调方案、测试用例和部署步骤，输出完整的上线文档，包括环境配置、CI/CD 流程和上线 Checklist。",
+        "inputs": [
+          { "id": "frontend_code", "name": "前端代码", "type": "unknown" },
+          { "id": "backend_code", "name": "后端代码", "type": "unknown" }
+        ],
+        "outputs": [
+          { "id": "deploy_plan", "name": "部署方案", "type": "unknown" }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    }
+  ],
+  "links": [
+    {
+      "id": "l1",
+      "source": "input",
+      "target": "requirements",
+      "sourceHandle": "response",
+      "targetHandle": "raw_requirement",
+      "label": "原始需求"
+    },
+    {
+      "id": "l2",
+      "source": "requirements",
+      "target": "tech_stack",
+      "sourceHandle": "requirements_doc",
+      "targetHandle": "requirements_doc",
+      "label": "需求文档"
+    },
+    {
+      "id": "l3",
+      "source": "requirements",
+      "target": "ui_design",
+      "sourceHandle": "requirements_doc",
+      "targetHandle": "requirements_doc",
+      "label": "需求文档"
+    },
+    {
+      "id": "l4",
+      "source": "tech_stack",
+      "target": "frontend_impl",
+      "sourceHandle": "tech_plan",
+      "targetHandle": "tech_plan",
+      "label": "技术方案"
+    },
+    {
+      "id": "l5",
+      "source": "ui_design",
+      "target": "frontend_impl",
+      "sourceHandle": "ui_spec",
+      "targetHandle": "ui_spec",
+      "label": "UI 设计方案"
+    },
+    {
+      "id": "l6",
+      "source": "tech_stack",
+      "target": "backend_impl",
+      "sourceHandle": "tech_plan",
+      "targetHandle": "tech_plan",
+      "label": "技术方案"
+    },
+    {
+      "id": "l7",
+      "source": "frontend_impl",
+      "target": "integration",
+      "sourceHandle": "frontend_code",
+      "targetHandle": "frontend_code",
+      "label": "前端代码"
+    },
+    {
+      "id": "l8",
+      "source": "backend_impl",
+      "target": "integration",
+      "sourceHandle": "backend_code",
+      "targetHandle": "backend_code",
+      "label": "后端代码"
+    }
+  ]
+}

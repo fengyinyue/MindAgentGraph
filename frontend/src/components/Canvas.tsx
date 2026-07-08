@@ -29,6 +29,8 @@ const typeColor: Record<string, string> = {
   prompt: "#6c8eef",
   planning: "#9b6cef",
   subgraph: "#14b8a6",
+  subgraph_input: "#10b981",
+  subgraph_output: "#f43f5e",
   memory: "#ef9b6c",
   filescope: "#6cefb6",
   analysis: "#22d3ee",
@@ -114,6 +116,14 @@ const defaultPortsByType: Record<NodeType, { inputs: DataPort[]; outputs: DataPo
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "structure", name: "Structure", type: "graph" }],
   },
+  subgraph_input: {
+    inputs: [],
+    outputs: [{ id: "output", name: "Output", type: "unknown" }],
+  },
+  subgraph_output: {
+    inputs: [{ id: "input", name: "Input", type: "unknown" }],
+    outputs: [],
+  },
   memory: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "memory", name: "Memory", type: "unknown" }],
@@ -184,6 +194,8 @@ function nodeTypeLabel(type: NodeType): string {
   if (type === "prompt") return "Requirement";
   if (type === "planning") return "Design";
   if (type === "subgraph") return "Subgraph";
+  if (type === "subgraph_input") return "SG Input";
+  if (type === "subgraph_output") return "SG Output";
   if (type === "analysis") return "Analysis";
   if (type === "code") return "Execution";
   if (type === "test") return "Test";
@@ -349,6 +361,8 @@ export default function Canvas() {
             });
           }
         } else if (c.type === "remove") {
+          const target = storeNodes.find((n) => n.id === c.id);
+          if (target?.type === "subgraph_input" || target?.type === "subgraph_output") continue;
           storeRemoveNode(c.id);
         }
       }
@@ -426,6 +440,7 @@ export default function Canvas() {
   const contextMenuCanGenerateModuleGraph = contextMenuNode?.type === "analysis" && contextMenuOutput;
   const contextMenuHasDownstream = contextMenuNode ? storeEdges.some((e) => e.source === contextMenuNode.id) : false;
   const contextMenuCanRunTest = contextMenuNode?.type === "test";
+  const contextMenuIsBoundary = contextMenuNode?.type === "subgraph_input" || contextMenuNode?.type === "subgraph_output";
 
   const decoratedNodes: RFNode[] = useMemo(
     () =>
@@ -731,15 +746,19 @@ export default function Canvas() {
             </button>
           ) : null}
           <hr className="border-zinc-700 my-1" />
-          <button
-            className="block w-full text-left px-3 py-1.5 hover:bg-canvas hover:text-red-400"
-            onClick={() => {
-              storeRemoveNode(menu.nodeId);
-              closeMenu();
-            }}
-          >
-            🗑 Delete
-          </button>
+          {contextMenuIsBoundary ? (
+            <div className="px-3 py-1.5 text-zinc-600 text-xs select-none">🔒 内置节点，不可删除</div>
+          ) : (
+            <button
+              className="block w-full text-left px-3 py-1.5 hover:bg-canvas hover:text-red-400"
+              onClick={() => {
+                storeRemoveNode(menu.nodeId);
+                closeMenu();
+              }}
+            >
+              🗑 Delete
+            </button>
+          )}
         </div>
       )}
 

@@ -94,7 +94,97 @@ export const useGraphStore = create<GraphState>((set) => ({
     })),
   removeLink: (id) => set((s) => ({ links: s.links.filter((e) => e.id !== id) })),
   selectNode: (id) => set({ selectedNodeId: id }),
-  enterSubgraph: (id) => set({ activeParentId: id, selectedNodeId: null }),
+  enterSubgraph: (id) => set((s) => {
+    const subgraphNode = s.nodes.find((n) => n.id === id);
+    if (!subgraphNode) return { activeParentId: id, selectedNodeId: null };
+
+    // Sync data.children.links → top-level links (visibleEdges only reads top-level).
+    const existingChildren = (subgraphNode.data?.children ?? { nodes: [], links: [] }) as {
+      nodes: unknown[];
+      links: unknown[];
+    };
+    const childLinks = existingChildren.links as Edge[];
+    const topLevelLinkIds = new Set(s.links.map((l) => l.id));
+    const missingLinks = childLinks.filter((l) => l.id && !topLevelLinkIds.has(l.id));
+    const syncedLinks = missingLinks.length > 0 ? [...s.links, ...missingLinks] : s.links;
+
+    // Sync data.children.nodes → top-level nodes with parentId.
+    const childNodes = existingChildren.nodes as NodeBase[];
+    const topLevelNodeIds = new Set(s.nodes.map((n) => n.id));
+    const missingNodes = childNodes
+      .filter((n) => n.id && !topLevelNodeIds.has(n.id))
+      .map((n) => ({ ...n, parentId: id }));
+
+    const hasInput = s.nodes.some((n) => n.parentId === id && n.type === "subgraph_input");
+    const hasOutput = s.nodes.some((n) => n.parentId === id && n.type === "subgraph_output");
+
+    if (hasInput && hasOutput && missingLinks.length === 0 && missingNodes.length === 0) {
+      return { activeParentId: id, selectedNodeId: null };
+    }
+
+    const subInputPorts = Array.isArray(subgraphNode.data?.inputs) ? subgraphNode.data.inputs : [];
+    const subOutputPorts = Array.isArray(subgraphNode.data?.outputs) ? subgraphNode.data.outputs : [];
+
+    // Compute bounding box of all internal nodes to place boundary nodes adjacent.
+    const allInternalNodes = [
+      ...s.nodes.filter((n) => n.parentId === id),
+      ...missingNodes,
+    ];
+    const xs = allInternalNodes.map((n) => n.position.x);
+    const ys = allInternalNodes.map((n) => n.position.y);
+    const minX = xs.length ? Math.min(...xs) : 0;
+    const maxX = xs.length ? Math.max(...xs) : 640;
+    const midY = ys.length ? ys.reduce((a, b) => a + b, 0) / ys.length : 0;
+
+    const inputNodeId  = `${id}_sg_input`;
+    const outputNodeId = `${id}_sg_output`;
+
+    const newBoundaryNodes: NodeBase[] = [];
+    if (!hasInput) {
+      newBoundaryNodes.push({
+        id: inputNodeId,
+        type: "subgraph_input",
+        title: "输入",
+        parentId: id,
+        position: { x: minX - 320, y: Math.round(midY) },
+        contextMode: "inherit",
+        fileScope: { allow: [], deny: [] },
+        toolPolicy: { tools: [], deny: [] },
+        data: { inputs: [], outputs: subInputPorts },
+        runHistory: [],
+        resourceRefs: [],
+        metadata: {},
+      });
+    }
+    if (!hasOutput) {
+      newBoundaryNodes.push({
+        id: outputNodeId,
+        type: "subgraph_output",
+        title: "输出",
+        parentId: id,
+        position: { x: maxX + 320, y: Math.round(midY) },
+        contextMode: "inherit",
+        fileScope: { allow: [], deny: [] },
+        toolPolicy: { tools: [], deny: [] },
+        data: { inputs: subOutputPorts, outputs: [] },
+        runHistory: [],
+        resourceRefs: [],
+        metadata: {},
+      });
+    }
+
+    // Mirror new boundary nodes into data.children for backend execution.
+    const updatedChildren = {
+      ...existingChildren,
+      nodes: [...existingChildren.nodes, ...newBoundaryNodes],
+    };
+
+    const updatedNodes = s.nodes
+      .map((n) => (n.id === id ? { ...n, data: { ...n.data, children: updatedChildren } } : n))
+      .concat(missingNodes, newBoundaryNodes);
+
+    return { nodes: updatedNodes, links: syncedLinks, activeParentId: id, selectedNodeId: null };
+  }),
   // Pop up exactly one level (not straight to top), so nested drill-in
   // (plan > subgraph > dataflow) returns to the enclosing container.
   exitSubgraph: () => set((s) => {

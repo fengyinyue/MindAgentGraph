@@ -1,0 +1,2231 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "type": "prompt",
+      "title": "项目立项输入",
+      "position": {
+        "x": -771,
+        "y": 36.8
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {},
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "preproduction",
+      "type": "subgraph",
+      "title": "前期制作",
+      "position": {
+        "x": -371,
+        "y": 36.8
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "完成项目立项全流程：AI 辅助撰写 GDD 与 TDD，人工评审签字后正式启动研发",
+        "inputs": [
+          {
+            "id": "requirement",
+            "name": "立项要求",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_pre_gdd",
+              "type": "planning",
+              "title": "撰写 GDD",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "根据立项要求撰写完整 GDD：核心玩法循环（跳伞→搜刮→战斗→决赛圈）、玩家规模与匹配规则、地图规格与分区（城市/工业/森林/海岸）、安全圈阶段参数（6 圈：初始半径/收缩半径/等待时间/收缩时间/毒圈伤害）、武器分类与伤害框架、物资稀有度（白/蓝/紫/金）与刷新策略、胜利条件、差异化特色、竞品对标（PUBG/Fortnite/Apex）",
+                "inputs": [
+                  {
+                    "id": "requirement",
+                    "name": "立项要求",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "gdd",
+                    "name": "GDD 文档",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_pre_tdd",
+              "type": "planning",
+              "title": "撰写 TDD",
+              "position": {
+                "x": 320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "基于 GDD 撰写技术设计文档（TDD）：UE5 技术选型理由（World Partition / GAS / Dedicated Server / Chaos Physics）、核心类层次与模块划分、网络架构（权威服务端 + 客户端预测）、性能预算（Draw Call / 内存 / 网络带宽上限）、第三方中间件选型（语音/反作弊/数据分析）、里程碑计划（原型 4 周→Alpha 8 周→Beta 4 周→发布）、团队规模与岗位需求",
+                "inputs": [
+                  {
+                    "id": "gdd",
+                    "name": "GDD 文档",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "tdd",
+                    "name": "TDD 文档",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_pre_approval",
+              "type": "task",
+              "title": "立项评审签字",
+              "position": {
+                "x": 640,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】组织立项评审会议：制作人确认 GDD 玩法可行性，技术负责人评估 TDD 工期与风险，投资方/发行商审查商业模式与市场定位；会后签署《项目立项确认书》，解锁正式研发预算，并将确认后的 GDD+TDD+里程碑计划归档为项目计划包",
+                "inputs": [
+                  {
+                    "id": "tdd",
+                    "name": "TDD 文档",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "preproduction_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "preproduction",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "requirement",
+                    "name": "立项要求",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "preproduction_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "preproduction",
+              "position": {
+                "x": 960,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_pre_in",
+              "source": "preproduction_sg_input",
+              "target": "sub_pre_gdd",
+              "sourceHandle": "requirement",
+              "targetHandle": "requirement",
+              "label": "立项要求"
+            },
+            {
+              "id": "sub_pre_l1",
+              "source": "sub_pre_gdd",
+              "target": "sub_pre_tdd",
+              "sourceHandle": "gdd",
+              "targetHandle": "gdd",
+              "label": "GDD 文档"
+            },
+            {
+              "id": "sub_pre_l2",
+              "source": "sub_pre_tdd",
+              "target": "sub_pre_approval",
+              "sourceHandle": "tdd",
+              "targetHandle": "tdd",
+              "label": "TDD 文档"
+            },
+            {
+              "id": "sub_pre_out",
+              "source": "sub_pre_approval",
+              "target": "preproduction_sg_output",
+              "sourceHandle": "project_plan",
+              "targetHandle": "project_plan",
+              "label": "项目计划包"
+            }
+          ]
+        }
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "完成项目立项全流程：AI 辅助撰写 GDD 与 TDD，人工评审签字后正式启动研发"
+    },
+    {
+      "id": "sub_pre_gdd",
+      "type": "planning",
+      "title": "撰写 GDD",
+      "parentId": "preproduction",
+      "position": {
+        "x": -103.1,
+        "y": -36.4
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "根据立项要求撰写完整 GDD：核心玩法循环（跳伞→搜刮→战斗→决赛圈）、玩家规模与匹配规则、地图规格与分区、安全圈阶段参数（6 圈）、武器分类与伤害框架、物资稀有度与刷新策略、胜利条件、差异化特色、竞品对标",
+        "inputs": [
+          {
+            "id": "requirement",
+            "name": "立项要求",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "gdd",
+            "name": "GDD 文档",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "根据立项要求撰写完整 GDD：核心玩法循环（跳伞→搜刮→战斗→决赛圈）、玩家规模与匹配规则、地图规格与分区、安全圈阶段参数（6 圈）、武器分类与伤害框架、物资稀有度与刷新策略、胜利条件、差异化特色、竞品对标"
+    },
+    {
+      "id": "sub_pre_tdd",
+      "type": "planning",
+      "title": "撰写 TDD",
+      "parentId": "preproduction",
+      "position": {
+        "x": 254.1,
+        "y": -43.2
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "基于 GDD 撰写 TDD：UE5 技术选型、核心类层次与模块划分、网络架构、性能预算、第三方中间件选型、里程碑计划、团队规模",
+        "inputs": [
+          {
+            "id": "gdd",
+            "name": "GDD 文档",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "tdd",
+            "name": "TDD 文档",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "基于 GDD 撰写 TDD：UE5 技术选型、核心类层次与模块划分、网络架构、性能预算、第三方中间件选型、里程碑计划、团队规模"
+    },
+    {
+      "id": "sub_pre_approval",
+      "type": "task",
+      "title": "立项评审签字",
+      "parentId": "preproduction",
+      "position": {
+        "x": 638.5,
+        "y": -37.9
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】组织立项评审会议，制作人+技术负责人+投资方签署立项确认书，解锁研发预算，归档项目计划包",
+        "inputs": [
+          {
+            "id": "tdd",
+            "name": "TDD 文档",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】组织立项评审会议，制作人+技术负责人+投资方签署立项确认书，解锁研发预算，归档项目计划包"
+    },
+    {
+      "id": "project_setup",
+      "type": "task",
+      "title": "项目环境搭建",
+      "position": {
+        "x": 88.7,
+        "y": -323.9
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】技术负责人完成开发环境搭建：在 Epic Launcher 创建 UE5 Dedicated Server 模板项目、启用 GameplayAbilities / OnlineSubsystem / Chaos Physics 插件、配置 Perforce 或 Git LFS 仓库（含 .uasset 大文件策略）、搭建 Jenkins/TeamCity CI 管道（编译+Cook+打包自动化）、配置多人游戏 Dedicated Server 本地调试环境、在 Jira/Notion 上按 TDD 里程碑创建迭代任务板",
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】技术负责人完成开发环境搭建：在 Epic Launcher 创建 UE5 Dedicated Server 模板项目、启用 GameplayAbilities / OnlineSubsystem / Chaos Physics 插件、配置 Perforce 或 Git LFS 仓库（含 .uasset 大文件策略）、搭建 Jenkins/TeamCity CI 管道（编译+Cook+打包自动化）、配置多人游戏 Dedicated Server 本地调试环境、在 Jira/Notion 上按 TDD 里程碑创建迭代任务板"
+    },
+    {
+      "id": "art_production",
+      "type": "task",
+      "title": "美术与音效生产",
+      "position": {
+        "x": 139.7,
+        "y": 257.3
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】美术团队/外包按 GDD 风格指南生产全套资产：角色（主角/NPC 骨骼网格体 + 动画蓝图，包括跑跑/跳伞/滑翔/瞄准/死亡）、武器模型（步枪/霰弹枪/狙击枪/投掷物各 2–3 套皮肤）、地图环境资产（城市建筑/工业设施/森林植被/海岸礁石模块化套件）、特效（枪口焰/弹孔/毒圈Niagara）、UI 图集（准心/血条/小地图/背包格子）、音效（枪声/脚步/拾取/UI音效）、背景音乐（大厅/战斗/结算主题）；完成后上传至 P4/Git 并在任务板标记完成",
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "art_assets",
+            "name": "美术资产包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】美术团队/外包按 GDD 风格指南生产全套资产：角色（主角/NPC 骨骼网格体 + 动画蓝图，包括跑跑/跳伞/滑翔/瞄准/死亡）、武器模型（步枪/霰弹枪/狙击枪/投掷物各 2–3 套皮肤）、地图环境资产（城市建筑/工业设施/森林植被/海岸礁石模块化套件）、特效（枪口焰/弹孔/毒圈Niagara）、UI 图集（准心/血条/小地图/背包格子）、音效（枪声/脚步/拾取/UI音效）、背景音乐（大厅/战斗/结算主题）；完成后上传至 P4/Git 并在任务板标记完成"
+    },
+    {
+      "id": "core_dev",
+      "type": "subgraph",
+      "title": "核心系统开发",
+      "position": {
+        "x": 543.7,
+        "y": -238
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "AI 设计核心框架并生成代码骨架，开发团队照方案完成具体实现",
+        "inputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "core_impl",
+            "name": "核心系统实现",
+            "type": "unknown"
+          }
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_cd_design",
+              "type": "planning",
+              "title": "框架与网络架构设计",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "设计 GameFramework 类层次：ABRGameMode（对局生命周期状态机 WaitingToStart→Flying→InProgress→FinalZone→EndGame）、ABRGameState（全局对局数据 Replicated）、ABRPlayerState（个人数据：击杀数/存活名次/装备）、ABRCharacter（继承 ACharacter，挂载 UHealthComponent/UInventoryComponent/UArmorComponent）、ABRPlayerController（输入映射/HUD 管理）；设计 GAS 集成方案（AbilitySystemComponent 挂载位置、AttributeSet 定义、GameplayTag 体系）；规划网络复制策略（Replicated 属性、RPC 分类、NetUpdateFrequency 建议值、Relevancy 管理）",
+                "inputs": [
+                  {
+                    "id": "setup_done",
+                    "name": "环境就绪确认",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "arch_spec",
+                    "name": "架构规格",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_cd_codegen",
+              "type": "code",
+              "title": "生成核心代码骨架",
+              "position": {
+                "x": 320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "根据架构规格生成以下文件：Source/BattleRoyale/Public/Core/ 下的 ABRGameMode.h、ABRGameState.h、ABRCharacter.h、ABRPlayerState.h、ABRPlayerController.h、UHealthComponent.h、UInventoryComponent.h、UArmorComponent.h（含完整 UCLASS/UPROPERTY(Replicated)/UFUNCTION 声明）；Source/BattleRoyale/ 下的 BattleRoyale.Build.cs（依赖：GameplayAbilities、OnlineSubsystem、NetCore）；BattleRoyale.uproject（GameplayAbilities/OnlineSubsystemNull 插件声明）；同时生成各类的 .cpp 存根文件到 Private/Core/",
+                "inputs": [
+                  {
+                    "id": "arch_spec",
+                    "name": "架构规格",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "code_skeleton",
+                    "name": "代码骨架",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_cd_impl",
+              "type": "task",
+              "title": "核心逻辑实现",
+              "position": {
+                "x": 640,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】服务端程序员按架构规格实现所有 .cpp 逻辑：ABRGameMode 状态机跳转与 Timer 驱动、ABRCharacter 移动（增强输入 + 跳伞 / 滑翔物理）、GAS AttributeSet 生命值 / 护甲属性绑定与同步、UInventoryComponent 格子管理与拾取交互服务端确认、网络复制测试（两客户端本地联调）；完成后在代码仓库创建 PR，通过 Code Review 合入主干",
+                "inputs": [
+                  {
+                    "id": "code_skeleton",
+                    "name": "代码骨架",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "core_impl",
+                    "name": "核心系统实现",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "core_dev_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "core_dev",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "setup_done",
+                    "name": "环境就绪确认",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "core_dev_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "core_dev",
+              "position": {
+                "x": 960,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "core_impl",
+                    "name": "核心系统实现",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_cd_in",
+              "source": "core_dev_sg_input",
+              "target": "sub_cd_design",
+              "sourceHandle": "setup_done",
+              "targetHandle": "setup_done",
+              "label": "环境就绪确认"
+            },
+            {
+              "id": "sub_cd_l1",
+              "source": "sub_cd_design",
+              "target": "sub_cd_codegen",
+              "sourceHandle": "arch_spec",
+              "targetHandle": "arch_spec",
+              "label": "架构规格"
+            },
+            {
+              "id": "sub_cd_l2",
+              "source": "sub_cd_codegen",
+              "target": "sub_cd_impl",
+              "sourceHandle": "code_skeleton",
+              "targetHandle": "code_skeleton",
+              "label": "代码骨架"
+            },
+            {
+              "id": "sub_cd_out",
+              "source": "sub_cd_impl",
+              "target": "core_dev_sg_output",
+              "sourceHandle": "core_impl",
+              "targetHandle": "core_impl",
+              "label": "核心系统实现"
+            }
+          ]
+        }
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "AI 设计核心框架并生成代码骨架，开发团队照方案完成具体实现"
+    },
+    {
+      "id": "sub_cd_design",
+      "type": "planning",
+      "title": "框架与网络架构设计",
+      "parentId": "core_dev",
+      "position": {
+        "x": -4,
+        "y": -51
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "设计 GameFramework 类层次、GAS 集成方案、网络复制策略，输出完整架构规格",
+        "inputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "arch_spec",
+            "name": "架构规格",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "设计 GameFramework 类层次、GAS 集成方案、网络复制策略，输出完整架构规格"
+    },
+    {
+      "id": "sub_cd_codegen",
+      "type": "code",
+      "title": "生成核心代码骨架",
+      "parentId": "core_dev",
+      "position": {
+        "x": 383,
+        "y": -50
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "根据架构规格生成核心 C++ 头文件、.cpp 存根、Build.cs 和 .uproject 文件",
+        "inputs": [
+          {
+            "id": "arch_spec",
+            "name": "架构规格",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "code_skeleton",
+            "name": "代码骨架",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "根据架构规格生成核心 C++ 头文件、.cpp 存根、Build.cs 和 .uproject 文件"
+    },
+    {
+      "id": "sub_cd_impl",
+      "type": "task",
+      "title": "核心逻辑实现",
+      "parentId": "core_dev",
+      "position": {
+        "x": 806,
+        "y": -84
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】服务端程序员实现所有 .cpp 逻辑、本地联调、Code Review 后合入主干",
+        "inputs": [
+          {
+            "id": "code_skeleton",
+            "name": "代码骨架",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "core_impl",
+            "name": "核心系统实现",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】服务端程序员实现所有 .cpp 逻辑、本地联调、Code Review 后合入主干"
+    },
+    {
+      "id": "world_building",
+      "type": "task",
+      "title": "关卡搭建",
+      "position": {
+        "x": 679,
+        "y": 91
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】关卡设计师在 UE 编辑器内完成大地图构建：开启 World Partition（512m×512m Cell）、在地形工具雕刻 8×8 km² 地形（山丘/平原/海湾）、按 GDD 分区放置地标（城市/工厂/军事基地/港口各 2–3 个）、使用模块化套件拼装建筑室内、放置 ALootSpawner 并配置 DT_LootTable 权重、配置 Runtime Grid 和 HLOD 代理层级、执行光照烘焙（GPU Lightmass）并验证移动端 Lumen 效果；完成后提交 P4/Git 并通知程序员进行场景流送压测",
+        "inputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          },
+          {
+            "id": "art_assets",
+            "name": "美术资产包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "world_built",
+            "name": "关卡就绪",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】关卡设计师在 UE 编辑器内完成大地图构建：开启 World Partition（512m×512m Cell）、在地形工具雕刻 8×8 km² 地形（山丘/平原/海湾）、按 GDD 分区放置地标（城市/工厂/军事基地/港口各 2–3 个）、使用模块化套件拼装建筑室内、放置 ALootSpawner 并配置 DT_LootTable 权重、配置 Runtime Grid 和 HLOD 代理层级、执行光照烘焙（GPU Lightmass）并验证移动端 Lumen 效果；完成后提交 P4/Git 并通知程序员进行场景流送压测"
+    },
+    {
+      "id": "gameplay_systems",
+      "type": "subgraph",
+      "title": "游戏系统开发",
+      "position": {
+        "x": 962,
+        "y": -239
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "基于核心框架，AI 设计并生成战斗+生存系统代码框架，开发团队完成全部游戏逻辑实现",
+        "inputs": [
+          {
+            "id": "core_impl",
+            "name": "核心系统实现",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "systems_impl",
+            "name": "游戏系统实现",
+            "type": "unknown"
+          }
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_gs_combat",
+              "type": "planning",
+              "title": "战斗系统设计",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "基于核心框架设计战斗系统：武器类层次（ABRWeapon → ABRRifle/ABRShotgun/ABRSniper/ABRThrowable）、Hitscan vs Projectile 选择规则与服务端验证方案、伤害公式（基础伤害 × 部位系数 × 护甲减伤）、GAS GameplayEffect 用于伤害/治疗/减益状态（中毒/减速）、后坐力 UCurveFloat 资产结构、弹药与换弹流程（本地预测 + Server RPC 确认）、近战攻击与投掷物抛物线物理",
+                "inputs": [
+                  {
+                    "id": "core_impl",
+                    "name": "核心系统实现",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "combat_design",
+                    "name": "战斗设计",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_gs_survival",
+              "type": "planning",
+              "title": "生存机制设计",
+              "position": {
+                "x": 320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "设计大逃杀生存三要素：①安全圈——AZoneActor 服务端驱动 TimerManager 推进 6 阶段（圆心随机偏移算法、插值收缩曲线、客户端 Niagara 毒雾特效同步）；②物资系统——ULootTableDataAsset（30 种物品/4 稀有度/权重）、ALootSpawner（Overlap 拾取→服务端确认→背包同步）、弹药合并逻辑；③对局生命周期——大厅等待→飞机飞越（SkeletalMesh 驾驶）→跳伞滑翔（布娃娃过渡）→陆地→决赛圈→排名结算页面",
+                "inputs": [
+                  {
+                    "id": "combat_design",
+                    "name": "战斗设计",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "survival_design",
+                    "name": "生存设计",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_gs_code",
+              "type": "code",
+              "title": "生成系统代码与配置",
+              "position": {
+                "x": 640,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "根据战斗+生存设计文档生成以下文件：Public/Weapons/ABRWeapon.h、ABRWeaponComponent.h、UBRDamageExecution.h、GA_FireWeapon.h；Public/Zone/AZoneActor.h；Public/Loot/ULootTableDataAsset.h、ALootSpawner.h；Content/Data/DT_LootTable.csv（30 种物品/4 稀有度）；Content/Data/ZonePhases.json（6 阶段安全圈配置）；Content/Data/DT_WeaponStats.csv（武器数值：伤害/射速/弹容/后坐力系数）；对应 .cpp 存根文件",
+                "inputs": [
+                  {
+                    "id": "survival_design",
+                    "name": "生存设计",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "systems_code",
+                    "name": "系统代码",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_gs_impl",
+              "type": "task",
+              "title": "游戏逻辑实现",
+              "position": {
+                "x": 960,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】游戏程序员按设计文档实现所有游戏逻辑 .cpp：武器开火/命中检测/弹道/后坐力、安全圈 Timer 推进与客户端 Niagara 同步、背包拾取/丢弃/合并、对局状态机 Hook（OnMatchPhaseChanged）、UI Widget 绑定（UMG 血条/弹药/小地图）；完成后与关卡设计师联合调试（跑 Map+Systems 完整 Playthrough），通过 Code Review 合入主干",
+                "inputs": [
+                  {
+                    "id": "systems_code",
+                    "name": "系统代码",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "systems_impl",
+                    "name": "游戏系统实现",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "gameplay_systems_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "gameplay_systems",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "core_impl",
+                    "name": "核心系统实现",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "gameplay_systems_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "gameplay_systems",
+              "position": {
+                "x": 1280,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "systems_impl",
+                    "name": "游戏系统实现",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_gs_in",
+              "source": "gameplay_systems_sg_input",
+              "target": "sub_gs_combat",
+              "sourceHandle": "core_impl",
+              "targetHandle": "core_impl",
+              "label": "核心系统实现"
+            },
+            {
+              "id": "sub_gs_l1",
+              "source": "sub_gs_combat",
+              "target": "sub_gs_survival",
+              "sourceHandle": "combat_design",
+              "targetHandle": "combat_design",
+              "label": "战斗设计"
+            },
+            {
+              "id": "sub_gs_l2",
+              "source": "sub_gs_survival",
+              "target": "sub_gs_code",
+              "sourceHandle": "survival_design",
+              "targetHandle": "survival_design",
+              "label": "生存设计"
+            },
+            {
+              "id": "sub_gs_l3",
+              "source": "sub_gs_code",
+              "target": "sub_gs_impl",
+              "sourceHandle": "systems_code",
+              "targetHandle": "systems_code",
+              "label": "系统代码"
+            },
+            {
+              "id": "sub_gs_out",
+              "source": "sub_gs_impl",
+              "target": "gameplay_systems_sg_output",
+              "sourceHandle": "systems_impl",
+              "targetHandle": "systems_impl",
+              "label": "游戏系统实现"
+            }
+          ]
+        }
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "基于核心框架，AI 设计并生成战斗+生存系统代码框架，开发团队完成全部游戏逻辑实现"
+    },
+    {
+      "id": "sub_gs_combat",
+      "type": "planning",
+      "title": "战斗系统设计",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "基于核心框架设计武器类层次、命中检测方案、伤害公式、GAS 效果、后坐力系统",
+        "inputs": [
+          {
+            "id": "core_impl",
+            "name": "核心系统实现",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "combat_design",
+            "name": "战斗设计",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "基于核心框架设计武器类层次、命中检测方案、伤害公式、GAS 效果、后坐力系统"
+    },
+    {
+      "id": "sub_gs_survival",
+      "type": "planning",
+      "title": "生存机制设计",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": 320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "设计安全圈 6 阶段机制、物资系统、对局生命周期状态机",
+        "inputs": [
+          {
+            "id": "combat_design",
+            "name": "战斗设计",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "survival_design",
+            "name": "生存设计",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "设计安全圈 6 阶段机制、物资系统、对局生命周期状态机"
+    },
+    {
+      "id": "sub_gs_code",
+      "type": "code",
+      "title": "生成系统代码与配置",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": 640,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "生成武器/安全圈/物资系统的 C++ 头文件、.cpp 存根、DataTable CSV、ZonePhases JSON",
+        "inputs": [
+          {
+            "id": "survival_design",
+            "name": "生存设计",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "systems_code",
+            "name": "系统代码",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "生成武器/安全圈/物资系统的 C++ 头文件、.cpp 存根、DataTable CSV、ZonePhases JSON"
+    },
+    {
+      "id": "sub_gs_impl",
+      "type": "task",
+      "title": "游戏逻辑实现",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": 960,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】程序员实现全部游戏逻辑 .cpp，与关卡设计师联合调试完整 Playthrough，Code Review 合入主干",
+        "inputs": [
+          {
+            "id": "systems_code",
+            "name": "系统代码",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "systems_impl",
+            "name": "游戏系统实现",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】程序员实现全部游戏逻辑 .cpp，与关卡设计师联合调试完整 Playthrough，Code Review 合入主干"
+    },
+    {
+      "id": "integration",
+      "type": "planning",
+      "title": "集成验证",
+      "position": {
+        "x": 1405.1,
+        "y": -116.6
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "综合游戏系统与关卡产出，生成集成验证报告：检查系统间接口对齐（武器伤害→UHealthComponent 扣血路径、ALootSpawner→UInventoryComponent 入库路径、AZoneActor→ABRCharacter 毒圈伤害路径）；识别潜在竞态（多人同时拾取同一物品的服务端仲裁）；列出待解决的技术债与阻塞项；给出 Alpha 里程碑前必须完成的 P0 任务清单；评估当前性能基准（Draw Call / 内存 / 服务端 Tick 率）是否达标",
+        "inputs": [
+          {
+            "id": "systems_impl",
+            "name": "游戏系统实现",
+            "type": "unknown"
+          },
+          {
+            "id": "world_built",
+            "name": "关卡就绪",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "integration_report",
+            "name": "集成报告",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "综合游戏系统与关卡产出，生成集成验证报告：检查系统间接口对齐（武器伤害→UHealthComponent 扣血路径、ALootSpawner→UInventoryComponent 入库路径、AZoneActor→ABRCharacter 毒圈伤害路径）；识别潜在竞态（多人同时拾取同一物品的服务端仲裁）；列出待解决的技术债与阻塞项；给出 Alpha 里程碑前必须完成的 P0 任务清单；评估当前性能基准（Draw Call / 内存 / 服务端 Tick 率）是否达标"
+    },
+    {
+      "id": "qa_testing",
+      "type": "subgraph",
+      "title": "QA 测试与性能优化",
+      "position": {
+        "x": 1937.4,
+        "y": -24.1
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "AI 生成测试用例与性能分析脚本，QA 团队执行人工游玩测试，输出完整 QA 报告",
+        "inputs": [
+          {
+            "id": "integration_report",
+            "name": "集成报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_qa_cases",
+              "type": "planning",
+              "title": "生成测试用例集",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "基于集成报告生成完整测试用例集（Xmind/Notion 格式）：功能测试（武器射击/命中判定/弹药系统/背包/安全圈缩圈/对局状态机转换）、网络测试（高延迟下客户端预测回滚/服务端仲裁/断线重连）、边界测试（100 人同时落地/物资同抢/圈外长期存活）、回归测试套件（每个 P0 功能的冒烟用例）；同时列出需性能分析的热点场景（100 人战斗/地标大量 Actor 激活/安全圈特效全屏覆盖）",
+                "inputs": [
+                  {
+                    "id": "integration_report",
+                    "name": "集成报告",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "test_cases",
+                    "name": "测试用例集",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_qa_perf",
+              "type": "code",
+              "title": "性能分析脚本",
+              "position": {
+                "x": 320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "根据测试用例集生成以下自动化工具：Python 脚本解析 UE Unreal Insights 导出的 .utrace 文件，统计各模块 CPU/GPU 耗时并输出 CSV 报告；Bash 脚本批量启动 Dedicated Server + N 个无头客户端模拟压测场景并采样帧率；Gauntlet 自动化测试配置文件（冒烟测试用例）；UnrealFrontend 打包 Profile 配置（Development + Stats）",
+                "inputs": [
+                  {
+                    "id": "test_cases",
+                    "name": "测试用例集",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "perf_tools",
+                    "name": "性能工具",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_qa_playtest",
+              "type": "task",
+              "title": "人工游玩测试",
+              "position": {
+                "x": 640,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】QA 团队执行完整游玩测试：按测试用例集逐一验证功能并在 Jira 录入 Bug（含截图/复现步骤/严重级别）；使用性能分析脚本跑压测场景并记录帧率/内存数据；组织内部玩家局（10–30 人）收集体验反馈与数值平衡意见；将所有 Bug 分级（P0 崩溃/P1 功能缺失/P2 体验问题/P3 优化建议），P0/P1 必须修复后方可出包，最终产出《QA 报告》（通过率/未解决 Bug 列表/性能基准达标情况）",
+                "inputs": [
+                  {
+                    "id": "perf_tools",
+                    "name": "性能工具",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "qa_report",
+                    "name": "QA 报告",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_qa_in",
+              "source": "qa_testing_sg_input",
+              "target": "sub_qa_cases",
+              "sourceHandle": "integration_report",
+              "targetHandle": "integration_report",
+              "label": "集成报告"
+            },
+            {
+              "id": "sub_qa_l1",
+              "source": "sub_qa_cases",
+              "target": "sub_qa_perf",
+              "sourceHandle": "test_cases",
+              "targetHandle": "test_cases",
+              "label": "测试用例集"
+            },
+            {
+              "id": "sub_qa_l2",
+              "source": "sub_qa_perf",
+              "target": "sub_qa_playtest",
+              "sourceHandle": "perf_tools",
+              "targetHandle": "perf_tools",
+              "label": "性能工具"
+            },
+            {
+              "id": "sub_qa_out",
+              "source": "sub_qa_playtest",
+              "target": "qa_testing_sg_output",
+              "sourceHandle": "qa_report",
+              "targetHandle": "qa_report",
+              "label": "QA 报告"
+            }
+          ]
+        }
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "AI 生成测试用例与性能分析脚本，QA 团队执行人工游玩测试，输出完整 QA 报告"
+    },
+    {
+      "id": "sub_qa_cases",
+      "type": "planning",
+      "title": "生成测试用例集",
+      "parentId": "qa_testing",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "基于集成报告生成完整测试用例集：功能/网络/边界/回归测试，以及性能热点场景清单",
+        "inputs": [
+          {
+            "id": "integration_report",
+            "name": "集成报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "test_cases",
+            "name": "测试用例集",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "基于集成报告生成完整测试用例集：功能/网络/边界/回归测试，以及性能热点场景清单"
+    },
+    {
+      "id": "sub_qa_perf",
+      "type": "code",
+      "title": "性能分析脚本",
+      "parentId": "qa_testing",
+      "position": {
+        "x": 320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "生成 Unreal Insights 解析脚本、压测批处理脚本、Gauntlet 自动化测试配置",
+        "inputs": [
+          {
+            "id": "test_cases",
+            "name": "测试用例集",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "perf_tools",
+            "name": "性能工具",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "生成 Unreal Insights 解析脚本、压测批处理脚本、Gauntlet 自动化测试配置"
+    },
+    {
+      "id": "sub_qa_playtest",
+      "type": "task",
+      "title": "人工游玩测试",
+      "parentId": "qa_testing",
+      "position": {
+        "x": 640,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】QA 团队执行功能验证与压测、录入 Bug、组织内测局收集反馈，产出《QA 报告》",
+        "inputs": [
+          {
+            "id": "perf_tools",
+            "name": "性能工具",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】QA 团队执行功能验证与压测、录入 Bug、组织内测局收集反馈，产出《QA 报告》"
+    },
+    {
+      "id": "launch_prep",
+      "type": "task",
+      "title": "发布准备",
+      "position": {
+        "x": 2337.2,
+        "y": 204.9
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】运营与技术团队完成发布前全部工作：申请并完成各平台认证（Steam Valve Anti-Cheat 集成/PS5 TRC 检查清单/Xbox TCRS）、部署生产级 Dedicated Server 集群（AWS/阿里云 自动扩缩容，单区 10–30 台）、配置 CDN 资产分发与热更新（Pak 文件分包策略）、上线数据分析埋点（玩家行为/留存/对局时长仪表盘）、完成 GDPR/隐私合规材料、准备用户协议与 ESRB/PEGI 评级申请、配置防作弊系统（EAC 或 BattlEye）线上参数、撰写 Day 1 Patch 说明与已知问题公告",
+        "inputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "launch_config",
+            "name": "发布配置",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】运营与技术团队完成发布前全部工作：申请并完成各平台认证（Steam Valve Anti-Cheat 集成/PS5 TRC 检查清单/Xbox TCRS）、部署生产级 Dedicated Server 集群（AWS/阿里云 自动扩缩容，单区 10–30 台）、配置 CDN 资产分发与热更新（Pak 文件分包策略）、上线数据分析埋点（玩家行为/留存/对局时长仪表盘）、完成 GDPR/隐私合规材料、准备用户协议与 ESRB/PEGI 评级申请、配置防作弊系统（EAC 或 BattlEye）线上参数、撰写 Day 1 Patch 说明与已知问题公告"
+    },
+    {
+      "id": "release_doc",
+      "type": "planning",
+      "title": "发布文档整合",
+      "position": {
+        "x": 2832.7,
+        "y": -89.7
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "综合 QA 报告与发布配置，输出完整的发布文档包：版本说明（功能列表/已知问题/修复记录）、运维手册（服务器启停/扩缩容规程/监控告警阈值/故障恢复 Runbook）、玩家快速入门指南、开发者技术后记（架构决策回顾/踩坑记录/下一版本技术债清单）、运营 KPI 监控面板说明（日活/对局时长/留存率/服务器负载）",
+        "inputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          },
+          {
+            "id": "launch_config",
+            "name": "发布配置",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "release_notes",
+            "name": "发布文档包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "综合 QA 报告与发布配置，输出完整的发布文档包：版本说明（功能列表/已知问题/修复记录）、运维手册（服务器启停/扩缩容规程/监控告警阈值/故障恢复 Runbook）、玩家快速入门指南、开发者技术后记（架构决策回顾/踩坑记录/下一版本技术债清单）、运营 KPI 监控面板说明（日活/对局时长/留存率/服务器负载）"
+    },
+    {
+      "id": "preproduction_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "preproduction",
+      "position": {
+        "x": -466.3,
+        "y": 40.2
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "requirement",
+            "name": "立项要求",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "preproduction_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "preproduction",
+      "position": {
+        "x": 1060.8,
+        "y": 28.8
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "core_dev_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "core_dev",
+      "position": {
+        "x": -320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "core_dev_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "core_dev",
+      "position": {
+        "x": 1220,
+        "y": -19
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "core_impl",
+            "name": "核心系统实现",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "gameplay_systems_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": -320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "core_impl",
+            "name": "核心系统实现",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "gameplay_systems_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": 1280,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "systems_impl",
+            "name": "游戏系统实现",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    }
+  ],
+  "links": [
+    {
+      "id": "l1",
+      "source": "input",
+      "target": "preproduction",
+      "sourceHandle": "response",
+      "targetHandle": "requirement",
+      "label": "立项要求"
+    },
+    {
+      "id": "l2",
+      "source": "preproduction",
+      "target": "project_setup",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "l3",
+      "source": "preproduction",
+      "target": "art_production",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "l4",
+      "source": "project_setup",
+      "target": "core_dev",
+      "sourceHandle": "setup_done",
+      "targetHandle": "setup_done",
+      "label": "环境就绪确认"
+    },
+    {
+      "id": "l5",
+      "source": "project_setup",
+      "target": "world_building",
+      "sourceHandle": "setup_done",
+      "targetHandle": "setup_done",
+      "label": "环境就绪确认"
+    },
+    {
+      "id": "l6",
+      "source": "art_production",
+      "target": "world_building",
+      "sourceHandle": "art_assets",
+      "targetHandle": "art_assets",
+      "label": "美术资产包"
+    },
+    {
+      "id": "l7",
+      "source": "core_dev",
+      "target": "gameplay_systems",
+      "sourceHandle": "core_impl",
+      "targetHandle": "core_impl",
+      "label": "核心系统实现"
+    },
+    {
+      "id": "l8",
+      "source": "gameplay_systems",
+      "target": "integration",
+      "sourceHandle": "systems_impl",
+      "targetHandle": "systems_impl",
+      "label": "游戏系统实现"
+    },
+    {
+      "id": "l9",
+      "source": "world_building",
+      "target": "integration",
+      "sourceHandle": "world_built",
+      "targetHandle": "world_built",
+      "label": "关卡就绪"
+    },
+    {
+      "id": "l10",
+      "source": "integration",
+      "target": "qa_testing",
+      "sourceHandle": "integration_report",
+      "targetHandle": "integration_report",
+      "label": "集成报告"
+    },
+    {
+      "id": "l11",
+      "source": "qa_testing",
+      "target": "launch_prep",
+      "sourceHandle": "qa_report",
+      "targetHandle": "qa_report",
+      "label": "QA 报告"
+    },
+    {
+      "id": "l12",
+      "source": "qa_testing",
+      "target": "release_doc",
+      "sourceHandle": "qa_report",
+      "targetHandle": "qa_report",
+      "label": "QA 报告"
+    },
+    {
+      "id": "l13",
+      "source": "launch_prep",
+      "target": "release_doc",
+      "sourceHandle": "launch_config",
+      "targetHandle": "launch_config",
+      "label": "发布配置"
+    },
+    {
+      "id": "sub_pre_in",
+      "source": "preproduction_sg_input",
+      "target": "sub_pre_gdd",
+      "sourceHandle": "requirement",
+      "targetHandle": "requirement",
+      "label": "立项要求"
+    },
+    {
+      "id": "sub_pre_l1",
+      "source": "sub_pre_gdd",
+      "target": "sub_pre_tdd",
+      "sourceHandle": "gdd",
+      "targetHandle": "gdd",
+      "label": "GDD 文档"
+    },
+    {
+      "id": "sub_pre_l2",
+      "source": "sub_pre_tdd",
+      "target": "sub_pre_approval",
+      "sourceHandle": "tdd",
+      "targetHandle": "tdd",
+      "label": "TDD 文档"
+    },
+    {
+      "id": "sub_pre_out",
+      "source": "sub_pre_approval",
+      "target": "preproduction_sg_output",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "sub_cd_in",
+      "source": "core_dev_sg_input",
+      "target": "sub_cd_design",
+      "sourceHandle": "setup_done",
+      "targetHandle": "setup_done",
+      "label": "环境就绪确认"
+    },
+    {
+      "id": "sub_cd_l1",
+      "source": "sub_cd_design",
+      "target": "sub_cd_codegen",
+      "sourceHandle": "arch_spec",
+      "targetHandle": "arch_spec",
+      "label": "架构规格"
+    },
+    {
+      "id": "sub_cd_l2",
+      "source": "sub_cd_codegen",
+      "target": "sub_cd_impl",
+      "sourceHandle": "code_skeleton",
+      "targetHandle": "code_skeleton",
+      "label": "代码骨架"
+    },
+    {
+      "id": "sub_cd_out",
+      "source": "sub_cd_impl",
+      "target": "core_dev_sg_output",
+      "sourceHandle": "core_impl",
+      "targetHandle": "core_impl",
+      "label": "核心系统实现"
+    },
+    {
+      "id": "sub_gs_in",
+      "source": "gameplay_systems_sg_input",
+      "target": "sub_gs_combat",
+      "sourceHandle": "core_impl",
+      "targetHandle": "core_impl",
+      "label": "核心系统实现"
+    },
+    {
+      "id": "sub_gs_l1",
+      "source": "sub_gs_combat",
+      "target": "sub_gs_survival",
+      "sourceHandle": "combat_design",
+      "targetHandle": "combat_design",
+      "label": "战斗设计"
+    },
+    {
+      "id": "sub_gs_l2",
+      "source": "sub_gs_survival",
+      "target": "sub_gs_code",
+      "sourceHandle": "survival_design",
+      "targetHandle": "survival_design",
+      "label": "生存设计"
+    },
+    {
+      "id": "sub_gs_l3",
+      "source": "sub_gs_code",
+      "target": "sub_gs_impl",
+      "sourceHandle": "systems_code",
+      "targetHandle": "systems_code",
+      "label": "系统代码"
+    },
+    {
+      "id": "sub_gs_out",
+      "source": "sub_gs_impl",
+      "target": "gameplay_systems_sg_output",
+      "sourceHandle": "systems_impl",
+      "targetHandle": "systems_impl",
+      "label": "游戏系统实现"
+    },
+    {
+      "id": "sub_qa_in",
+      "source": "qa_testing_sg_input",
+      "target": "sub_qa_cases",
+      "sourceHandle": "integration_report",
+      "targetHandle": "integration_report",
+      "label": "集成报告"
+    },
+    {
+      "id": "sub_qa_l1",
+      "source": "sub_qa_cases",
+      "target": "sub_qa_perf",
+      "sourceHandle": "test_cases",
+      "targetHandle": "test_cases",
+      "label": "测试用例集"
+    },
+    {
+      "id": "sub_qa_l2",
+      "source": "sub_qa_perf",
+      "target": "sub_qa_playtest",
+      "sourceHandle": "perf_tools",
+      "targetHandle": "perf_tools",
+      "label": "性能工具"
+    },
+    {
+      "id": "sub_qa_out",
+      "source": "sub_qa_playtest",
+      "target": "qa_testing_sg_output",
+      "sourceHandle": "qa_report",
+      "targetHandle": "qa_report",
+      "label": "QA 报告"
+    }
+  ]
+}

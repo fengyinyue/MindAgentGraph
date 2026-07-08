@@ -2,6 +2,8 @@ export type NodeType =
   | "prompt"
   | "planning"
   | "subgraph"
+  | "subgraph_input"
+  | "subgraph_output"
   | "memory"
   | "filescope"
   | "analysis"
