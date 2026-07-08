@@ -3,11 +3,11 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import Canvas from "./components/Canvas";
 import PlanInput from "./components/PlanInput";
-import ChatBox from "./components/ChatBox";
 import Toolbar from "./components/Toolbar";
 import LeftPanel from "./components/LeftPanel";
 import BottomPanel from "./components/BottomPanel";
 import OutputViewer from "./components/OutputViewer";
+import RightPanel from "./components/RightPanel";
 import { checkHealth } from "./api/backend";
 import { usePanelStore } from "./store/panelStore";
 
@@ -113,13 +113,13 @@ export default function App() {
               <Separator className="w-1.5 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
               <Panel
                 key="right-open"
-                defaultSize="360px"
-                minSize="280px"
+                defaultSize="400px"
+                minSize="360px"
                 maxSize="720px"
                 groupResizeBehavior="preserve-pixel-size"
               >
                 <ErrorBoundary>
-                  <ChatBox />
+                  <RightPanel />
                 </ErrorBoundary>
               </Panel>
             </>

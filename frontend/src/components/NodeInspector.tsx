@@ -58,6 +58,14 @@ const DEFAULT_PORTS_BY_TYPE: Record<NodeType, { inputs: DataPort[]; outputs: Dat
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "structure", name: "Structure", type: "graph" }],
   },
+  subgraph_input: {
+    inputs: [],
+    outputs: [{ id: "input", name: "Input", type: "unknown" }],
+  },
+  subgraph_output: {
+    inputs: [{ id: "output", name: "Output", type: "unknown" }],
+    outputs: [],
+  },
   memory: {
     inputs: [{ id: "context", name: "Context", type: "unknown" }],
     outputs: [{ id: "memory", name: "Memory", type: "unknown" }],
@@ -344,7 +352,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
   if (view === "props") {
     return (
       <div className="flex flex-col h-full text-sm overflow-y-auto">
-        <div className="p-3 grid grid-cols-12 gap-x-3 gap-y-2">
+        <div className="p-3 space-y-3">
           <div className="col-span-4 min-w-0">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Title</div>
             <input
@@ -419,14 +427,14 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
             />
           </div>
 
-          <div className="col-span-12 min-w-0 border-t border-zinc-800/60 pt-2">
+          <div className="min-w-0 border-t border-zinc-800/60 pt-2">
             <div className="mb-2 flex items-center gap-2">
               <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Ports</span>
               <span className="text-[10px] text-zinc-600">
                 semantic labels and connection anchors
               </span>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-3">
               <PortEditor
                 title="Inputs"
                 direction="inputs"
@@ -1118,58 +1126,73 @@ function PortEditor({
           No {title.toLowerCase()}
         </div>
       ) : (
-        <div className="space-y-1.5">
+        <div className="space-y-2">
           {ports.map((port, index) => (
-            <div key={index} className="grid grid-cols-[1fr_1fr_112px_auto] gap-1.5">
-              <input
-                className="min-w-0 rounded border border-zinc-700 bg-canvas px-1.5 py-1 text-[11px] outline-none focus:border-accent"
-                value={port.name}
-                placeholder="Name"
-                title="Visible port label"
-                onChange={(e) => {
-                  const name = e.target.value;
-                  onChange(ports.map((item, i) => i === index ? { ...item, name } : item));
-                }}
-              />
-              <input
-                className="min-w-0 rounded border border-zinc-700 bg-canvas px-1.5 py-1 font-mono text-[11px] outline-none focus:border-accent"
-                value={port.id}
-                placeholder="id"
-                title="Stable handle id used by links"
-                onChange={(e) => {
-                  const oldId = port.id;
-                  const nextId = uniquePortId(
-                    ports.filter((_, i) => i !== index),
-                    portIdFromName(e.target.value, `${fallbackPrefix}_${index + 1}`),
-                  );
-                  onChange(
-                    ports.map((item, i) => i === index ? { ...item, id: nextId } : item),
-                    { oldId, newId: nextId },
-                  );
-                }}
-              />
-              <select
-                className="rounded border border-zinc-700 bg-canvas px-1.5 py-1 text-[11px] outline-none focus:border-accent"
-                value={port.type}
-                onChange={(e) => {
-                  const type = isDataPortType(e.target.value) ? e.target.value : "unknown";
-                  onChange(ports.map((item, i) => i === index ? { ...item, type } : item));
-                }}
-              >
-                {DATA_PORT_TYPES.map((type) => (
-                  <option key={type} value={type}>{type}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="rounded border border-zinc-700 px-2 py-1 text-[11px] text-zinc-400 hover:border-red-500 hover:text-red-300"
-                title="Delete port and its connected links"
-                onClick={() => {
-                  onChange(ports.filter((_, i) => i !== index), { oldId: port.id });
-                }}
-              >
-                Delete
-              </button>
+            <div key={index} className="rounded border border-zinc-800/80 bg-black/10 p-2">
+              <div className="grid grid-cols-1 gap-2">
+                <label className="min-w-0">
+                  <span className="text-[10px] uppercase tracking-wide text-zinc-600">Name</span>
+                  <input
+                    className="mt-0.5 w-full min-w-0 rounded border border-zinc-700 bg-canvas px-1.5 py-1 text-[11px] outline-none focus:border-accent"
+                    value={port.name}
+                    placeholder="Name"
+                    title="Visible port label"
+                    onChange={(e) => {
+                      const name = e.target.value;
+                      onChange(ports.map((item, i) => i === index ? { ...item, name } : item));
+                    }}
+                  />
+                </label>
+                <div className="grid grid-cols-[1fr_112px] gap-2">
+                  <label className="min-w-0">
+                    <span className="text-[10px] uppercase tracking-wide text-zinc-600">Handle</span>
+                    <input
+                      className="mt-0.5 w-full min-w-0 rounded border border-zinc-700 bg-canvas px-1.5 py-1 font-mono text-[11px] outline-none focus:border-accent"
+                      value={port.id}
+                      placeholder="id"
+                      title="Stable handle id used by links"
+                      onChange={(e) => {
+                        const oldId = port.id;
+                        const nextId = uniquePortId(
+                          ports.filter((_, i) => i !== index),
+                          portIdFromName(e.target.value, `${fallbackPrefix}_${index + 1}`),
+                        );
+                        onChange(
+                          ports.map((item, i) => i === index ? { ...item, id: nextId } : item),
+                          { oldId, newId: nextId },
+                        );
+                      }}
+                    />
+                  </label>
+                  <label>
+                    <span className="text-[10px] uppercase tracking-wide text-zinc-600">Type</span>
+                    <select
+                      className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-1.5 py-1 text-[11px] outline-none focus:border-accent"
+                      value={port.type}
+                      onChange={(e) => {
+                        const type = isDataPortType(e.target.value) ? e.target.value : "unknown";
+                        onChange(ports.map((item, i) => i === index ? { ...item, type } : item));
+                      }}
+                    >
+                      {DATA_PORT_TYPES.map((type) => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+              <div className="mt-2 flex justify-end">
+                <button
+                  type="button"
+                  className="rounded border border-zinc-700 px-2 py-0.5 text-[11px] text-zinc-400 hover:border-red-500 hover:text-red-300"
+                  title="Delete port and its connected links"
+                  onClick={() => {
+                    onChange(ports.filter((_, i) => i !== index), { oldId: port.id });
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
           ))}
         </div>

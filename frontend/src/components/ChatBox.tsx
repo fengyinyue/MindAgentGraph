@@ -431,7 +431,7 @@ function applyGraphCommand(rawText: string): GraphCommandResult {
   };
 }
 
-export default function ChatBox() {
+export default function ChatBox({ embedded = false }: { embedded?: boolean } = {}) {
   const rightOpen = usePanelStore((s) => s.rightOpen);
   const nodeCount = useGraphStore((s) => s.nodes.length);
   const linkCount = useGraphStore((s) => s.links.length);
@@ -447,7 +447,7 @@ export default function ChatBox() {
     }
   }, [messages]);
 
-  if (!rightOpen) return null;
+  if (!embedded && !rightOpen) return null;
 
   const send = async () => {
     const text = draft.trim();
@@ -488,7 +488,7 @@ export default function ChatBox() {
   };
 
   return (
-    <div className="bg-panel border-l border-zinc-800 flex flex-col h-full">
+    <div className={`${embedded ? "" : "border-l border-zinc-800"} bg-panel flex flex-col h-full`}>
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-800 text-xs">
         <div className="min-w-0">
           <div className="font-semibold text-zinc-300">图表助手</div>
