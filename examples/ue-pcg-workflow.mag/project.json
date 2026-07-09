@@ -1,0 +1,8 @@
+{
+  "name": "ue-pcg-workflow",
+  "version": "0.1.0",
+  "rootGraph": "graphs/main.json",
+  "description": "UE PCG图表自动生成：分析任务→规划节点→MCP检测→创建缺失节点→MCP组装图表",
+  "createdAt": "2026-07-09T00:00:00.000Z",
+  "updatedAt": "2026-07-09T04:12:49.975Z"
+}

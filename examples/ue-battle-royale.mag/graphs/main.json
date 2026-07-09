@@ -5,8 +5,8 @@
       "type": "prompt",
       "title": "项目立项输入",
       "position": {
-        "x": -771,
-        "y": 36.8
+        "x": -1018.1,
+        "y": -331.3
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -27,8 +27,8 @@
       "type": "subgraph",
       "title": "前期制作",
       "position": {
-        "x": -371,
-        "y": 36.8
+        "x": -678.1,
+        "y": -331.3
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -283,8 +283,8 @@
       "title": "撰写 GDD",
       "parentId": "preproduction",
       "position": {
-        "x": -103.1,
-        "y": -36.4
+        "x": 338.9,
+        "y": -0.6
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -323,8 +323,8 @@
       "title": "撰写 TDD",
       "parentId": "preproduction",
       "position": {
-        "x": 254.1,
-        "y": -43.2
+        "x": 680,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -363,8 +363,8 @@
       "title": "立项评审签字",
       "parentId": "preproduction",
       "position": {
-        "x": 638.5,
-        "y": -37.9
+        "x": 1020,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -399,11 +399,11 @@
     },
     {
       "id": "project_setup",
-      "type": "task",
+      "type": "subgraph",
       "title": "项目环境搭建",
       "position": {
-        "x": 88.7,
-        "y": -323.9
+        "x": -210.1,
+        "y": -400.6
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -415,7 +415,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "【人工】技术负责人完成开发环境搭建：在 Epic Launcher 创建 UE5 Dedicated Server 模板项目、启用 GameplayAbilities / OnlineSubsystem / Chaos Physics 插件、配置 Perforce 或 Git LFS 仓库（含 .uasset 大文件策略）、搭建 Jenkins/TeamCity CI 管道（编译+Cook+打包自动化）、配置多人游戏 Dedicated Server 本地调试环境、在 Jira/Notion 上按 TDD 里程碑创建迭代任务板",
+        "purpose": "人工完成 UE 项目创建与 DevOps 配置，再由 MCP 自动完成编辑器内初始化",
         "inputs": [
           {
             "id": "project_plan",
@@ -429,20 +429,190 @@
             "name": "环境就绪确认",
             "type": "unknown"
           }
-        ]
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_ps_devops",
+              "type": "task",
+              "title": "DevOps 与项目创建",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】使用 Epic Games Launcher 创建 UE5 Dedicated Server 模板项目；在 Perforce/Git 建立仓库并配置 LFS 大文件策略（.uasset/.umap）；在 Jenkins/TeamCity 建立 CI 管道（编译+Cook+打包自动化）；通过编辑器 Plugin Browser 手动启用 GameplayAbilities/OnlineSubsystem/Chaos 插件（首次需重启编辑器）；确保 MCP Server 已运行，通知 AI 继续后续配置",
+                "inputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "ue_project_ready",
+                    "name": "UE 项目就绪",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_ps_mcp_init",
+              "type": "code",
+              "title": "MCP 编辑器初始化",
+              "position": {
+                "x": 480,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "通过 UE MCP 完成项目骨架初始化：调用 AssetTools.create_folder 创建 Content/Data/、Content/Weapons/、Content/Zone/、Content/UI/、Content/Characters/ 目录结构；调用 BlueprintTools.create_blueprint 创建 BP_ABRGameMode、BP_ABRGameState、BP_ABRCharacter、BP_ABRPlayerController 蓝图资产骨架；调用 AssetTools.write_file 写入 Config/DefaultGame.ini 的 GameMode 与 DefaultPawn 默认配置；调用 ProgrammaticToolset.run_python_script 批量执行并验证",
+                "inputs": [
+                  {
+                    "id": "ue_project_ready",
+                    "name": "UE 项目就绪",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "setup_done",
+                    "name": "环境就绪确认",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "project_setup_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "project_setup",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "project_setup_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "project_setup",
+              "position": {
+                "x": 800,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "setup_done",
+                    "name": "环境就绪确认",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_ps_in",
+              "source": "project_setup_sg_input",
+              "target": "sub_ps_devops",
+              "sourceHandle": "project_plan",
+              "targetHandle": "project_plan",
+              "label": "项目计划包"
+            },
+            {
+              "id": "sub_ps_l1",
+              "source": "sub_ps_devops",
+              "target": "sub_ps_mcp_init",
+              "sourceHandle": "ue_project_ready",
+              "targetHandle": "ue_project_ready",
+              "label": "UE 项目就绪"
+            },
+            {
+              "id": "sub_ps_out",
+              "source": "sub_ps_mcp_init",
+              "target": "project_setup_sg_output",
+              "sourceHandle": "setup_done",
+              "targetHandle": "setup_done",
+              "label": "环境就绪确认"
+            }
+          ]
+        }
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "【人工】技术负责人完成开发环境搭建：在 Epic Launcher 创建 UE5 Dedicated Server 模板项目、启用 GameplayAbilities / OnlineSubsystem / Chaos Physics 插件、配置 Perforce 或 Git LFS 仓库（含 .uasset 大文件策略）、搭建 Jenkins/TeamCity CI 管道（编译+Cook+打包自动化）、配置多人游戏 Dedicated Server 本地调试环境、在 Jira/Notion 上按 TDD 里程碑创建迭代任务板"
+      "purpose": "人工完成 UE 项目创建与 DevOps 配置，再由 MCP 自动完成编辑器内初始化"
     },
     {
       "id": "art_production",
-      "type": "task",
+      "type": "subgraph",
       "title": "美术与音效生产",
       "position": {
-        "x": 139.7,
-        "y": 257.3
+        "x": -207.1,
+        "y": -155.6
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -454,7 +624,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "【人工】美术团队/外包按 GDD 风格指南生产全套资产：角色（主角/NPC 骨骼网格体 + 动画蓝图，包括跑跑/跳伞/滑翔/瞄准/死亡）、武器模型（步枪/霰弹枪/狙击枪/投掷物各 2–3 套皮肤）、地图环境资产（城市建筑/工业设施/森林植被/海岸礁石模块化套件）、特效（枪口焰/弹孔/毒圈Niagara）、UI 图集（准心/血条/小地图/背包格子）、音效（枪声/脚步/拾取/UI音效）、背景音乐（大厅/战斗/结算主题）；完成后上传至 P4/Git 并在任务板标记完成",
+        "purpose": "三支团队并行生产角色/环境/音频资产，AI 汇总验证完整性与风格一致性",
         "inputs": [
           {
             "id": "project_plan",
@@ -468,20 +638,308 @@
             "name": "美术资产包",
             "type": "unknown"
           }
-        ]
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_art_chars",
+              "type": "task",
+              "title": "角色与武器资产制作",
+              "position": {
+                "x": 0,
+                "y": -200
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】角色美术组按 GDD 风格指南制作：主角/NPC 骨骼网格体（Skeleton + SkeletalMesh）；动画蓝图（跑步/跳伞/滑翔/瞄准/射击/死亡/布娃娃过渡）；步枪/霰弹枪/狙击枪/投掷物各 2–3 套皮肤 Static/Skeletal Mesh；角色材质与贴图（PBR：Albedo/Normal/ORM）；完成后上传 P4/Git 并通知 AI 审查",
+                "inputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "chars_done",
+                    "name": "角色武器资产",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_art_world",
+              "type": "task",
+              "title": "环境与特效资产制作",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】环境美术组制作地图资产：城市建筑/工业设施/森林植被/海岸礁石模块化套件（可拼装 Static Mesh 集合，含室内/室外两套精度）；Nanite/HLOD 友好网格（非破坏性 LOD 设置）；各区域 Tileable 地形材质（草地/沙地/岩石/混凝土）；Niagara 特效（枪口焰/弹孔贴花/毒圈雾/爆炸/治疗光效）；完成后上传 P4/Git 并通知 AI 审查",
+                "inputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "world_done",
+                    "name": "环境特效资产",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_art_audio",
+              "type": "task",
+              "title": "UI 图集与音频资产制作",
+              "position": {
+                "x": 0,
+                "y": 200
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】UI 美术组+音频组并行生产：UI 图集（准心/血条/盔甲条/小地图底图/背包格子/物品图标/稀有度框/击杀通知图标，含 @1x/@2x/@3x）；音效（枪声分层：近/中/远/室内各版本、枪栓/换弹、脚步（草地/混凝土/金属）、拾取、门开关、UI 按钮反馈）；背景音乐（大厅等待/战斗紧张/决赛圈/胜利/失败主题，各 Loop 段落）；完成后上传 P4/Git 并通知 AI 审查",
+                "inputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "audio_done",
+                    "name": "UI图集与音频资产",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_art_audit",
+              "type": "planning",
+              "title": "资产交付审查与归档",
+              "position": {
+                "x": 480,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "汇总三组资产交付清单，验证完整性与风格一致性：对照 GDD 资产列表逐项核查是否全部交付；检查角色/武器材质是否统一使用 PBR 参数范围；确认模块化套件命名规范（前缀 SM_/SK_/NS_/T_ 等）与文件夹结构（Content/Characters/Content/Weapons/Content/Environment）；输出《美术资产包》交付确认报告（资产路径清单 + 未达标项 + 修复建议）",
+                "inputs": [
+                  {
+                    "id": "chars_done",
+                    "name": "角色武器资产",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "world_done",
+                    "name": "环境特效资产",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "audio_done",
+                    "name": "UI图集与音频资产",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "art_assets",
+                    "name": "美术资产包",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "art_production_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "art_production",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "project_plan",
+                    "name": "项目计划包",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "art_production_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "art_production",
+              "position": {
+                "x": 800,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "art_assets",
+                    "name": "美术资产包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_art_in1",
+              "source": "art_production_sg_input",
+              "target": "sub_art_chars",
+              "sourceHandle": "project_plan",
+              "targetHandle": "project_plan",
+              "label": "项目计划包"
+            },
+            {
+              "id": "sub_art_in2",
+              "source": "art_production_sg_input",
+              "target": "sub_art_world",
+              "sourceHandle": "project_plan",
+              "targetHandle": "project_plan",
+              "label": "项目计划包"
+            },
+            {
+              "id": "sub_art_in3",
+              "source": "art_production_sg_input",
+              "target": "sub_art_audio",
+              "sourceHandle": "project_plan",
+              "targetHandle": "project_plan",
+              "label": "项目计划包"
+            },
+            {
+              "id": "sub_art_l1",
+              "source": "sub_art_chars",
+              "target": "sub_art_audit",
+              "sourceHandle": "chars_done",
+              "targetHandle": "chars_done",
+              "label": "角色武器资产"
+            },
+            {
+              "id": "sub_art_l2",
+              "source": "sub_art_world",
+              "target": "sub_art_audit",
+              "sourceHandle": "world_done",
+              "targetHandle": "world_done",
+              "label": "环境特效资产"
+            },
+            {
+              "id": "sub_art_l3",
+              "source": "sub_art_audio",
+              "target": "sub_art_audit",
+              "sourceHandle": "audio_done",
+              "targetHandle": "audio_done",
+              "label": "UI图集与音频资产"
+            },
+            {
+              "id": "sub_art_out",
+              "source": "sub_art_audit",
+              "target": "art_production_sg_output",
+              "sourceHandle": "art_assets",
+              "targetHandle": "art_assets",
+              "label": "美术资产包"
+            }
+          ]
+        }
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "【人工】美术团队/外包按 GDD 风格指南生产全套资产：角色（主角/NPC 骨骼网格体 + 动画蓝图，包括跑跑/跳伞/滑翔/瞄准/死亡）、武器模型（步枪/霰弹枪/狙击枪/投掷物各 2–3 套皮肤）、地图环境资产（城市建筑/工业设施/森林植被/海岸礁石模块化套件）、特效（枪口焰/弹孔/毒圈Niagara）、UI 图集（准心/血条/小地图/背包格子）、音效（枪声/脚步/拾取/UI音效）、背景音乐（大厅/战斗/结算主题）；完成后上传至 P4/Git 并在任务板标记完成"
+      "purpose": "三支团队并行生产角色/环境/音频资产，AI 汇总验证完整性与风格一致性"
     },
     {
       "id": "core_dev",
       "type": "subgraph",
       "title": "核心系统开发",
       "position": {
-        "x": 543.7,
-        "y": -238
+        "x": 250,
+        "y": -405
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -731,13 +1189,518 @@
       "purpose": "AI 设计核心框架并生成代码骨架，开发团队照方案完成具体实现"
     },
     {
+      "id": "sub_art_chars",
+      "type": "task",
+      "title": "角色与武器资产制作",
+      "parentId": "art_production",
+      "position": {
+        "x": 340,
+        "y": -170
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】制作主角/NPC 骨骼网格体+动画蓝图（跑步/跳伞/滑翔/瞄准/死亡）、武器模型各 2–3 套皮肤及 PBR 贴图",
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "chars_done",
+            "name": "角色武器资产",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】制作主角/NPC 骨骼网格体+动画蓝图（跑步/跳伞/滑翔/瞄准/死亡）、武器模型各 2–3 套皮肤及 PBR 贴图"
+    },
+    {
+      "id": "sub_art_world",
+      "type": "task",
+      "title": "环境与特效资产制作",
+      "parentId": "art_production",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】制作城市/工业/森林/海岸模块化套件、Nanite 网格、地形材质、Niagara 特效",
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "world_done",
+            "name": "环境特效资产",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】制作城市/工业/森林/海岸模块化套件、Nanite 网格、地形材质、Niagara 特效"
+    },
+    {
+      "id": "sub_art_audio",
+      "type": "task",
+      "title": "UI 图集与音频资产制作",
+      "parentId": "art_production",
+      "position": {
+        "x": 340,
+        "y": 170
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】制作 UI 图集（准心/血条/背包格子/物品图标）、分层枪声音效、脚步音效、UI 音效、背景音乐各主题",
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "audio_done",
+            "name": "UI图集与音频资产",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】制作 UI 图集（准心/血条/背包格子/物品图标）、分层枪声音效、脚步音效、UI 音效、背景音乐各主题"
+    },
+    {
+      "id": "sub_art_audit",
+      "type": "planning",
+      "title": "资产交付审查与归档",
+      "parentId": "art_production",
+      "position": {
+        "x": 855.9,
+        "y": -29.6
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "汇总三组资产清单，验证完整性与命名规范，输出《美术资产包》交付确认报告",
+        "inputs": [
+          {
+            "id": "chars_done",
+            "name": "角色武器资产",
+            "type": "unknown"
+          },
+          {
+            "id": "world_done",
+            "name": "环境特效资产",
+            "type": "unknown"
+          },
+          {
+            "id": "audio_done",
+            "name": "UI图集与音频资产",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "art_assets",
+            "name": "美术资产包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "汇总三组资产清单，验证完整性与命名规范，输出《美术资产包》交付确认报告"
+    },
+    {
+      "id": "sub_lp_cert",
+      "type": "task",
+      "title": "平台认证",
+      "parentId": "launch_prep",
+      "position": {
+        "x": 0,
+        "y": -170
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】完成 Steam/PS5/Xbox 三平台认证申请（SDK 集成、TRC/TCRS 检查、审核提交）",
+        "inputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "cert_done",
+            "name": "平台认证完成",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】完成 Steam/PS5/Xbox 三平台认证申请（SDK 集成、TRC/TCRS 检查、审核提交）"
+    },
+    {
+      "id": "sub_lp_infra",
+      "type": "task",
+      "title": "服务器部署与运维配置",
+      "parentId": "launch_prep",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】部署多区域 Dedicated Server 集群（Auto Scaling）、CDN 热更新管道、数据分析埋点、监控告警、峰值并发压测",
+        "inputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "infra_done",
+            "name": "基础设施就绪",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】部署多区域 Dedicated Server 集群（Auto Scaling）、CDN 热更新管道、数据分析埋点、监控告警、峰值并发压测"
+    },
+    {
+      "id": "sub_lp_compliance",
+      "type": "task",
+      "title": "合规与发布配置",
+      "parentId": "launch_prep",
+      "position": {
+        "x": 0,
+        "y": 170
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】完成 GDPR/CCPA 隐私政策、ESRB/PEGI 评级、防作弊线上参数、Day 1 Patch 说明、各平台发布时区配置",
+        "inputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "compliance_done",
+            "name": "合规配置完成",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】完成 GDPR/CCPA 隐私政策、ESRB/PEGI 评级、防作弊线上参数、Day 1 Patch 说明、各平台发布时区配置"
+    },
+    {
+      "id": "sub_lp_verify",
+      "type": "planning",
+      "title": "发布就绪确认",
+      "parentId": "launch_prep",
+      "position": {
+        "x": 425.7,
+        "y": -35.6
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "汇总三路并行结果，生成《发布就绪确认清单》，输出最终发布配置文件",
+        "inputs": [
+          {
+            "id": "cert_done",
+            "name": "平台认证完成",
+            "type": "unknown"
+          },
+          {
+            "id": "infra_done",
+            "name": "基础设施就绪",
+            "type": "unknown"
+          },
+          {
+            "id": "compliance_done",
+            "name": "合规配置完成",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "launch_config",
+            "name": "发布配置",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "汇总三路并行结果，生成《发布就绪确认清单》，输出最终发布配置文件"
+    },
+    {
+      "id": "sub_ps_devops",
+      "type": "task",
+      "title": "DevOps 与项目创建",
+      "parentId": "project_setup",
+      "position": {
+        "x": 340,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】创建 UE5 项目、配置 P4/Git LFS、建立 CI 管道、启用必要插件，启动 MCP Server",
+        "inputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "ue_project_ready",
+            "name": "UE 项目就绪",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】创建 UE5 项目、配置 P4/Git LFS、建立 CI 管道、启用必要插件，启动 MCP Server"
+    },
+    {
+      "id": "sub_ps_mcp_init",
+      "type": "code",
+      "title": "MCP 编辑器初始化",
+      "parentId": "project_setup",
+      "position": {
+        "x": 680,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "通过 UE MCP 创建 Content 目录结构、基础 Blueprint 骨架、DefaultGame.ini 配置",
+        "inputs": [
+          {
+            "id": "ue_project_ready",
+            "name": "UE 项目就绪",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "通过 UE MCP 创建 Content 目录结构、基础 Blueprint 骨架、DefaultGame.ini 配置"
+    },
+    {
+      "id": "sub_wb_pcg",
+      "type": "code",
+      "title": "MCP 程序化地图生成",
+      "parentId": "world_building",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "通过 UE MCP 配置 World Partition、PCG 程序化放置环境资产、创建 DT_LootTable、放置 AZoneActor 并配置安全圈参数、批量创建材质实例",
+        "inputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          },
+          {
+            "id": "art_assets",
+            "name": "美术资产包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "pcg_done",
+            "name": "程序化生成完成",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "通过 UE MCP 配置 World Partition、PCG 程序化放置环境资产、创建 DT_LootTable、放置 AZoneActor 并配置安全圈参数、批量创建材质实例"
+    },
+    {
+      "id": "sub_wb_polish",
+      "type": "task",
+      "title": "地形雕刻与艺术打磨",
+      "parentId": "world_building",
+      "position": {
+        "x": 388.2,
+        "y": -3.4
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】地形雕刻、PCG 结果艺术审查、地标室内摆放、光照烘焙",
+        "inputs": [
+          {
+            "id": "pcg_done",
+            "name": "程序化生成完成",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "world_built",
+            "name": "关卡就绪",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "【人工】地形雕刻、PCG 结果艺术审查、地标室内摆放、光照烘焙"
+    },
+    {
       "id": "sub_cd_design",
       "type": "planning",
       "title": "框架与网络架构设计",
       "parentId": "core_dev",
       "position": {
-        "x": -4,
-        "y": -51
+        "x": 340,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -776,8 +1739,8 @@
       "title": "生成核心代码骨架",
       "parentId": "core_dev",
       "position": {
-        "x": 383,
-        "y": -50
+        "x": 680,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -816,8 +1779,8 @@
       "title": "核心逻辑实现",
       "parentId": "core_dev",
       "position": {
-        "x": 806,
-        "y": -84
+        "x": 1020,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -852,11 +1815,11 @@
     },
     {
       "id": "world_building",
-      "type": "task",
-      "title": "关卡搭建",
+      "type": "subgraph",
+      "title": "世界构建",
       "position": {
-        "x": 679,
-        "y": 91
+        "x": 242,
+        "y": -178
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -868,7 +1831,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "【人工】关卡设计师在 UE 编辑器内完成大地图构建：开启 World Partition（512m×512m Cell）、在地形工具雕刻 8×8 km² 地形（山丘/平原/海湾）、按 GDD 分区放置地标（城市/工厂/军事基地/港口各 2–3 个）、使用模块化套件拼装建筑室内、放置 ALootSpawner 并配置 DT_LootTable 权重、配置 Runtime Grid 和 HLOD 代理层级、执行光照烘焙（GPU Lightmass）并验证移动端 Lumen 效果；完成后提交 P4/Git 并通知程序员进行场景流送压测",
+        "purpose": "MCP 自动完成程序化地图生成与 World Partition 配置，人工完成地形雕刻与艺术打磨",
         "inputs": [
           {
             "id": "setup_done",
@@ -887,20 +1850,208 @@
             "name": "关卡就绪",
             "type": "unknown"
           }
-        ]
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_wb_pcg",
+              "type": "code",
+              "title": "MCP 程序化地图生成",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "通过 UE MCP 完成大地图自动化构建：调用 ObjectTools.set_properties 配置 World Partition Runtime Grid（512m×512m Cell）和 HLOD 代理层级；调用 PCGToolset.CreateGraph 创建环境分布 PCG 图（森林植被/工业设备/海岸礁石密度规则）并通过 PCGToolset.SpawnGraphInstance 实例化；调用 DataTableTools.create_data_table + add_row 创建填充 DT_LootTable（30 种物品/4 稀有度/权重）；调用 SceneTools.add_to_scene_from_class 放置 AZoneActor 并通过 ObjectTools.set_properties 写入 6 阶段安全圈参数；调用 CurveTableTools 创建安全圈收缩插值曲线；调用 MaterialInstanceTools 为各地形区域批量创建材质实例；ProgrammaticToolset.run_python_script 批量编排上述操作",
+                "inputs": [
+                  {
+                    "id": "setup_done",
+                    "name": "环境就绪确认",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "art_assets",
+                    "name": "美术资产包",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "pcg_done",
+                    "name": "程序化生成完成",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_wb_polish",
+              "type": "task",
+              "title": "地形雕刻与艺术打磨",
+              "position": {
+                "x": 480,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】关卡设计师完成最终艺术打磨：在 Landscape 模式雕刻地形（山丘/河流/海湾/平原过渡区）；对 PCG 生成结果进行艺术审查（调整密度过高/视觉重复区域）；手动摆放地标内部场景（建筑室内精细布局、叙事道具）；调整各区域 Material Instance 参数达到风格统一；执行 GPU Lightmass 光照烘焙并验证 Lumen 效果；验证 World Partition 流送边界无穿帮；提交 P4 并通知程序员进行场景流送压测",
+                "inputs": [
+                  {
+                    "id": "pcg_done",
+                    "name": "程序化生成完成",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "world_built",
+                    "name": "关卡就绪",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "world_building_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "world_building",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "setup_done",
+                    "name": "环境就绪确认",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "art_assets",
+                    "name": "美术资产包",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "world_building_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "world_building",
+              "position": {
+                "x": 660,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "world_built",
+                    "name": "关卡就绪",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_wb_in1",
+              "source": "world_building_sg_input",
+              "target": "sub_wb_pcg",
+              "sourceHandle": "setup_done",
+              "targetHandle": "setup_done",
+              "label": "环境就绪确认"
+            },
+            {
+              "id": "sub_wb_in2",
+              "source": "world_building_sg_input",
+              "target": "sub_wb_pcg",
+              "sourceHandle": "art_assets",
+              "targetHandle": "art_assets",
+              "label": "美术资产包"
+            },
+            {
+              "id": "sub_wb_l1",
+              "source": "sub_wb_pcg",
+              "target": "sub_wb_polish",
+              "sourceHandle": "pcg_done",
+              "targetHandle": "pcg_done",
+              "label": "程序化生成完成"
+            },
+            {
+              "id": "sub_wb_out",
+              "source": "sub_wb_polish",
+              "target": "world_building_sg_output",
+              "sourceHandle": "world_built",
+              "targetHandle": "world_built",
+              "label": "关卡就绪"
+            }
+          ]
+        }
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "【人工】关卡设计师在 UE 编辑器内完成大地图构建：开启 World Partition（512m×512m Cell）、在地形工具雕刻 8×8 km² 地形（山丘/平原/海湾）、按 GDD 分区放置地标（城市/工厂/军事基地/港口各 2–3 个）、使用模块化套件拼装建筑室内、放置 ALootSpawner 并配置 DT_LootTable 权重、配置 Runtime Grid 和 HLOD 代理层级、执行光照烘焙（GPU Lightmass）并验证移动端 Lumen 效果；完成后提交 P4/Git 并通知程序员进行场景流送压测"
+      "purpose": "MCP 自动完成程序化地图生成与 World Partition 配置，人工完成地形雕刻与艺术打磨"
     },
     {
       "id": "gameplay_systems",
       "type": "subgraph",
       "title": "游戏系统开发",
       "position": {
-        "x": 962,
-        "y": -239
+        "x": 677,
+        "y": -407.7
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1044,9 +2195,9 @@
               "metadata": {}
             },
             {
-              "id": "sub_gs_impl",
-              "type": "task",
-              "title": "游戏逻辑实现",
+              "id": "sub_gs_bp_impl",
+              "type": "code",
+              "title": "MCP 数据资产与蓝图创建",
               "position": {
                 "x": 960,
                 "y": 0
@@ -1061,11 +2212,49 @@
                 "deny": []
               },
               "data": {
-                "purpose": "【人工】游戏程序员按设计文档实现所有游戏逻辑 .cpp：武器开火/命中检测/弹道/后坐力、安全圈 Timer 推进与客户端 Niagara 同步、背包拾取/丢弃/合并、对局状态机 Hook（OnMatchPhaseChanged）、UI Widget 绑定（UMG 血条/弹药/小地图）；完成后与关卡设计师联合调试（跑 Map+Systems 完整 Playthrough），通过 Code Review 合入主干",
+                "purpose": "通过 UE MCP 在编辑器内完成所有数据资产和蓝图骨架：调用 DataTableTools.create_data_table + add_row 创建填充 DT_WeaponStats（伤害/射速/弹容/后坐力/射程）；调用 DataAssetTools.create_data_asset + ObjectTools.set_properties 为每种武器创建 DA_WeaponData 实例并填充数值；调用 BlueprintTools.create_blueprint + write_graph_dsl 创建 BP_ABRWeapon、BP_ABRRifle 并写入开火/换弹事件图骨架；调用 UMGToolSet 构建 WBP_HUD 控件树（血条/弹药计数/小地图/准心）；调用 CurveTableTools 创建武器后坐力曲线表；调用 MaterialInstanceTools 为各武器皮肤批量创建材质实例；ProgrammaticToolset.run_python_script 批量编排",
                 "inputs": [
                   {
                     "id": "systems_code",
                     "name": "系统代码",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "bp_done",
+                    "name": "蓝图与数据资产就绪",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_gs_cpp_impl",
+              "type": "task",
+              "title": "C++ 游戏逻辑实现",
+              "position": {
+                "x": 1280,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】游戏程序员实现所有复杂 C++ 逻辑 .cpp：武器开火/Hitscan LineTrace/Server_Fire RPC、后坐力 CurveFloat 采样与相机偏移、GAS GameplayAbility 完整实现、GAS GameplayEffect 伤害执行体、安全圈 TimerHandle 推进与 Multicast 特效同步、背包拾取服务端仲裁、ABRGameMode 状态机 Hook；与关卡设计师联合全流程调试；Code Review 通过后合入主干",
+                "inputs": [
+                  {
+                    "id": "bp_done",
+                    "name": "蓝图与数据资产就绪",
                     "type": "unknown"
                   }
                 ],
@@ -1174,14 +2363,22 @@
             {
               "id": "sub_gs_l3",
               "source": "sub_gs_code",
-              "target": "sub_gs_impl",
+              "target": "sub_gs_bp_impl",
               "sourceHandle": "systems_code",
               "targetHandle": "systems_code",
               "label": "系统代码"
             },
             {
+              "id": "sub_gs_l4",
+              "source": "sub_gs_bp_impl",
+              "target": "sub_gs_cpp_impl",
+              "sourceHandle": "bp_done",
+              "targetHandle": "bp_done",
+              "label": "蓝图与数据资产就绪"
+            },
+            {
               "id": "sub_gs_out",
-              "source": "sub_gs_impl",
+              "source": "sub_gs_cpp_impl",
               "target": "gameplay_systems_sg_output",
               "sourceHandle": "systems_impl",
               "targetHandle": "systems_impl",
@@ -1201,7 +2398,7 @@
       "title": "战斗系统设计",
       "parentId": "gameplay_systems",
       "position": {
-        "x": 0,
+        "x": 340,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1241,7 +2438,7 @@
       "title": "生存机制设计",
       "parentId": "gameplay_systems",
       "position": {
-        "x": 320,
+        "x": 680,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1281,7 +2478,7 @@
       "title": "生成系统代码与配置",
       "parentId": "gameplay_systems",
       "position": {
-        "x": 640,
+        "x": 1020,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1316,12 +2513,12 @@
       "purpose": "生成武器/安全圈/物资系统的 C++ 头文件、.cpp 存根、DataTable CSV、ZonePhases JSON"
     },
     {
-      "id": "sub_gs_impl",
-      "type": "task",
-      "title": "游戏逻辑实现",
+      "id": "sub_gs_bp_impl",
+      "type": "code",
+      "title": "MCP 数据资产与蓝图创建",
       "parentId": "gameplay_systems",
       "position": {
-        "x": 960,
+        "x": 1360,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1334,11 +2531,51 @@
         "deny": []
       },
       "data": {
-        "purpose": "【人工】程序员实现全部游戏逻辑 .cpp，与关卡设计师联合调试完整 Playthrough，Code Review 合入主干",
+        "purpose": "通过 UE MCP 创建 DT_WeaponStats、DA_WeaponData 实例、BP 蓝图事件图骨架、WBP_HUD 控件树、后坐力曲线表、武器材质实例",
         "inputs": [
           {
             "id": "systems_code",
             "name": "系统代码",
+            "type": "unknown"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "bp_done",
+            "name": "蓝图与数据资产就绪",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {},
+      "purpose": "通过 UE MCP 创建 DT_WeaponStats、DA_WeaponData 实例、BP 蓝图事件图骨架、WBP_HUD 控件树、后坐力曲线表、武器材质实例"
+    },
+    {
+      "id": "sub_gs_cpp_impl",
+      "type": "task",
+      "title": "C++ 游戏逻辑实现",
+      "parentId": "gameplay_systems",
+      "position": {
+        "x": 1700,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "purpose": "【人工】程序员实现复杂 C++ 逻辑（GAS/RPC/物理/状态机）、联合调试、Code Review 合入主干",
+        "inputs": [
+          {
+            "id": "bp_done",
+            "name": "蓝图与数据资产就绪",
             "type": "unknown"
           }
         ],
@@ -1353,15 +2590,15 @@
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "【人工】程序员实现全部游戏逻辑 .cpp，与关卡设计师联合调试完整 Playthrough，Code Review 合入主干"
+      "purpose": "【人工】程序员实现复杂 C++ 逻辑（GAS/RPC/物理/状态机）、联合调试、Code Review 合入主干"
     },
     {
       "id": "integration",
       "type": "planning",
       "title": "集成验证",
       "position": {
-        "x": 1405.1,
-        "y": -116.6
+        "x": 1090,
+        "y": -430
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1392,7 +2629,81 @@
             "name": "集成报告",
             "type": "unknown"
           }
-        ]
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "integration_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "integration",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "systems_impl",
+                    "name": "游戏系统实现",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "world_built",
+                    "name": "关卡就绪",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "integration_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "integration",
+              "position": {
+                "x": 960,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "integration_report",
+                    "name": "集成报告",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": []
+        }
       },
       "runHistory": [],
       "resourceRefs": [],
@@ -1404,8 +2715,8 @@
       "type": "subgraph",
       "title": "QA 测试与性能优化",
       "position": {
-        "x": 1937.4,
-        "y": -24.1
+        "x": 1469.3,
+        "y": -369.9
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1547,6 +2858,70 @@
               "runHistory": [],
               "resourceRefs": [],
               "metadata": {}
+            },
+            {
+              "id": "qa_testing_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "qa_testing",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "integration_report",
+                    "name": "集成报告",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "qa_testing_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "qa_testing",
+              "position": {
+                "x": 960,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "qa_report",
+                    "name": "QA 报告",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
             }
           ],
           "links": [
@@ -1596,7 +2971,7 @@
       "title": "生成测试用例集",
       "parentId": "qa_testing",
       "position": {
-        "x": 0,
+        "x": 340,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1636,7 +3011,7 @@
       "title": "性能分析脚本",
       "parentId": "qa_testing",
       "position": {
-        "x": 320,
+        "x": 680,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1676,7 +3051,7 @@
       "title": "人工游玩测试",
       "parentId": "qa_testing",
       "position": {
-        "x": 640,
+        "x": 1020,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1712,11 +3087,11 @@
     },
     {
       "id": "launch_prep",
-      "type": "task",
+      "type": "subgraph",
       "title": "发布准备",
       "position": {
-        "x": 2337.2,
-        "y": 204.9
+        "x": 1935.9,
+        "y": -212.6
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1728,7 +3103,7 @@
         "deny": []
       },
       "data": {
-        "purpose": "【人工】运营与技术团队完成发布前全部工作：申请并完成各平台认证（Steam Valve Anti-Cheat 集成/PS5 TRC 检查清单/Xbox TCRS）、部署生产级 Dedicated Server 集群（AWS/阿里云 自动扩缩容，单区 10–30 台）、配置 CDN 资产分发与热更新（Pak 文件分包策略）、上线数据分析埋点（玩家行为/留存/对局时长仪表盘）、完成 GDPR/隐私合规材料、准备用户协议与 ESRB/PEGI 评级申请、配置防作弊系统（EAC 或 BattlEye）线上参数、撰写 Day 1 Patch 说明与已知问题公告",
+        "purpose": "平台认证/服务器部署/合规三路并行推进，AI 汇总生成发布就绪确认清单",
         "inputs": [
           {
             "id": "qa_report",
@@ -1742,20 +3117,308 @@
             "name": "发布配置",
             "type": "unknown"
           }
-        ]
+        ],
+        "children": {
+          "nodes": [
+            {
+              "id": "sub_lp_cert",
+              "type": "task",
+              "title": "平台认证",
+              "position": {
+                "x": 0,
+                "y": -200
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】运营团队完成各平台认证流程：Steam — 配置 Steamworks SDK（AppID/成就/排行榜/DLC）、集成 VAC 反作弊、提交 Steam Direct 发布材料（截图/视频/描述/年龄分级）；PS5 — 按 TRC 检查清单逐项验证（存档/奖杯/无障碍/法语本地化）、提交 Sony DevNet 审核；Xbox — 按 TCRS 要求检查（GamePass 兼容性/GDK 版本/Smart Delivery）、提交 Partner Center 审核；获取全部平台批准文件并归档",
+                "inputs": [
+                  {
+                    "id": "qa_report",
+                    "name": "QA 报告",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "cert_done",
+                    "name": "平台认证完成",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_lp_infra",
+              "type": "task",
+              "title": "服务器部署与运维配置",
+              "position": {
+                "x": 0,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】DevOps 团队完成线上基础设施：在 AWS/阿里云多区域部署 Dedicated Server 集群（单区 10–30 台，Auto Scaling 组，CPU 触发扩缩容策略）；配置负载均衡与匹配服务（GameLift 或自建 Lobby 服务）；配置 CDN 资产分发与热更新管道（Pak 文件分包/差量更新/版本校验）；上线数据分析埋点（玩家行为/留存/对局时长/漏斗分析 Dashboard）；配置监控告警（服务器 CPU/网络/玩家数 Grafana 面板 + PagerDuty 告警规则）；完成压测验证（模拟峰值并发）",
+                "inputs": [
+                  {
+                    "id": "qa_report",
+                    "name": "QA 报告",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "infra_done",
+                    "name": "基础设施就绪",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_lp_compliance",
+              "type": "task",
+              "title": "合规与发布配置",
+              "position": {
+                "x": 0,
+                "y": 200
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "【人工】法务+运营团队完成合规事项：准备 GDPR/CCPA 隐私政策与用户协议（含数据收集说明/删号流程/用户同意弹窗）；完成 ESRB/PEGI 年龄评级申请（提交暴力/血腥内容说明）；配置防作弊系统线上参数（EAC 或 BattlEye 灵敏度阈值/封禁策略/申诉流程）；撰写 Day 1 Patch 说明（功能列表/已知问题/感谢致辞）与媒体新闻稿；在各平台设置发布时间与地区锁定配置",
+                "inputs": [
+                  {
+                    "id": "qa_report",
+                    "name": "QA 报告",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "compliance_done",
+                    "name": "合规配置完成",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "sub_lp_verify",
+              "type": "planning",
+              "title": "发布就绪确认",
+              "position": {
+                "x": 480,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "purpose": "汇总三路并行结果，生成《发布就绪确认清单》：逐项核查平台认证批文是否全部到位、服务器集群压测是否达标（TPS/延迟/并发峰值）、合规材料是否齐备（隐私政策/评级/防作弊）；识别任何阻塞发布的 P0 问题；生成最终《发布配置》文件（包含发布时间/区域配置/CDN 地址/监控面板链接/On-Call 运维手册路径）",
+                "inputs": [
+                  {
+                    "id": "cert_done",
+                    "name": "平台认证完成",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "infra_done",
+                    "name": "基础设施就绪",
+                    "type": "unknown"
+                  },
+                  {
+                    "id": "compliance_done",
+                    "name": "合规配置完成",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": [
+                  {
+                    "id": "launch_config",
+                    "name": "发布配置",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "launch_prep_sg_input",
+              "type": "subgraph_input",
+              "title": "输入",
+              "parentId": "launch_prep",
+              "position": {
+                "x": -320,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [],
+                "outputs": [
+                  {
+                    "id": "qa_report",
+                    "name": "QA 报告",
+                    "type": "unknown"
+                  }
+                ]
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            },
+            {
+              "id": "launch_prep_sg_output",
+              "type": "subgraph_output",
+              "title": "输出",
+              "parentId": "launch_prep",
+              "position": {
+                "x": 660,
+                "y": 0
+              },
+              "contextMode": "inherit",
+              "fileScope": {
+                "allow": [],
+                "deny": []
+              },
+              "toolPolicy": {
+                "tools": [],
+                "deny": []
+              },
+              "data": {
+                "inputs": [
+                  {
+                    "id": "launch_config",
+                    "name": "发布配置",
+                    "type": "unknown"
+                  }
+                ],
+                "outputs": []
+              },
+              "runHistory": [],
+              "resourceRefs": [],
+              "metadata": {}
+            }
+          ],
+          "links": [
+            {
+              "id": "sub_lp_in1",
+              "source": "launch_prep_sg_input",
+              "target": "sub_lp_cert",
+              "sourceHandle": "qa_report",
+              "targetHandle": "qa_report",
+              "label": "QA 报告"
+            },
+            {
+              "id": "sub_lp_in2",
+              "source": "launch_prep_sg_input",
+              "target": "sub_lp_infra",
+              "sourceHandle": "qa_report",
+              "targetHandle": "qa_report",
+              "label": "QA 报告"
+            },
+            {
+              "id": "sub_lp_in3",
+              "source": "launch_prep_sg_input",
+              "target": "sub_lp_compliance",
+              "sourceHandle": "qa_report",
+              "targetHandle": "qa_report",
+              "label": "QA 报告"
+            },
+            {
+              "id": "sub_lp_l1",
+              "source": "sub_lp_cert",
+              "target": "sub_lp_verify",
+              "sourceHandle": "cert_done",
+              "targetHandle": "cert_done",
+              "label": "平台认证完成"
+            },
+            {
+              "id": "sub_lp_l2",
+              "source": "sub_lp_infra",
+              "target": "sub_lp_verify",
+              "sourceHandle": "infra_done",
+              "targetHandle": "infra_done",
+              "label": "基础设施就绪"
+            },
+            {
+              "id": "sub_lp_l3",
+              "source": "sub_lp_compliance",
+              "target": "sub_lp_verify",
+              "sourceHandle": "compliance_done",
+              "targetHandle": "compliance_done",
+              "label": "合规配置完成"
+            },
+            {
+              "id": "sub_lp_out",
+              "source": "sub_lp_verify",
+              "target": "launch_prep_sg_output",
+              "sourceHandle": "launch_config",
+              "targetHandle": "launch_config",
+              "label": "发布配置"
+            }
+          ]
+        }
       },
       "runHistory": [],
       "resourceRefs": [],
       "metadata": {},
-      "purpose": "【人工】运营与技术团队完成发布前全部工作：申请并完成各平台认证（Steam Valve Anti-Cheat 集成/PS5 TRC 检查清单/Xbox TCRS）、部署生产级 Dedicated Server 集群（AWS/阿里云 自动扩缩容，单区 10–30 台）、配置 CDN 资产分发与热更新（Pak 文件分包策略）、上线数据分析埋点（玩家行为/留存/对局时长仪表盘）、完成 GDPR/隐私合规材料、准备用户协议与 ESRB/PEGI 评级申请、配置防作弊系统（EAC 或 BattlEye）线上参数、撰写 Day 1 Patch 说明与已知问题公告"
+      "purpose": "平台认证/服务器部署/合规三路并行推进，AI 汇总生成发布就绪确认清单"
     },
     {
       "id": "release_doc",
       "type": "planning",
       "title": "发布文档整合",
       "position": {
-        "x": 2832.7,
-        "y": -89.7
+        "x": 2332.2,
+        "y": -424.1
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1799,8 +3462,8 @@
       "title": "输入",
       "parentId": "preproduction",
       "position": {
-        "x": -466.3,
-        "y": 40.2
+        "x": 0,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1831,8 +3494,8 @@
       "title": "输出",
       "parentId": "preproduction",
       "position": {
-        "x": 1060.8,
-        "y": 28.8
+        "x": 1360,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1863,7 +3526,7 @@
       "title": "输入",
       "parentId": "core_dev",
       "position": {
-        "x": -320,
+        "x": 0,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1895,8 +3558,8 @@
       "title": "输出",
       "parentId": "core_dev",
       "position": {
-        "x": 1220,
-        "y": -19
+        "x": 1360,
+        "y": 0
       },
       "contextMode": "inherit",
       "fileScope": {
@@ -1927,7 +3590,7 @@
       "title": "输入",
       "parentId": "gameplay_systems",
       "position": {
-        "x": -320,
+        "x": 0,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1959,7 +3622,7 @@
       "title": "输出",
       "parentId": "gameplay_systems",
       "position": {
-        "x": 1280,
+        "x": 2040,
         "y": 0
       },
       "contextMode": "inherit",
@@ -1976,6 +3639,400 @@
           {
             "id": "systems_impl",
             "name": "游戏系统实现",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "art_production_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "art_production",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "art_production_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "art_production",
+      "position": {
+        "x": 1271.6,
+        "y": 13.9
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "art_assets",
+            "name": "美术资产包",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "qa_testing_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "qa_testing",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "integration_report",
+            "name": "集成报告",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "qa_testing_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "qa_testing",
+      "position": {
+        "x": 1360,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "project_setup_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "project_setup",
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "project_plan",
+            "name": "项目计划包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "project_setup_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "project_setup",
+      "position": {
+        "x": 1020,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "launch_prep_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "launch_prep",
+      "position": {
+        "x": -320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "qa_report",
+            "name": "QA 报告",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "launch_prep_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "launch_prep",
+      "position": {
+        "x": 858.6,
+        "y": 2.3
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "launch_config",
+            "name": "发布配置",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "world_building_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "world_building",
+      "position": {
+        "x": -320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "setup_done",
+            "name": "环境就绪确认",
+            "type": "unknown"
+          },
+          {
+            "id": "art_assets",
+            "name": "美术资产包",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "world_building_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "world_building",
+      "position": {
+        "x": 800.9,
+        "y": 40.7
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "world_built",
+            "name": "关卡就绪",
+            "type": "unknown"
+          }
+        ],
+        "outputs": []
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "integration_sg_input",
+      "type": "subgraph_input",
+      "title": "输入",
+      "parentId": "integration",
+      "position": {
+        "x": -320,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [],
+        "outputs": [
+          {
+            "id": "systems_impl",
+            "name": "游戏系统实现",
+            "type": "unknown"
+          },
+          {
+            "id": "world_built",
+            "name": "关卡就绪",
+            "type": "unknown"
+          }
+        ]
+      },
+      "runHistory": [],
+      "resourceRefs": [],
+      "metadata": {}
+    },
+    {
+      "id": "integration_sg_output",
+      "type": "subgraph_output",
+      "title": "输出",
+      "parentId": "integration",
+      "position": {
+        "x": 960,
+        "y": 0
+      },
+      "contextMode": "inherit",
+      "fileScope": {
+        "allow": [],
+        "deny": []
+      },
+      "toolPolicy": {
+        "tools": [],
+        "deny": []
+      },
+      "data": {
+        "inputs": [
+          {
+            "id": "integration_report",
+            "name": "集成报告",
             "type": "unknown"
           }
         ],
@@ -2182,18 +4239,194 @@
     {
       "id": "sub_gs_l3",
       "source": "sub_gs_code",
-      "target": "sub_gs_impl",
+      "target": "sub_gs_bp_impl",
       "sourceHandle": "systems_code",
       "targetHandle": "systems_code",
       "label": "系统代码"
     },
     {
+      "id": "sub_gs_l4",
+      "source": "sub_gs_bp_impl",
+      "target": "sub_gs_cpp_impl",
+      "sourceHandle": "bp_done",
+      "targetHandle": "bp_done",
+      "label": "蓝图与数据资产就绪"
+    },
+    {
       "id": "sub_gs_out",
-      "source": "sub_gs_impl",
+      "source": "sub_gs_cpp_impl",
       "target": "gameplay_systems_sg_output",
       "sourceHandle": "systems_impl",
       "targetHandle": "systems_impl",
       "label": "游戏系统实现"
+    },
+    {
+      "id": "sub_ps_in",
+      "source": "project_setup_sg_input",
+      "target": "sub_ps_devops",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "sub_ps_l1",
+      "source": "sub_ps_devops",
+      "target": "sub_ps_mcp_init",
+      "sourceHandle": "ue_project_ready",
+      "targetHandle": "ue_project_ready",
+      "label": "UE 项目就绪"
+    },
+    {
+      "id": "sub_ps_out",
+      "source": "sub_ps_mcp_init",
+      "target": "project_setup_sg_output",
+      "sourceHandle": "setup_done",
+      "targetHandle": "setup_done",
+      "label": "环境就绪确认"
+    },
+    {
+      "id": "sub_wb_in1",
+      "source": "world_building_sg_input",
+      "target": "sub_wb_pcg",
+      "sourceHandle": "setup_done",
+      "targetHandle": "setup_done",
+      "label": "环境就绪确认"
+    },
+    {
+      "id": "sub_wb_in2",
+      "source": "world_building_sg_input",
+      "target": "sub_wb_pcg",
+      "sourceHandle": "art_assets",
+      "targetHandle": "art_assets",
+      "label": "美术资产包"
+    },
+    {
+      "id": "sub_wb_l1",
+      "source": "sub_wb_pcg",
+      "target": "sub_wb_polish",
+      "sourceHandle": "pcg_done",
+      "targetHandle": "pcg_done",
+      "label": "程序化生成完成"
+    },
+    {
+      "id": "sub_wb_out",
+      "source": "sub_wb_polish",
+      "target": "world_building_sg_output",
+      "sourceHandle": "world_built",
+      "targetHandle": "world_built",
+      "label": "关卡就绪"
+    },
+    {
+      "id": "sub_art_in1",
+      "source": "art_production_sg_input",
+      "target": "sub_art_chars",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "sub_art_in2",
+      "source": "art_production_sg_input",
+      "target": "sub_art_world",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "sub_art_in3",
+      "source": "art_production_sg_input",
+      "target": "sub_art_audio",
+      "sourceHandle": "project_plan",
+      "targetHandle": "project_plan",
+      "label": "项目计划包"
+    },
+    {
+      "id": "sub_art_l1",
+      "source": "sub_art_chars",
+      "target": "sub_art_audit",
+      "sourceHandle": "chars_done",
+      "targetHandle": "chars_done",
+      "label": "角色武器资产"
+    },
+    {
+      "id": "sub_art_l2",
+      "source": "sub_art_world",
+      "target": "sub_art_audit",
+      "sourceHandle": "world_done",
+      "targetHandle": "world_done",
+      "label": "环境特效资产"
+    },
+    {
+      "id": "sub_art_l3",
+      "source": "sub_art_audio",
+      "target": "sub_art_audit",
+      "sourceHandle": "audio_done",
+      "targetHandle": "audio_done",
+      "label": "UI图集与音频资产"
+    },
+    {
+      "id": "sub_art_out",
+      "source": "sub_art_audit",
+      "target": "art_production_sg_output",
+      "sourceHandle": "art_assets",
+      "targetHandle": "art_assets",
+      "label": "美术资产包"
+    },
+    {
+      "id": "sub_lp_in1",
+      "source": "launch_prep_sg_input",
+      "target": "sub_lp_cert",
+      "sourceHandle": "qa_report",
+      "targetHandle": "qa_report",
+      "label": "QA 报告"
+    },
+    {
+      "id": "sub_lp_in2",
+      "source": "launch_prep_sg_input",
+      "target": "sub_lp_infra",
+      "sourceHandle": "qa_report",
+      "targetHandle": "qa_report",
+      "label": "QA 报告"
+    },
+    {
+      "id": "sub_lp_in3",
+      "source": "launch_prep_sg_input",
+      "target": "sub_lp_compliance",
+      "sourceHandle": "qa_report",
+      "targetHandle": "qa_report",
+      "label": "QA 报告"
+    },
+    {
+      "id": "sub_lp_l1",
+      "source": "sub_lp_cert",
+      "target": "sub_lp_verify",
+      "sourceHandle": "cert_done",
+      "targetHandle": "cert_done",
+      "label": "平台认证完成"
+    },
+    {
+      "id": "sub_lp_l2",
+      "source": "sub_lp_infra",
+      "target": "sub_lp_verify",
+      "sourceHandle": "infra_done",
+      "targetHandle": "infra_done",
+      "label": "基础设施就绪"
+    },
+    {
+      "id": "sub_lp_l3",
+      "source": "sub_lp_compliance",
+      "target": "sub_lp_verify",
+      "sourceHandle": "compliance_done",
+      "targetHandle": "compliance_done",
+      "label": "合规配置完成"
+    },
+    {
+      "id": "sub_lp_out",
+      "source": "sub_lp_verify",
+      "target": "launch_prep_sg_output",
+      "sourceHandle": "launch_config",
+      "targetHandle": "launch_config",
+      "label": "发布配置"
     },
     {
       "id": "sub_qa_in",
