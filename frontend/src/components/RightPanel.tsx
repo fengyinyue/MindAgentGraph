@@ -25,23 +25,23 @@ export default function RightPanel() {
   if (!rightOpen) return null;
 
   return (
-    <div className="bg-panel border-l border-zinc-800 flex h-full flex-col">
-      <div className="flex items-center gap-1 border-b border-zinc-800 px-2 py-1 text-xs">
+    <div className="mag-panel flex h-full flex-col border-l">
+      <div className="mag-panel-header flex items-center gap-1 border-b px-2 py-1 text-xs">
         <button
-          className={`rounded px-2 py-1 ${
+          className={`mag-tab ${
             activeTab === "assistant"
-              ? "bg-accent/20 text-accent"
-              : "text-zinc-500 hover:text-zinc-300"
+              ? "mag-tab-active"
+              : ""
           }`}
           onClick={() => setActiveTab("assistant")}
         >
           助手
         </button>
         <button
-          className={`rounded px-2 py-1 ${
+          className={`mag-tab ${
             activeTab === "inspector"
-              ? "bg-accent/20 text-accent"
-              : "text-zinc-500 hover:text-zinc-300"
+              ? "mag-tab-active"
+              : ""
           }`}
           onClick={() => setActiveTab("inspector")}
         >
@@ -55,14 +55,14 @@ export default function RightPanel() {
         </div>
       ) : (
         <div className="min-h-0 flex-1 flex flex-col">
-          <div className="flex items-center gap-1 border-b border-zinc-800 px-2 py-1 text-xs overflow-x-auto">
+          <div className="mag-panel-header flex items-center gap-1 border-b px-2 py-1 text-xs overflow-x-auto">
             {INSPECTOR_TABS.map((tab) => (
               <button
                 key={tab.key}
-                className={`shrink-0 rounded px-2 py-0.5 ${
+                className={`mag-tab ${
                   inspectorView === tab.key
-                    ? "bg-accent/20 text-accent"
-                    : "text-zinc-500 hover:text-zinc-300"
+                    ? "mag-tab-active"
+                    : ""
                 }`}
                 onClick={() => setInspectorView(tab.key)}
               >

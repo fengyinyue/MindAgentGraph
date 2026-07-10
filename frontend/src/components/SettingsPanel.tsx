@@ -64,19 +64,19 @@ export default function SettingsPanel({ open, onClose }: Props) {
   return (
     <>
       <div
-        className="fixed inset-0 bg-black/40 z-40"
+        className="fixed inset-0 bg-black/50 z-40 backdrop-blur-[1px]"
         onClick={onClose}
         aria-hidden
       />
       <aside
-        className="fixed top-0 right-0 h-full w-[420px] bg-panel border-l border-zinc-800 z-50 shadow-2xl flex flex-col"
+        className="mag-panel fixed top-0 right-0 z-50 flex h-full w-[420px] flex-col border-l shadow-2xl"
         role="dialog"
         aria-label="Settings"
       >
-        <header className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+        <header className="mag-panel-header flex items-center justify-between border-b px-4 py-3">
           <h2 className="text-sm font-semibold">Settings · API Keys</h2>
           <button
-            className="text-zinc-400 hover:text-white text-lg leading-none"
+            className="mag-button mag-button-icon text-lg leading-none"
             onClick={onClose}
             aria-label="Close"
           >
@@ -93,10 +93,10 @@ export default function SettingsPanel({ open, onClose }: Props) {
           {PROVIDERS.map((p) => (
             <KeyRow key={p.id} info={p} />
           ))}
-          <div className="border-t border-zinc-800 pt-4 space-y-3">
+          <div className="border-t border-zinc-800/80 pt-4 space-y-3">
             <h3 className="text-sm font-semibold">Local CLI Providers</h3>
             {LOCAL_PROVIDERS.map((p) => (
-              <div key={p.id} className="rounded border border-zinc-800 bg-canvas/40 p-3">
+              <div key={p.id} className="mag-list-item p-3">
                 <div className="text-sm font-medium">{p.label}</div>
                 <p className="mt-1 text-[11px] text-zinc-600 leading-relaxed">{p.hint}</p>
               </div>
@@ -144,7 +144,7 @@ function KeyRow({ info }: { info: ProviderInfo }) {
       <div className="flex gap-2">
         <input
           type={reveal ? "text" : "password"}
-          className="flex-1 bg-canvas border border-zinc-700 rounded px-3 py-2 text-xs font-mono outline-none focus:border-accent"
+          className="mag-input flex-1 px-3 py-2 text-xs font-mono"
           placeholder={info.placeholder}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -153,7 +153,7 @@ function KeyRow({ info }: { info: ProviderInfo }) {
           spellCheck={false}
         />
         <button
-          className="px-2 text-xs text-zinc-400 hover:text-white"
+          className="mag-button mag-button-icon"
           onClick={() => setReveal((r) => !r)}
           title={reveal ? "Hide" : "Show"}
         >
@@ -162,7 +162,7 @@ function KeyRow({ info }: { info: ProviderInfo }) {
       </div>
       <div className="flex gap-2 text-xs">
         <button
-          className="px-3 py-1 bg-accent rounded disabled:opacity-50"
+          className="mag-button mag-button-primary"
           onClick={onSave}
           disabled={!draft.trim() || draft === stored}
         >
@@ -170,7 +170,7 @@ function KeyRow({ info }: { info: ProviderInfo }) {
         </button>
         {stored && (
           <button
-            className="px-3 py-1 border border-zinc-700 rounded hover:border-red-500 hover:text-red-400"
+            className="mag-button hover:border-red-500 hover:text-red-400"
             onClick={onClear}
           >
             Clear

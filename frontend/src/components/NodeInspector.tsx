@@ -356,7 +356,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
           <div className="col-span-4 min-w-0">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Title</div>
             <input
-              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent"
+              className="mag-input mt-0.5 w-full px-2 py-1 text-xs"
               value={node.title}
               onChange={(e) => updateNode(node.id, { title: e.target.value })}
             />
@@ -364,7 +364,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
           <div className="col-span-2 min-w-0">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Type</div>
             <select
-              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-xs outline-none focus:border-accent"
+              className="mag-input mt-0.5 w-full px-1.5 py-1 text-xs"
               value={node.type}
               onChange={(e) => updateNode(node.id, { type: e.target.value as NodeType })}
             >
@@ -376,7 +376,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
           <div className="col-span-2 min-w-0">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Context</div>
             <select
-              className="w-full bg-canvas border border-zinc-700 rounded px-1.5 py-1 mt-0.5 text-xs outline-none focus:border-accent"
+              className="mag-input mt-0.5 w-full px-1.5 py-1 text-xs"
               value={node.contextMode}
               onChange={(e) => updateNode(node.id, { contextMode: e.target.value as "inherit" | "explicit" | "isolated" })}
               title={contextHint(node.contextMode)}
@@ -389,7 +389,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
           <div className="col-span-4 min-w-0">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Memory Ref</div>
             <input
-              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent font-mono"
+              className="mag-input mt-0.5 w-full px-2 py-1 font-mono text-xs"
               value={memoryRef}
               placeholder="architecture.md"
               onChange={(e) => updateNode(node.id, { memoryRef: e.target.value || undefined })}
@@ -399,7 +399,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
           <div className="col-span-6 min-w-0">
             <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Purpose / Node Prompt</div>
             <textarea
-              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-14"
+              className="mag-input mt-0.5 min-h-14 w-full resize-y px-2 py-1 text-xs"
               rows={3}
               value={purpose}
               placeholder="这个节点自己的任务说明"
@@ -415,7 +415,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               <span className="text-[10px] text-zinc-600">{customSystemPrompt.trim() ? "custom" : "default"}</span>
             </div>
             <textarea
-              className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-14"
+              className="mag-input mt-0.5 min-h-14 w-full resize-y px-2 py-1 text-xs"
               rows={3}
               value={systemPrompt}
               onChange={(e) => {
@@ -452,13 +452,13 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
 
           <div className="col-span-12 flex flex-wrap gap-2 pt-1 border-t border-zinc-800/60">
             {isRunning ? (
-              <button className="px-3 py-1 bg-red-700 rounded text-xs" onClick={cancel}>
+              <button className="mag-button border-red-700/70 text-red-300 hover:border-red-500 hover:text-red-200" onClick={cancel}>
                 ■ Cancel
               </button>
             ) : (
               <>
                 <button
-                  className="px-3 py-1 bg-accent rounded text-xs disabled:opacity-50"
+                  className="mag-button mag-button-primary"
                   onClick={() => run(node.id)}
                   disabled={runningId !== null || (isCodeAnalysisNode && !projectDir)}
                   title={isCodeAnalysisNode && !projectDir ? "请先在工具栏选择 Project Dir" : undefined}
@@ -467,7 +467,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 </button>
                 {isPlanningNode ? (
                   <button
-                    className="px-3 py-1 bg-purple-700 rounded text-xs disabled:opacity-50"
+                    className="mag-button"
                     onClick={() => exportDesignDocument(node.id)}
                     disabled={runningId !== null}
                     title="Export this Design node's current output as a Markdown document."
@@ -477,7 +477,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 ) : null}
                 {canGenerateNodes ? (
                   <button
-                    className="px-3 py-1 bg-purple-700 rounded text-xs disabled:opacity-50"
+                    className="mag-button"
                     onClick={() => expandPlanNodes(node.id, "design")}
                     disabled={runningId !== null}
                     title="Generate internal structure nodes for this Subgraph."
@@ -487,7 +487,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 ) : null}
                 {isTestNode ? (
                   <button
-                    className="px-3 py-1 bg-blue-700 rounded text-xs disabled:opacity-50"
+                    className="mag-button"
                     onClick={() => runTestNode(node.id)}
                     disabled={runningId !== null || !projectDir}
                     title={!projectDir ? "Select Project Dir before running tests." : "Run the configured whitelisted test command without LLM."}
@@ -497,7 +497,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 ) : null}
                 {canGenerateModuleGraph ? (
                   <button
-                    className="px-3 py-1 bg-cyan-700 rounded text-xs disabled:opacity-50"
+                    className="mag-button"
                     onClick={() => expandModuleGraph(node.id)}
                     disabled={runningId !== null}
                   >
@@ -506,7 +506,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 ) : null}
                 {isCodeAnalysisNode ? (
                   <button
-                    className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
+                    className="mag-button"
                     onClick={() => enterSubgraph(node.id)}
                     disabled={runningId !== null}
                   >
@@ -515,7 +515,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 ) : null}
                 {isGraphNode ? (
                   <button
-                    className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
+                    className="mag-button"
                     onClick={() => enterSubgraph(node.id)}
                     disabled={runningId !== null}
                   >
@@ -525,7 +525,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 {isCodeNode ? (
                   <>
                     <button
-                      className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
+                      className="mag-button mag-button-primary"
                       onClick={() => runCode(node.id)}
                       disabled={runningId !== null || !projectDir}
                       title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : executionEngine === "claude-code" ? "Claude Code Execution Runner" : "MAG Native Execution Runner"}
@@ -533,7 +533,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                       ⚡ Execution
                     </button>
                     <button
-                      className="px-3 py-1 bg-teal-700 rounded text-xs disabled:opacity-50"
+                      className="mag-button"
                       onClick={() => enterSubgraph(node.id)}
                       disabled={runningId !== null}
                     >
@@ -553,7 +553,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Tool</span>
                 <select
-                  className="bg-canvas border border-zinc-700 rounded px-1.5 py-0.5 text-xs outline-none focus:border-accent"
+                  className="mag-input px-1.5 py-0.5 text-xs"
                   value={String(node.data?.tool ?? "")}
                   onChange={(e) =>
                     useGraphStore.getState().patchNodeData(node.id, { tool: e.target.value })
@@ -573,7 +573,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Tool Input (JSON，可编辑)</div>
                 <textarea
                   key={node.id}
-                  className="w-full bg-canvas border border-zinc-700 rounded px-2 py-1 mt-0.5 text-xs outline-none focus:border-accent resize-y min-h-16 font-mono"
+                  className="mag-input mt-0.5 min-h-16 w-full resize-y px-2 py-1 font-mono text-xs"
                   rows={4}
                   defaultValue={JSON.stringify(node.data?.toolInput ?? {}, null, 2)}
                   onBlur={(e) => {
@@ -588,7 +588,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               </div>
               <div className="flex flex-wrap gap-2 items-center">
                 <button
-                  className="px-3 py-1 bg-emerald-700 rounded text-xs disabled:opacity-50"
+                  className="mag-button mag-button-primary"
                   onClick={() => replayTools(node.parentId ?? node.id, [node.id])}
                   disabled={runningId !== null || !projectDir || !node.parentId}
                   title={!projectDir ? "请先在工具栏点 📁 选择工程目录" : !node.parentId ? "该 tool 节点不在某个执行器内部，无法单步重放" : "仅重跑这一步（不过 LLM）"}
@@ -600,7 +600,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               {node.data?.lastOutput !== undefined ? (
                 <div>
                   <div className="text-[10px] text-zinc-500 uppercase tracking-wide">Last Output</div>
-                  <pre className="w-full bg-canvas border border-zinc-800 rounded px-2 py-1 mt-0.5 text-[11px] text-zinc-400 overflow-x-auto max-h-40 whitespace-pre-wrap">
+                  <pre className="mag-input mt-0.5 max-h-40 w-full overflow-x-auto whitespace-pre-wrap px-2 py-1 text-[11px] text-zinc-400">
                     {typeof node.data.lastOutput === "string"
                       ? node.data.lastOutput
                       : JSON.stringify(node.data.lastOutput, null, 2)}
@@ -622,7 +622,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 <label className="min-w-64 flex-1">
                   <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Test Command</span>
                   <input
-                    className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 font-mono text-xs outline-none focus:border-accent"
+                    className="mag-input mt-0.5 w-full px-2 py-1 font-mono text-xs"
                     value={String(node.data?.testCommand ?? "uv run pytest")}
                     onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { testCommand: e.target.value })}
                   />
@@ -640,7 +640,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                 <label className="min-w-56">
                   <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Execution Engine</span>
                   <select
-                    className="mt-0.5 w-full rounded border border-zinc-700 bg-canvas px-2 py-1 text-xs outline-none focus:border-accent"
+                    className="mag-input mt-0.5 w-full px-2 py-1 text-xs"
                     value={executionEngine}
                     onChange={(e) => useGraphStore.getState().patchNodeData(node.id, { executionEngine: e.target.value as CodeExecutionEngine })}
                     disabled={runningId !== null}
@@ -658,7 +658,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-zinc-500 uppercase tracking-wide">Advanced Automation</span>
                 <button
-                  className="px-2 py-0.5 bg-purple-800 rounded text-[11px] disabled:opacity-50"
+                  className="mag-button h-6 px-2 text-[11px]"
                   onClick={saveAsSkill}
                   disabled={runningId !== null}
                   title="把该执行器内部的 tool 子图存成可复用、可传参的技能"
@@ -673,7 +673,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                   {skills.map((skill) => (
                     <form
                       key={skill.id}
-                      className="border border-zinc-800 rounded px-2 py-1.5 space-y-1"
+                      className="mag-list-item space-y-1 px-2 py-1.5"
                       onSubmit={(e) => {
                         e.preventDefault();
                         const fd = new FormData(e.currentTarget);
@@ -685,10 +685,10 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-zinc-200 truncate">{skill.name}</span>
                         <span className="text-[10px] text-zinc-600">{skill.steps.length} 步 / {skill.params.length} 参数</span>
-                        <button type="submit" className="ml-auto px-2 py-0.5 bg-emerald-700 rounded text-[11px] disabled:opacity-50" disabled={runningId !== null || !projectDir}>▶ Run</button>
+                        <button type="submit" className="mag-button mag-button-primary ml-auto h-6 px-2 text-[11px]" disabled={runningId !== null || !projectDir}>▶ Run</button>
                         <button
                           type="button"
-                          className="px-2 py-0.5 border border-zinc-700 rounded text-[11px] text-zinc-400 hover:text-red-400"
+                          className="mag-button h-6 px-2 text-[11px] hover:border-red-500 hover:text-red-400"
                           onClick={() => useSkillStore.getState().removeSkill(skill.id)}
                         >🗑</button>
                       </div>
@@ -698,7 +698,7 @@ export default function NodeInspector({ view = "props" }: { view?: InspectorView
                           <input
                             name={p.stepId}
                             defaultValue={String(p.default ?? "")}
-                            className="flex-1 bg-canvas border border-zinc-700 rounded px-1.5 py-0.5 text-[11px] font-mono outline-none focus:border-accent"
+                            className="mag-input flex-1 px-1.5 py-0.5 font-mono text-[11px]"
                           />
                         </div>
                       ))}

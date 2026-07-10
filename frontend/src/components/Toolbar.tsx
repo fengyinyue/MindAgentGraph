@@ -7,12 +7,9 @@ import { autoLayoutGraph } from "@/utils/layout";
 import { allowedNodeTypes, type NodeBase, type ProjectMeta } from "@shared/types";
 import SettingsPanel from "./SettingsPanel";
 
-const buttonBase = "inline-flex h-7 items-center gap-1.5 rounded border px-2.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45";
-const buttonNeutral = `${buttonBase} border-zinc-700 bg-panel text-zinc-200 hover:border-accent/70 hover:text-accent`;
-const buttonPrimary = `${buttonBase} border-accent/70 bg-accent/15 text-accent hover:bg-accent/25`;
-const buttonSuccess = `${buttonBase} border-emerald-700/70 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20`;
-const buttonInfo = `${buttonBase} border-violet-700/70 bg-violet-500/10 text-violet-300 hover:bg-violet-500/20`;
-const iconButton = "inline-flex h-7 w-7 items-center justify-center rounded border border-zinc-700 bg-panel text-xs transition-colors hover:border-accent/70 hover:text-accent";
+const buttonNeutral = "mag-button";
+const buttonPrimary = "mag-button mag-button-primary";
+const iconButton = "mag-button mag-button-icon";
 
 function nodeTypeTitle(type: NodeBase["type"]): string {
   if (type === "prompt") return "Requirement";
@@ -119,16 +116,16 @@ export default function Toolbar() {
 
   return (
     <>
-      <div className="flex gap-2 items-center px-3 py-1.5 border-b border-zinc-800 bg-canvas text-xs">
-        <span className="font-semibold text-accent">MindAgentGraph</span>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+      <div className="mag-toolbar flex gap-2 items-center px-3 py-1.5 border-b text-xs">
+        <span className="font-semibold text-accent drop-shadow-[0_0_8px_rgba(108,142,239,0.22)]">MindAgentGraph</span>
+        <span className="mx-1 h-4 w-px bg-zinc-800/80" />
         <button className={buttonNeutral} onClick={onNew} disabled={runningId !== null}>New</button>
         <button className={buttonNeutral} onClick={onOpen}>Open</button>
         <button className={buttonNeutral} onClick={onSave}>Save</button>
         <button className={buttonNeutral} onClick={onSaveAs}>Save As</button>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-zinc-800/80" />
         <button
-          className={buttonSuccess}
+          className={buttonPrimary}
           title="Add Node"
           onClick={() => {
             const state = useGraphStore.getState();
@@ -150,10 +147,10 @@ export default function Toolbar() {
             } as NodeBase);
           }}
         >
-          + Node
+          Add Node
         </button>
         <button
-          className={buttonInfo}
+          className={buttonPrimary}
           onClick={() => {
             const positions = autoLayoutGraph(nodes, links);
             if (positions.size === 0) return;
@@ -163,7 +160,7 @@ export default function Toolbar() {
           disabled={runningId !== null || nodes.length === 0}
           title="按拓扑顺序自动排版（每个 Subgraph 内部独立排版）"
         >
-          ⇲ Layout
+          Layout
         </button>
         <button
           className={buttonPrimary}
@@ -175,7 +172,7 @@ export default function Toolbar() {
         >
           Run DAG
         </button>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-zinc-800/80" />
         <button
           className={buttonNeutral}
           onClick={onSelectProjectDir}
@@ -183,10 +180,10 @@ export default function Toolbar() {
         >
           📁 {projectDir ? projectDir.split(/[/\\]/).pop() : "Project Dir"}
         </button>
-        <span className="ml-auto text-zinc-500">
+        <span className="ml-auto max-w-[28vw] truncate text-zinc-500" title={projectPath ?? "untitled"}>
           {projectPath ?? "untitled"}
         </span>
-        <span className="mx-1 h-4 w-px bg-zinc-800" />
+        <span className="mx-1 h-4 w-px bg-zinc-800/80" />
         <button
           className={`${iconButton} ${leftOpen ? "border-accent/60 text-accent" : "text-zinc-500"}`}
           onClick={toggleLeftPanel}

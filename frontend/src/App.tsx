@@ -69,7 +69,7 @@ export default function App() {
               >
                 <LeftPanel />
               </Panel>
-              <Separator className="w-1.5 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
+              <Separator className="mag-resize-handle w-1.5 cursor-col-resize" />
             </>
           )}
 
@@ -80,7 +80,7 @@ export default function App() {
                   <PlanInput />
                   <div className="flex-1 min-h-0 bg-canvas relative">
                     {!backendReady && (
-                      <div className="absolute top-2 left-2 z-10 bg-yellow-900/80 text-yellow-200 text-xs px-3 py-1.5 rounded">
+                      <div className="mag-list-item absolute top-2 left-2 z-10 px-3 py-1.5 text-xs text-amber-200">
                         等待后端启动…
                       </div>
                     )}
@@ -93,7 +93,7 @@ export default function App() {
 
               {bottomOpen && (
                 <>
-                  <Separator className="h-1 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-row-resize" />
+                  <Separator className="mag-resize-handle h-1 cursor-row-resize" />
                   <Panel
                     key="bottom-open"
                     defaultSize="220px"
@@ -110,7 +110,7 @@ export default function App() {
 
           {rightOpen && (
             <>
-              <Separator className="w-1.5 bg-zinc-800 hover:bg-accent/60 active:bg-accent transition-colors cursor-col-resize" />
+              <Separator className="mag-resize-handle w-1.5 cursor-col-resize" />
               <Panel
                 key="right-open"
                 defaultSize="400px"

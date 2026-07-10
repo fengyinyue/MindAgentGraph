@@ -16,15 +16,15 @@ export default function BottomPanel() {
   if (!bottomOpen) return null;
 
   return (
-    <div className="bg-panel border-t border-zinc-800 flex flex-col h-full">
-      <div className="flex items-center px-3 py-1 border-b border-zinc-800 text-xs gap-1 overflow-x-auto">
+    <div className="mag-panel flex flex-col h-full border-t">
+      <div className="mag-panel-header flex items-center px-3 py-1 border-b text-xs gap-1 overflow-x-auto">
         {TABS.map((tab) => (
           <button
             key={tab.key}
-            className={`px-2 py-0.5 rounded shrink-0 ${
+            className={`mag-tab ${
               activeTab === tab.key
-                ? "bg-accent/20 text-accent"
-                : "text-zinc-500 hover:text-zinc-300"
+                ? "mag-tab-active"
+                : ""
             }`}
             onClick={() => setActiveTab(tab.key)}
           >

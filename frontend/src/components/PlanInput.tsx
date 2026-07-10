@@ -17,10 +17,10 @@ export default function PlanInput() {
   const model = models[provider] || DEFAULT_MODELS[provider];
 
   return (
-    <div className="flex gap-2 items-center p-2 bg-panel border-b border-zinc-800 text-xs">
+    <div className="mag-panel-header flex gap-2 items-center p-2 border-b text-xs">
       <span className="text-zinc-500">Provider:</span>
       <select
-        className="bg-canvas border border-zinc-700 rounded px-2 py-1 text-xs outline-none focus:border-accent"
+        className="mag-input px-2 py-1 text-xs"
         value={provider}
         onChange={(e) => setProvider(e.target.value as Provider)}
         title="选择模型提供商"
@@ -32,7 +32,7 @@ export default function PlanInput() {
         ))}
       </select>
       <input
-        className="w-40 bg-canvas border border-zinc-700 rounded px-2 py-1 text-xs outline-none focus:border-accent font-mono"
+        className="mag-input w-40 px-2 py-1 text-xs font-mono"
         value={model}
         onChange={(e) => setModel(provider, e.target.value)}
         placeholder={provider.startsWith("local-") ? "CLI default" : "model name"}

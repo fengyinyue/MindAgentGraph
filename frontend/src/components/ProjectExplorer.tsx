@@ -63,7 +63,7 @@ export default function ProjectExplorer() {
 
   return (
     <div className="flex h-full min-h-0 flex-col text-xs">
-      <div className="flex gap-1 border-b border-zinc-800 px-2 py-1">
+      <div className="mag-panel-header flex gap-1 border-b px-2 py-1">
         <TabButton label="节点" active={activeTab === "nodes"} onClick={() => setActiveTab("nodes")} />
         <TabButton label="文件" active={activeTab === "files"} onClick={() => setActiveTab("files")} />
         <TabButton label="Agent" active={activeTab === "agents"} onClick={() => setActiveTab("agents")} />
@@ -78,8 +78,8 @@ export default function ProjectExplorer() {
               tree.map((item) => (
                 <button
                   key={item.id}
-                  className={`block w-full truncate px-2 py-1 text-left hover:bg-canvas ${
-                    selectedNodeId === item.id ? "bg-accent/15 text-accent" : "text-zinc-300"
+                  className={`block w-full truncate px-2 py-1 text-left transition-colors hover:bg-white/[0.03] ${
+                    selectedNodeId === item.id ? "text-accent bg-accent/10" : "text-zinc-300"
                   }`}
                   style={{ paddingLeft: 8 + item.depth * 14 }}
                   onClick={() => selectNode(item.id)}
@@ -103,8 +103,8 @@ export default function ProjectExplorer() {
               nodes.map((node) => (
                 <button
                   key={node.id}
-                  className={`w-full rounded border px-2 py-1 text-left ${
-                    selectedNodeId === node.id ? "border-accent/60 bg-accent/10" : "border-zinc-800 bg-canvas/40"
+                  className={`mag-list-item w-full px-2 py-1 text-left ${
+                    selectedNodeId === node.id ? "mag-list-item-active" : ""
                   }`}
                   onClick={() => selectNode(node.id)}
                 >
@@ -126,8 +126,8 @@ export default function ProjectExplorer() {
               agentNodes.map((node) => (
                 <button
                   key={node.id}
-                  className={`w-full rounded border px-2 py-1 text-left ${
-                    selectedNodeId === node.id ? "border-accent/60 bg-accent/10" : "border-zinc-800 bg-canvas/40"
+                  className={`mag-list-item w-full px-2 py-1 text-left ${
+                    selectedNodeId === node.id ? "mag-list-item-active" : ""
                   }`}
                   onClick={() => selectNode(node.id)}
                 >
@@ -146,7 +146,7 @@ export default function ProjectExplorer() {
 function TabButton({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
-      className={`rounded px-2 py-0.5 ${active ? "bg-accent/20 text-accent" : "text-zinc-500 hover:text-zinc-300"}`}
+      className={`mag-tab ${active ? "mag-tab-active" : ""}`}
       onClick={onClick}
     >
       {label}
